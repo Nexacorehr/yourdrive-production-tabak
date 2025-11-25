@@ -12,7 +12,7 @@ const RecentlyEditedIcon = ({
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
   >
-    <g clip-path="url(#clip0_171_680)">
+    <g clipPath="url(#clip0_171_680)">
       <path
         d="M11.5819 12.375L8.4375 9.23063V3.9375H9.5625V8.76375L12.375 11.5819L11.5819 12.375Z"
         fill={color}
