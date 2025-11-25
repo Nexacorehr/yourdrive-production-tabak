@@ -43,7 +43,6 @@ const UploadPopup: React.FC<UploadPopupProps> = ({ anchorRef }) => {
           borderRadius: 6,
           boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
           zIndex: 9999,
-          /*on hover of children give cursor pointer*/
         }}
       >
         <p style={{ cursor: "pointer", margin: "4px 0" }}>Nova mapa</p>
