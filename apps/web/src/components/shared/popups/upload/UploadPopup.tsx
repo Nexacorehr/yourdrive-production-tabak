@@ -57,7 +57,7 @@ const UploadPopup: React.FC<UploadPopupProps> = ({ anchorRef }) => {
           const Icon = option.icon;
 
           return (
-            <PopupItems key={index}>
+            <PopupItems key={index} tabIndex={0}>
               <PopupIcon>
                 <Icon color="#535355" />
               </PopupIcon>
