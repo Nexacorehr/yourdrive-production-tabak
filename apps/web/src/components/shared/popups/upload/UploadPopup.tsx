@@ -1,4 +1,5 @@
-import React from "react";
+/* eslint-disable react-hooks/rules-of-hooks */
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { usePopupStore } from "../popup.store";
 import { useClickOutside } from "../../hooks/useOutsideClick";
 import PopupPortal from "../../Portal/Portal";
@@ -8,6 +9,7 @@ import {
   PopupText,
   PopupWrapper,
 } from "../styles/general";
+
 import UploadFolderIcon from "../../icons/uploadFolder";
 import NewFolderIcon from "../../icons/newFolder";
 import FileUploadIcon from "../../icons/FileUpload";
@@ -15,58 +17,151 @@ import FileUploadIcon from "../../icons/FileUpload";
 interface UploadPopupProps {
   anchorRef: React.RefObject<HTMLButtonElement | null> | null;
 }
+
 const UploadPopup: React.FC<UploadPopupProps> = ({ anchorRef }) => {
   const isOpen = usePopupStore((s) => s.isUploadPopupOpen);
   const closeUploadPopup = usePopupStore((s) => s.closeUploadPopup);
 
-  const popupRef = React.useRef<HTMLDivElement>(null);
-  const [coords, setCoords] = React.useState({ top: 0, left: 0 });
+  const popupRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
-  React.useEffect(() => {
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
     if (isOpen && anchorRef?.current) {
       const rect = anchorRef.current.getBoundingClientRect();
-      setCoords({
-        top: rect.bottom + 8,
-        left: rect.left,
-      });
+      setCoords({ top: rect.bottom + 8, left: rect.left });
     }
   }, [isOpen, anchorRef]);
 
-  useClickOutside(popupRef as React.RefObject<HTMLElement>, () =>
-    closeUploadPopup()
-  );
+  useClickOutside(popupRef as RefObject<HTMLElement>, closeUploadPopup);
 
-  const uploadOptions = [
-    { icon: NewFolderIcon, text: "Nova mapa" },
-    { icon: FileUploadIcon, text: "Prijenos datoteke" },
-    { icon: UploadFolderIcon, text: "Prijenos mape" },
-  ];
+  const handleNewFolder = () => {
+    console.log("Create new folder…");
+    closeUploadPopup();
+  };
+
+  const handleFileUploadClick = () => fileInputRef.current?.click();
+  const handleFolderUploadClick = () => folderInputRef.current?.click();
+
+  const uploadToBackend = async (
+    files: FileList,
+    preserveStructure = false
+  ) => {
+    if (!files.length) return;
+
+    const formData = new FormData();
+    Array.from(files).forEach((file) => {
+      const filePath = preserveStructure
+        ? file.webkitRelativePath || file.name
+        : file.name;
+      formData.append("files", file, filePath);
+    });
+
+    try {
+      setUploading(true);
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok)
+        throw new Error(`Upload failed: ${response.statusText}`);
+      const result = await response.json();
+      console.log("Upload successful:", result);
+      return result;
+    } catch (error) {
+      console.error("Upload error:", error);
+      throw error;
+    } finally {
+      setUploading(false);
+      closeUploadPopup();
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+
+    try {
+      console.log("Uploading file:", files[0].name);
+      await uploadToBackend(files, false);
+      console.log("File uploaded successfully");
+    } catch (err) {
+      console.error("Failed to upload file:", err);
+    } finally {
+      e.target.value = "";
+    }
+  };
+
+  const handleFolderChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+
+    try {
+      console.log(`Uploading folder with ${files.length} files`);
+      await uploadToBackend(files, true);
+      console.log("Folder uploaded successfully");
+    } catch (err) {
+      console.error("Failed to upload folder:", err);
+    } finally {
+      e.target.value = "";
+    }
+  };
 
   if (!isOpen) return null;
 
-  return (
-    <PopupPortal>
-      <PopupWrapper
-        ref={popupRef}
-        style={{
-          top: coords.top,
-          left: coords.left,
-        }}
-      >
-        {uploadOptions.map((option, index) => {
-          const Icon = option.icon;
+  const uploadOptions = [
+    { icon: NewFolderIcon, text: "Nova mapa", onClick: handleNewFolder },
+    {
+      icon: FileUploadIcon,
+      text: "Prijenos datoteke",
+      onClick: handleFileUploadClick,
+    },
+    {
+      icon: UploadFolderIcon,
+      text: "Prijenos mape",
+      onClick: handleFolderUploadClick,
+    },
+  ];
 
-          return (
-            <PopupItems key={index} tabIndex={0}>
+  return (
+    <>
+      <PopupPortal>
+        <PopupWrapper
+          ref={popupRef}
+          style={{ top: coords.top, left: coords.left }}
+        >
+          {uploadOptions.map(({ icon: Icon, text, onClick }, i) => (
+            <PopupItems key={i} tabIndex={0} onClick={onClick}>
               <PopupIcon>
                 <Icon color="#535355" />
               </PopupIcon>
-              <PopupText>{option.text}</PopupText>
+              <PopupText>{text}</PopupText>
             </PopupItems>
-          );
-        })}
-      </PopupWrapper>
-    </PopupPortal>
+          ))}
+          {uploading && <PopupText>Uploading…</PopupText>}
+        </PopupWrapper>
+      </PopupPortal>
+
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: "none" }}
+        onChange={handleFileChange}
+      />
+
+      <input
+        type="file"
+        ref={folderInputRef}
+        style={{ display: "none" }}
+        // @ts-expect-error - webkitdirectory works in all browsers
+        webkitdirectory=""
+        multiple
+        onChange={handleFolderChange}
+      />
+    </>
   );
 };
 
