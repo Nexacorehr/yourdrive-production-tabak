@@ -1,42 +1,44 @@
-import { Outlet } from "@tanstack/react-router";
-import { MainContainer } from "../../styles/main";
-import EmptyState from "./EmptyState";
-import { ROUTES } from "../../../../router/router";
+import styled from "styled-components";
+import { useMatches } from "@tanstack/react-router";
+import { type ReactNode } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
-const Main = () => {
-  const hasFiles = false;
-  const currentPath = window.location.pathname;
-  const currentPage =
-    currentPath === ROUTES.SHARED_WITH_YOU ? "shared" : "default";
-
-  const emptyStateText = {
-    default: {
-      title: "No files uploaded yet",
-      description: "Start by uploading files here.",
-    },
-    shared: {
-      title: "No shared files",
-      description: "Files shared with you will appear here.",
-    },
-  };
-
-  if (!hasFiles) {
-    return (
-      <EmptyState
-        text={
-          currentPage === "shared"
-            ? emptyStateText.shared
-            : emptyStateText.default
-        }
-      />
-    );
-  }
+interface MainProps {
+  children?: ReactNode;
+}
+const Main = ({ children }: MainProps) => {
+  const matches = useMatches();
+  const currentPath = matches[matches.length - 1]?.pathname || "";
 
   return (
     <MainContainer>
-      <Outlet />
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentPath}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{
+            duration: 0.25,
+            ease: [0.4, 0, 0.2, 1],
+          }}
+          style={{
+            width: "100%",
+            height: "100%",
+          }}
+        >
+          {children}
+        </motion.div>
+      </AnimatePresence>
     </MainContainer>
   );
 };
 
 export default Main;
+
+const MainContainer = styled.main`
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  background: #f8f9fa;
+`;

@@ -18,6 +18,7 @@
     "@aws-sdk/lib-storage": "^3.940.0",
     "@aws-sdk/s3-request-presigner": "^3.940.0",
     "express": "^5.2.1",
+    "framer-motion": "^12.23.25",
     "multer": "^2.0.2"
   },
   "devDependencies": {

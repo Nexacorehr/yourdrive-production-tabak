@@ -89,6 +89,7 @@ const dashboardRoute = createRoute({
 const dashboardIndexRoute = createRoute({
   getParentRoute: () => dashboardRoute,
   path: "/",
+  component: Dashboard,
 });
 
 const yourFilesRoute = createRoute({

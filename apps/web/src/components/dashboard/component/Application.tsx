@@ -13,7 +13,11 @@ export interface ApplicationProps {
   "data-testid"?: string;
 }
 
-const Application: FC<ApplicationProps> = ({ title, className = "" }) => {
+const Application: FC<ApplicationProps> = ({
+  title,
+  className = "",
+  children,
+}) => {
   const id = useId();
 
   useEffect(() => {
@@ -30,7 +34,7 @@ const Application: FC<ApplicationProps> = ({ title, className = "" }) => {
     <Root id={`application-${id}`} className={`application-root ${className}`}>
       <Layout>
         <Sidebar />
-        <Main />
+        <Main>{children}</Main>
       </Layout>
     </Root>
   );
