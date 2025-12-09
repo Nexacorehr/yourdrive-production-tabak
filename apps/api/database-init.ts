@@ -7,67 +7,86 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-async function initializeDatabase() {
+async function setupDatabase() {
   const client = await pool.connect();
 
   try {
-    console.log("🚀 Starting database initialization...");
+    console.log("🗑️  Dropping existing schema...");
+    await client.query(`DROP SCHEMA public CASCADE;`);
+    await client.query(`CREATE SCHEMA public;`);
+    console.log("✅ Schema reset complete");
 
+    console.log("\n📦 Creating User table...");
     await client.query(`
-      CREATE TABLE IF NOT EXISTS user_files (
-        id SERIAL PRIMARY KEY,
-        user_id VARCHAR(255) NOT NULL,
-        user_email VARCHAR(255) NOT NULL,
-        original_name VARCHAR(500) NOT NULL,
-        s3_key VARCHAR(1000) NOT NULL UNIQUE,
-        folder_path VARCHAR(1000),
-        size BIGINT NOT NULL,
-        mime_type VARCHAR(255),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      CREATE TABLE "User" (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        "emailVerified" BOOLEAN DEFAULT false NOT NULL,
+        "loginAttempts" INTEGER DEFAULT 0 NOT NULL,
+        "lockUntil" TIMESTAMP,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
       );
     `);
-    console.log("Created user_files table");
+    console.log("✅ User table created");
+
+    console.log("\n📦 Creating Session table...");
+    await client.query(`
+      CREATE TABLE "Session" (
+        id TEXT PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        "refreshToken" TEXT UNIQUE NOT NULL,
+        "expiresAt" TIMESTAMP NOT NULL,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") 
+          REFERENCES "User"(id) ON DELETE CASCADE ON UPDATE CASCADE
+      );
+    `);
 
     await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_user_files_user_email ON user_files(user_email);
+      CREATE INDEX "Session_userId_idx" ON "Session"("userId");
     `);
-    console.log("Created index on user_email");
+    console.log("✅ Session table created");
+
+    console.log("\n📦 Creating File table...");
+    await client.query(`
+      CREATE TABLE "File" (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        path TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        "mimeType" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        CONSTRAINT "File_userId_fkey" FOREIGN KEY ("userId") 
+          REFERENCES "User"(id) ON DELETE CASCADE ON UPDATE CASCADE
+      );
+    `);
 
     await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_user_files_folder_path ON user_files(folder_path);
+      CREATE INDEX "File_userId_idx" ON "File"("userId");
     `);
-    console.log("Created index on folder_path");
+    console.log("✅ File table created");
 
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_user_files_created_at ON user_files(created_at);
+    console.log("\n📊 Verifying tables...");
+    const result = await client.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+      ORDER BY table_name;
     `);
-    console.log("Created index on created_at");
 
-    await client.query(`
-      CREATE OR REPLACE FUNCTION update_updated_at_column()
-      RETURNS TRIGGER AS $$
-      BEGIN
-          NEW.updated_at = CURRENT_TIMESTAMP;
-          RETURN NEW;
-      END;
-      $$ language 'plpgsql';
-    `);
-    console.log("Created updated_at trigger function");
+    console.log("\n✨ Tables created:");
+    result.rows.forEach((row) => {
+      console.log(`  - ${row.table_name}`);
+    });
 
-    await client.query(`
-      DROP TRIGGER IF EXISTS update_user_files_updated_at ON user_files;
-      CREATE TRIGGER update_user_files_updated_at 
-      BEFORE UPDATE ON user_files
-      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-    `);
-    console.log("Created updated_at trigger");
-
-    console.log("");
-    console.log("Database initialization completed successfully!");
-    console.log("");
+    console.log("\n🎉 Database setup complete!");
   } catch (error) {
-    console.error("Error initializing database:", error);
+    console.error("❌ Error setting up database:", error);
     throw error;
   } finally {
     client.release();
@@ -75,12 +94,12 @@ async function initializeDatabase() {
   }
 }
 
-initializeDatabase()
+setupDatabase()
   .then(() => {
-    console.log("Database setup complete. You can now start your server.");
+    console.log("\n✅ Done! You can now start your server.");
     process.exit(0);
   })
   .catch((err) => {
-    console.error("Database setup failed:", err);
+    console.error("\n❌ Setup failed:", err);
     process.exit(1);
   });

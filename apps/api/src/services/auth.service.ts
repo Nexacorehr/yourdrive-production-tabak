@@ -4,8 +4,12 @@ import { prisma } from "../lib/prisma";
 import { z } from "zod";
 
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || "12");
-const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET!;
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET!;
+const JWT_ACCESS_SECRET =
+  process.env.JWT_ACCESS_SECRET! ||
+  "nmYK/mG/9EqVbe/2uAuDzw4s77opBCePgQ80ZPiO9SU/vH2SZ0IfL2sBUxmHJRXL";
+const JWT_REFRESH_SECRET =
+  process.env.JWT_REFRESH_SECRET! ||
+  "nmYK/mG/9EqVbe/2uAuDzw4s77opBCePgQ80ZPiO9SU/vH2SZ0IfL2sBUxmHJRXL";
 
 // Validation schemas
 export const registerSchema = z.object({

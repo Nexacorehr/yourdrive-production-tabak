@@ -89,7 +89,9 @@ const dashboardRoute = createRoute({
 const dashboardIndexRoute = createRoute({
   getParentRoute: () => dashboardRoute,
   path: "/",
-  component: Dashboard,
+  beforeLoad: () => {
+    throw redirect({ to: ROUTES.YOUR_FILES });
+  },
 });
 
 const yourFilesRoute = createRoute({

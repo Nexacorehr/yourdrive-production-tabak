@@ -8,20 +8,18 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  password      String
-  name          String?
-  emailVerified Boolean   @default(false)
+  id             String    @id @default(cuid())
+  name           String?
+  email          String    @unique
+  password       String
+  emailVerified  Boolean   @default(false)
+  loginAttempts  Int       @default(0)
+  lockUntil      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   
-  loginAttempts Int       @default(0)
-  lockUntil     DateTime?
-  
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  sessions      Session[]
-  files         File[]
+  sessions       Session[]
+  files          File[]
 }
 
 model Session {
