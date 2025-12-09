@@ -12,12 +12,13 @@ import LoginPage from "../components/login/Login";
 import RegisterPage from "../components/register/Register";
 import Dashboard from "../components/dashboard/Dashboard";
 
-import YourFiles from "../components/landing/yourFiles/YourFiles";
-import SharedWithYou from "../components/landing/sharedWithYou/SharedWithYou";
-import RecycleBin from "../components/landing/recycleBin/RecycleBin";
-import Devices from "../components/landing/devices/Devices";
-import RecentlyEdited from "../components/landing/recentlyEdited/RecentlyEdited";
-import Favorited from "../components/landing/favorited/Favorited";
+import YourFiles from "../components/dashboard/component/yourFiles/YourFiles";
+import SharedWithYou from "../components/dashboard/component/sharedWithYou/SharedWithYou";
+import RecycleBin from "../components/dashboard/component/recycleBin/RecycleBin";
+import Devices from "../components/dashboard/component/devices/Devices";
+import RecentlyEdited from "../components/dashboard/component/recentlyEdited/RecentlyEdited";
+import Favorited from "../components/dashboard/component/favorited/Favorited";
+import Home from "../components/dashboard/component/main/Home";
 
 export const ROUTES = {
   HOME: "/",
@@ -89,9 +90,7 @@ const dashboardRoute = createRoute({
 const dashboardIndexRoute = createRoute({
   getParentRoute: () => dashboardRoute,
   path: "/",
-  beforeLoad: () => {
-    throw redirect({ to: ROUTES.YOUR_FILES });
-  },
+  component: Home,
 });
 
 const yourFilesRoute = createRoute({

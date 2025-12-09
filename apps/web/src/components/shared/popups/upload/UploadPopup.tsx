@@ -64,7 +64,7 @@ const UploadPopup: React.FC<UploadPopupProps> = ({ anchorRef }) => {
 
     try {
       setUploading(true);
-      const response = await fetch("/api/upload", {
+      const response = await fetch("/api/files/upload", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
