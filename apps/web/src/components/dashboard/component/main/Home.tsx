@@ -1,4 +1,7 @@
 import React from "react";
+import { MainContainer } from "./styles/home.styles";
+
+import QuickSearch from "./components/QuickSearch";
 
 interface HomeProps {
   // Add props as needed
@@ -6,10 +9,11 @@ interface HomeProps {
 
 const Home: React.FC<HomeProps> = () => {
   return (
-    <div className="your-files">
-      <h2>Home</h2>
-      <p>Files will be displayed here</p>
-    </div>
+    <MainContainer>
+      <QuickSearch />
+      {/*<SuggestedFolders />*/}
+      {/*<RecentFiles />*/}
+    </MainContainer>
   );
 };
 

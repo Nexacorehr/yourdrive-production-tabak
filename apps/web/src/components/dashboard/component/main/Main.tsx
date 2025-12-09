@@ -41,4 +41,6 @@ const MainContainer = styled.main`
   overflow: hidden;
   position: relative;
   background: #f8f9fa;
+  border-radius: 10px;
+  padding: 20px 24px;
 `;
