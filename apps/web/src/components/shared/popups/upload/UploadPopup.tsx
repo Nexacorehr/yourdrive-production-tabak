@@ -13,12 +13,14 @@ import {
 import UploadFolderIcon from "../../icons/uploadFolder";
 import NewFolderIcon from "../../icons/newFolder";
 import FileUploadIcon from "../../icons/FileUpload";
+import { useAuthStore } from "../../../../store/authStore";
 
 interface UploadPopupProps {
   anchorRef: React.RefObject<HTMLButtonElement | null> | null;
 }
 
 const UploadPopup: React.FC<UploadPopupProps> = ({ anchorRef }) => {
+  const accessToken = useAuthStore((s) => s.accessToken);
   const isOpen = usePopupStore((s) => s.isUploadPopupOpen);
   const closeUploadPopup = usePopupStore((s) => s.closeUploadPopup);
 
@@ -64,6 +66,9 @@ const UploadPopup: React.FC<UploadPopupProps> = ({ anchorRef }) => {
       setUploading(true);
       const response = await fetch("/api/upload", {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: formData,
       });
       if (!response.ok)
