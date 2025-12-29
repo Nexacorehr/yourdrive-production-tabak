@@ -110,71 +110,95 @@ const FilesTable: React.FC<FilesTableProps> = ({
             {showOwner && <TableHeader>Owner</TableHeader>}
           </TableRow>
         </TableHead>
-        <TableBody>
-          {files.map((file) => (
-            <TableRow
-              key={file.id}
-              onClick={() => handleRowClick(file)}
-              onContextMenu={(e) => handleContextMenu(file, e)}
-              $selected={selectedFiles.has(file.id)}
-            >
-              {fileInteraction && (
-                <TableCell style={{ width: "40px" }}>
-                  <Checkbox
-                    type="checkbox"
-                    checked={selectedFiles.has(file.id)}
-                    onChange={(e) => handleCheckboxChange(file, e)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </TableCell>
-              )}
-              <TableCell>
-                <NameCell>
-                  <FileIconWrapper>
-                    {file.type === "folder" ? (
-                      <FolderSmallIcon color="#5f6368" />
-                    ) : (
-                      <FileIcon />
-                    )}
-                  </FileIconWrapper>
-                  <FileName title={file.name}>{file.name}</FileName>
-                </NameCell>
-              </TableCell>
-              <TableCell>
-                <InteractionText>{formatInteraction(file)}</InteractionText>
-              </TableCell>
-              {showLocation && (
-                <TableCell>
-                  <LocationCell>
-                    <FolderSmallIcon color="#5f6368" size={16} />
-                    <LocationText>{file.location}</LocationText>
-                  </LocationCell>
-                </TableCell>
-              )}
-              {showOwner && (
-                <TableCell>
-                  <OwnerCell>
-                    {file.owner.avatar ? (
-                      <OwnerAvatar
-                        src={file.owner.avatar}
-                        alt={file.owner.name}
-                      />
-                    ) : (
-                      <OwnerAvatarPlaceholder>
-                        {file.owner.name.charAt(0).toUpperCase()}
-                      </OwnerAvatarPlaceholder>
-                    )}
-                    {file.owner.isYou && <OwnerName>me</OwnerName>}
-                  </OwnerCell>
-                </TableCell>
-              )}
-            </TableRow>
-          ))}
-        </TableBody>
       </Table>
+      <ScrollableArea>
+        <Table>
+          <TableBody>
+            {files.map((file) => (
+              <TableRow
+                key={file.id}
+                onClick={() => handleRowClick(file)}
+                onContextMenu={(e) => handleContextMenu(file, e)}
+                $selected={selectedFiles.has(file.id)}
+              >
+                {fileInteraction && (
+                  <TableCell style={{ width: "40px" }}>
+                    <Checkbox
+                      type="checkbox"
+                      checked={selectedFiles.has(file.id)}
+                      onChange={(e) => handleCheckboxChange(file, e)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </TableCell>
+                )}
+                <TableCell>
+                  <NameCell>
+                    <FileIconWrapper>
+                      {file.type === "folder" ? (
+                        <FolderSmallIcon color="#5f6368" />
+                      ) : (
+                        <FileIcon />
+                      )}
+                    </FileIconWrapper>
+                    <FileName title={file.name}>{file.name}</FileName>
+                  </NameCell>
+                </TableCell>
+                <TableCell>
+                  <InteractionText>{formatInteraction(file)}</InteractionText>
+                </TableCell>
+                {showLocation && (
+                  <TableCell>
+                    <LocationCell>
+                      <FolderSmallIcon color="#5f6368" size={16} />
+                      <LocationText>{file.location}</LocationText>
+                    </LocationCell>
+                  </TableCell>
+                )}
+                {showOwner && (
+                  <TableCell>
+                    <OwnerCell>
+                      {file.owner.avatar ? (
+                        <OwnerAvatar
+                          src={file.owner.avatar}
+                          alt={file.owner.name}
+                        />
+                      ) : (
+                        <OwnerAvatarPlaceholder>
+                          {file.owner.name.charAt(0).toUpperCase()}
+                        </OwnerAvatarPlaceholder>
+                      )}
+                      {file.owner.isYou && <OwnerName>me</OwnerName>}
+                    </OwnerCell>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </ScrollableArea>
     </TableContainer>
   );
 };
+
+const ScrollableArea = styled.div`
+  max-height: 750px;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #c2c2c2;
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #a0a0a0;
+  }
+`;
 
 const TableContainer = styled.div`
   width: 100%;
@@ -185,6 +209,7 @@ const TableContainer = styled.div`
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 `;
 
 const TableHead = styled.thead``;
@@ -199,12 +224,7 @@ const TableRow = styled.tr<{ $selected?: boolean }>`
 
   &:hover {
     background: ${({ $selected }) =>
-      $selected ? "transparent" : "rgba(201, 201, 201, 0.1)"};
-  }
-
-  &:hover:nth-child(1) {
-    background: transparent; /* No hover effect for the first child */
-    cursor: default;
+      $selected ? "#e8f0fe" : "rgba(201, 201, 201, 0.1)"};
   }
 
   &:last-child {
@@ -220,6 +240,7 @@ const TableHeader = styled.th`
   color: #5f6368;
   border-bottom: 1px solid #e0e0e0;
   white-space: nowrap;
+  background: #f8f9fa;
 `;
 
 const TableCell = styled.td`

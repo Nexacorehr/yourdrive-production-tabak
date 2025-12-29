@@ -175,7 +175,6 @@ const FilterIndicator = styled.div`
   color: #666;
   margin-bottom: 12px;
   padding: 8px 12px;
-  background: #f5f5f5;
   border-radius: 6px;
   display: inline-block;
 `;
