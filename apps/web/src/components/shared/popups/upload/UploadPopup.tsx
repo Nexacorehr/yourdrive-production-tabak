@@ -14,6 +14,7 @@ import UploadFolderIcon from "../../icons/uploadFolder";
 import NewFolderIcon from "../../icons/newFolder";
 import FileUploadIcon from "../../icons/FileUpload";
 import { useAuthStore } from "../../../../store/authStore";
+import { useStorageStore } from "../../../../store/storageStore";
 
 interface UploadPopupProps {
   anchorRef: React.RefObject<HTMLButtonElement | null> | null;
@@ -21,6 +22,8 @@ interface UploadPopupProps {
 
 const UploadPopup: React.FC<UploadPopupProps> = ({ anchorRef }) => {
   const accessToken = useAuthStore((s) => s.accessToken);
+  const addUsage = useStorageStore((s) => s.addUsage);
+
   const isOpen = usePopupStore((s) => s.isUploadPopupOpen);
   const closeUploadPopup = usePopupStore((s) => s.closeUploadPopup);
 
@@ -54,8 +57,25 @@ const UploadPopup: React.FC<UploadPopupProps> = ({ anchorRef }) => {
   ) => {
     if (!files.length) return;
 
-    const formData = new FormData();
+    const totalSize = Array.from(files).reduce(
+      (sum, file) => sum + file.size,
+      0
+    );
 
+    const totalBytes = useStorageStore.getState().totalBytes;
+    const usedBytes = useStorageStore.getState().usedBytes;
+    const availableBytes = totalBytes - usedBytes;
+
+    if (totalSize > availableBytes) {
+      alert(
+        `Not enough storage space. You need ${formatBytes(
+          totalSize
+        )} but only have ${formatBytes(availableBytes)} available.`
+      );
+      return;
+    }
+
+    const formData = new FormData();
     const folderPaths: Record<string, string> = {};
 
     Array.from(files).forEach((file, index) => {
@@ -83,10 +103,17 @@ const UploadPopup: React.FC<UploadPopupProps> = ({ anchorRef }) => {
         },
         body: formData,
       });
-      if (!response.ok)
+
+      if (!response.ok) {
         throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
       const result = await response.json();
       console.log("Upload successful:", result);
+
+      // Add uploaded file sizes to storage usage
+      addUsage(totalSize);
+
       return result;
     } catch (error) {
       console.error("Upload error:", error);
@@ -102,7 +129,11 @@ const UploadPopup: React.FC<UploadPopupProps> = ({ anchorRef }) => {
     if (!files?.length) return;
 
     try {
-      console.log("Uploading file:", files[0].name);
+      console.log(
+        "Uploading file:",
+        files[0].name,
+        `(${formatBytes(files[0].size)})`
+      );
       await uploadToBackend(files, false);
       console.log("File uploaded successfully");
     } catch (err) {
@@ -116,8 +147,17 @@ const UploadPopup: React.FC<UploadPopupProps> = ({ anchorRef }) => {
     const files = e.target.files;
     if (!files?.length) return;
 
+    const totalSize = Array.from(files).reduce(
+      (sum, file) => sum + file.size,
+      0
+    );
+
     try {
-      console.log(`Uploading folder with ${files.length} files`);
+      console.log(
+        `Uploading folder with ${files.length} files (${formatBytes(
+          totalSize
+        )})`
+      );
       Array.from(files).forEach((file) => {
         console.log("File path:", (file as any).webkitRelativePath);
       });
@@ -184,5 +224,16 @@ const UploadPopup: React.FC<UploadPopupProps> = ({ anchorRef }) => {
     </>
   );
 };
+
+// Helper function to format bytes
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+  return `${(bytes / Math.pow(k, i)).toFixed(i >= 2 ? 1 : 0)} ${sizes[i]}`;
+}
 
 export default UploadPopup;

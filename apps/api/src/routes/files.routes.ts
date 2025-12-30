@@ -326,4 +326,40 @@ filesRoutes.delete(
   }
 );
 
+filesRoutes.get("/usage", authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Authentication required",
+      });
+    }
+
+    const result = await pool.query(
+      `SELECT 
+        COUNT(*) as total_files,
+        COALESCE(SUM(size), 0) as total_size
+       FROM user_files
+       WHERE user_id = $1`,
+      [req.userId]
+    );
+
+    const stats = result.rows[0];
+
+    res.json({
+      success: true,
+      usage: {
+        totalFiles: parseInt(stats.total_files, 10),
+        totalSize: parseInt(stats.total_size, 10),
+      },
+    });
+  } catch (err) {
+    console.error("Error fetching usage stats:", err);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch usage statistics",
+    });
+  }
+});
+
 export default filesRoutes;

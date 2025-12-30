@@ -13,6 +13,7 @@ const Home: React.FC<HomeProps> = () => {
   return (
     <MainContainer>
       <QuickSearch />
+      {/* TODO: hide suggested folders unless we have some folders to suggest */}
       <SuggestedFolders />
       <RecentFiles />
     </MainContainer>

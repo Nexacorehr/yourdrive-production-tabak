@@ -19,6 +19,7 @@ import Devices from "../components/dashboard/component/devices/Devices";
 import RecentlyEdited from "../components/dashboard/component/recentlyEdited/RecentlyEdited";
 import Favorited from "../components/dashboard/component/favorited/Favorited";
 import Home from "../components/dashboard/component/main/Home";
+import Settings from "../components/settings/Settings";
 
 export const ROUTES = {
   HOME: "/",
@@ -129,6 +130,13 @@ const favoritedRoute = createRoute({
   component: Favorited,
 });
 
+const settingsRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: "/settings",
+  component: Settings,
+  beforeLoad: requireAuthentication,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -141,6 +149,7 @@ const routeTree = rootRoute.addChildren([
     devicesRoute,
     recentlyEditedRoute,
     favoritedRoute,
+    settingsRoute,
   ]),
 ]);
 

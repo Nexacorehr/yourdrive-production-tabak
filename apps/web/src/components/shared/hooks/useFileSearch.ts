@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { type FileItem } from "../files_table/FilesTable";
 import { useSearchStore, type SearchFilters } from "../../../store/searchStore";
 
-// MIME type categories
 const MIME_TYPE_CATEGORIES = {
   documents: [
     "application/pdf",
