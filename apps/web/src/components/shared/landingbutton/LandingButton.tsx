@@ -55,7 +55,7 @@ const LandingButton = forwardRef<HTMLButtonElement, ButtonProps>((props, ref) =>
       border: "1px solid rgba(0,0,0,0.08)",
     },
     ghost: {
-      backgroundColor: "rgba(0, 0, 0, 0.80)",
+      backgroundColor: "#363840",
       color: "#EFF3FD",
       border: "1px solid transparent",
     },

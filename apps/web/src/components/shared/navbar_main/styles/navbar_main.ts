@@ -48,7 +48,7 @@ export const NavLink = styled.div`
       transform: translateX(-50%);
       width: 0%;
       height: 2px;
-      background-color: black;
+      background-color: #0366d6;
       transition: width 0.3s ease;
     }
 

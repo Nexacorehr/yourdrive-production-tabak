@@ -12,6 +12,10 @@ export const GlobalReset = createGlobalStyle`
     overflow-y: auto;   /* allow vertical scroll */
   }
 
+  
+  
+
+
   @font-face {
     font-family: "Forma DJR Display";
     src: url("../../../../../../public/fonts/FormaDJRDisplay-Bold-Testing.woff2") format("woff2"),

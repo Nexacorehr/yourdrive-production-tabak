@@ -1,5 +1,5 @@
 import React from "react";
-import { HeroContainer, HeroContGrad, TestniDiv, HeroContGradTop, HeroTextCont, GrayHeroText, BlueHeroText, ShortDesc, ButtonCont } from "./styles/hero";
+import { HeroContainer, HeroContGrad, HeroContGradTop, HeroTextCont, GrayHeroText, BlueHeroText, ShortDesc, ButtonCont } from "./styles/hero";
 import LandingButton from "../../../shared/landingbutton/LandingButton";
 
 const Hero: React.FC = () => {
@@ -21,7 +21,6 @@ const Hero: React.FC = () => {
         </HeroTextCont>
     </HeroContainer>
     <HeroContGrad/>
-    <TestniDiv/>
     </>
   );
 };

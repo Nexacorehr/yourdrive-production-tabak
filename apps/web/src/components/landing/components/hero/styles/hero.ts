@@ -20,7 +20,7 @@ export const GrayHeroText = styled.div`
     font-family: "Forma DJR Display";
     font-weight: 500;
     font-size: 96px;
-    color: rgba(0, 0, 0, 0.80);
+    color: #363840;
 `;
 export const BlueHeroText = styled.div`
     flex: 1;
@@ -72,10 +72,4 @@ export const HeroContGradTop = styled.div`
     
     );
     
-`;
-export const TestniDiv = styled.div`
-    width: 100%;
-    height: 1004px;
-    background: #e9eef6;
-  );
 `;
