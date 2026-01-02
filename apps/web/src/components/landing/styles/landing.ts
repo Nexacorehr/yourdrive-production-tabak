@@ -10,6 +10,7 @@ export const GlobalReset = createGlobalStyle`
     height: auto;        /* prevents scroll locking */
     overflow-x: hidden;  /* stop horizontal scroll */
     overflow-y: auto;   /* allow vertical scroll */
+    background-color: #ffffffff;
   }
 
   

@@ -2,7 +2,7 @@ import styled from "styled-components";
 
 export const HeroContainer = styled.div`
     width: 100%;
-    height: 855px;
+    height: 650px;
     background-color: #DDE2EE;
     display: flex;
     align-items: center;

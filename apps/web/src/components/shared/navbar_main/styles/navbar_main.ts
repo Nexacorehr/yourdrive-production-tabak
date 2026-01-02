@@ -4,6 +4,7 @@ export const NavbarContainer = styled.div`
     width: 100%;
     height: 64px;
     display: flex;
+    background-color: #ffffffff;
 `;
 
 export const ImgCont = styled.div`
