@@ -286,6 +286,7 @@ const UploadStatusModal: React.FC<UploadStatusModalProps> = ({
   onClose,
   totalProgress,
 }) => {
+  // TODO: popravi boje
   console.log("Modal render:", {
     isOpen,
     filesCount: files.length,
