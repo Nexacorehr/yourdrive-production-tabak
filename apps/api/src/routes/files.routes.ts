@@ -435,4 +435,61 @@ filesRoutes.get(
   }
 );
 
+filesRoutes.get(
+  "/content/:fileId",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.userId) {
+        return res.status(401).json({
+          success: false,
+          error: "Authentication required",
+        });
+      }
+
+      const { fileId } = req.params;
+
+      // Fetch file metadata from DB
+      const fileResult = await pool.query(
+        `SELECT id, original_name, s3_key, mime_type
+         FROM user_files
+         WHERE id = $1 AND user_id = $2`,
+        [fileId, req.userId]
+      );
+
+      if (fileResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "File not found",
+        });
+      }
+
+      const file = fileResult.rows[0];
+
+      const command = new GetObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: file.s3_key,
+      });
+
+      const signedUrl = await getSignedUrl(s3Client, command, {
+        expiresIn: 3600, // 1 hour
+      });
+
+      res.json({
+        success: true,
+        signedUrl,
+        mimeType: file.mime_type,
+        fileName: file.original_name,
+        fileId: file.id,
+      });
+    } catch (err) {
+      console.error("Error loading file content:", err);
+      res.status(500).json({
+        success: false,
+        error: "Failed to load file content",
+      });
+    }
+  }
+);
+
 export default filesRoutes;

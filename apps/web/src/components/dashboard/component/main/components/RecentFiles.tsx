@@ -61,6 +61,7 @@ const RecentFiles: React.FC = () => {
                 isYou: true,
               },
               size: file.size,
+              url: file.s3_key,
             })
           );
           setFiles(transformedFiles);

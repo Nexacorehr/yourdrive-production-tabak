@@ -20,6 +20,7 @@ export interface FileItem {
   selected?: boolean;
   starred?: boolean;
   trashed?: boolean;
+  url: string;
 }
 
 interface FilesTableProps {
