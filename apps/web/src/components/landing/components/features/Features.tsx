@@ -38,7 +38,8 @@ const Features: React.FC = () => {
               <Title>Never in your way.</Title>
               <Desc>YourDrive is designed as</Desc>
             </Wrap>
-            <Desc>your go to platform with the simple and affordable features.</Desc>
+            <Desc>your go to platform with the simple and</Desc>
+            <Desc>affordable features.</Desc>
           </TextCont>
         </Item>
       </ImgNDescCont>
