@@ -492,4 +492,85 @@ filesRoutes.get(
   }
 );
 
+filesRoutes.get(
+  "/folder-contents",
+  authMiddleware,
+  async (req: AuthRequest, res) => {
+    try {
+      if (!req.userId) {
+        return res.status(401).json({
+          success: false,
+          error: "Authentication required",
+        });
+      }
+
+      const { path } = req.query;
+
+      if (!path || typeof path !== "string") {
+        return res.status(400).json({
+          success: false,
+          error: "Folder path is required",
+        });
+      }
+
+      // Get all files that match this folder path or are in subfolders
+      const filesResult = await pool.query(
+        `SELECT id, original_name, s3_key, folder_path, size, mime_type, created_at
+       FROM user_files
+       WHERE user_id = $1 AND folder_path LIKE $2
+       ORDER BY original_name ASC`,
+        [req.userId, `${path}%`]
+      );
+
+      const files: Array<{
+        name: string;
+        size: number;
+        path: string;
+        id: number;
+      }> = [];
+      const subfolders = new Set<string>();
+
+      filesResult.rows.forEach((row) => {
+        const folderPath = row.folder_path || "";
+
+        // Check if file is directly in this folder (exact match)
+        if (folderPath === path) {
+          files.push({
+            id: row.id,
+            name: row.original_name,
+            size: parseInt(row.size, 10),
+            path: row.folder_path,
+          });
+        } else if (folderPath.startsWith(path + "/")) {
+          const relativePath = folderPath.substring(path.length + 1);
+          const nextFolder = relativePath.split("/")[0];
+
+          if (nextFolder) {
+            subfolders.add(nextFolder);
+          }
+        }
+      });
+
+      const folders = Array.from(subfolders).map((name) => ({
+        name,
+        path: `${path}/${name}`,
+      }));
+
+      res.json({
+        success: true,
+        content: {
+          files,
+          folders,
+        },
+      });
+    } catch (err) {
+      console.error("Error fetching folder contents:", err);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch folder contents",
+      });
+    }
+  }
+);
+
 export default filesRoutes;

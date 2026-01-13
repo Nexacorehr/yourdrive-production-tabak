@@ -217,11 +217,10 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({ url, fileName }) => {
 
   return (
     <Container>
-      <audio ref={audioRef} src={url} />
+      <audio ref={audioRef} src={url} crossOrigin="anonymous" />
 
       <WaveformContainer>
         <WaveformCanvas ref={canvasRef} width={800} height={200} />
-        <FileNameOverlay>{fileName}</FileNameOverlay>
       </WaveformContainer>
 
       <ControlsSection>
@@ -377,7 +376,6 @@ const Container = styled.div`
   align-items: center;
   justify-content: center;
   padding: 40px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 `;
 
 const WaveformContainer = styled.div`

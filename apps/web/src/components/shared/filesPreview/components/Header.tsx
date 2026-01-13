@@ -6,10 +6,12 @@ import {
   ActionBar,
   NavButton,
   ActionButton,
-  MoreButton,
   CloseButton,
   Divider,
 } from "../styles/filePreview.styles";
+
+import ShareIcon from "../../icons/share";
+import EditIcon from "../../icons/edit";
 
 export interface HeaderProps {
   fileId?: string;
@@ -27,7 +29,7 @@ export interface HeaderProps {
   currentIndex: number;
   onClose: () => void;
   onDownload?: () => void;
-  onShare?: () => void;
+  handleShare?: () => void;
   onRename?: () => void;
   onNavigate?: (index: number) => void;
   handleFavorite?: () => void;
@@ -43,7 +45,7 @@ export const Header = ({
   currentIndex,
   onNavigate,
   onRename,
-  onShare,
+  handleShare,
   onClose,
   handleFavorite,
   isFavorited,
@@ -84,26 +86,38 @@ export const Header = ({
         )}
 
         <ActionButton onClick={handleFavorite} title="Favorite">
-          {isFavorited ? "★" : "☆"}
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path
+              d={
+                isFavorited
+                  ? "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+                  : "M12 17.5l-5.878 3.09 1.123-6.545L2.489 9.41l6.572-.955L12 2.5l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545L12 17.5z"
+              }
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill={isFavorited ? "currentColor" : "none"}
+            />
+          </svg>
         </ActionButton>
 
         {onRename && (
           <ActionButton onClick={onRename} title="Rename">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path
-                d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
-                fill="currentColor"
+                d="M16.474 5.408l2.118 2.117m-.756-3.982L12.109 9.27a2.118 2.118 0 00-.58 1.082L11 13l2.648-.53c.41-.082.786-.283 1.082-.579l5.727-5.727a1.853 1.853 0 10-2.621-2.621z"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
-            </svg>
-          </ActionButton>
-        )}
-
-        {onShare && (
-          <ActionButton onClick={onShare} title="Share">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path
-                d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"
-                fill="currentColor"
+                d="M19 15v3a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h3"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
             </svg>
           </ActionButton>
@@ -112,32 +126,22 @@ export const Header = ({
         <ActionButton onClick={handleDownload} title="Download">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path
-              d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"
-              fill="currentColor"
+              d="M12 3v13m0 0l-4-4m4 4l4-4M5 20h14"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
           </svg>
         </ActionButton>
 
-        <ActionButton
-          onClick={() => setShowInfo(!showInfo)}
-          title="Information"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
-              fill="currentColor"
-            />
-          </svg>
+        <ActionButton onClick={handleShare} title="Share">
+          <ShareIcon height={20} width={20} color="currentColor" />
         </ActionButton>
 
-        <MoreButton title="More actions">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"
-              fill="currentColor"
-            />
-          </svg>
-        </MoreButton>
+        <ActionButton onClick={handleDownload} title="Edit">
+          <EditIcon height={20} width={20} color="currentColor" />
+        </ActionButton>
 
         <Divider />
 
