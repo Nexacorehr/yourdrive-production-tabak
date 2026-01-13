@@ -4,6 +4,8 @@ import { useAuthStore } from "../../../../../store/authStore";
 import FilesIcon from "../../../../shared/icons/files";
 import FilePreview from "../../../../shared/filesPreview/FilesPreview";
 
+import FileTypeIcon from "../../../../shared/files_table/FileTypeIcon";
+
 interface FolderPreviewModalProps {
   folder: { name: string; path: string };
   onClose: () => void;
@@ -130,17 +132,25 @@ const FolderPreviewModal: React.FC<FolderPreviewModalProps> = ({
                     key={f.path}
                     onClick={() => handleFolderClick(f.path)}
                   >
-                    <ItemIcon>
+                    <ItemIconWrapper>
                       <FilesIcon color="#5f6368" />
-                    </ItemIcon>
-                    <ItemName title={f.name}>{f.name}</ItemName>
-                    <ItemType>Folder</ItemType>
+                    </ItemIconWrapper>
+                    <ItemInfo>
+                      <ItemName title={f.name}>{f.name}</ItemName>
+                      <ItemType>Folder</ItemType>
+                    </ItemInfo>
                   </GridItem>
                 ))}
 
                 {content.files.map((file) => (
                   <GridItem key={file.id} onClick={() => handleFileClick(file)}>
-                    <ItemIcon>📄</ItemIcon>
+                    <ItemIconWrapper>
+                      <FileTypeIcon
+                        fileName={file.name}
+                        mimeType={file.mimeType}
+                        size={40}
+                      />
+                    </ItemIconWrapper>
                     <ItemInfo>
                       <ItemName title={file.name}>{file.name}</ItemName>
                       <ItemSize>{formatSize(file.size)}</ItemSize>
@@ -298,8 +308,8 @@ const ContentGrid = styled.div`
 const GridItem = styled.div`
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  gap: 12px;
   padding: 16px 12px;
   border: 1px solid #dadce0;
   border-radius: 8px;
@@ -312,12 +322,12 @@ const GridItem = styled.div`
   }
 `;
 
-const ItemIcon = styled.div`
-  font-size: 20px;
+const ItemIconWrapper = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 4px;
+  width: 48px;
+  height: 48px;
 `;
 
 const ItemInfo = styled.div`
@@ -325,6 +335,8 @@ const ItemInfo = styled.div`
   display: flex;
   flex-direction: column;
   gap: 4px;
+  align-items: center;
+  text-align: center;
 `;
 
 const ItemName = styled.div`
