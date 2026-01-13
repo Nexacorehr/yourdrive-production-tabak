@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import FileIcon from "../icons/file";
+import FileTypeIcon from "./FileTypeIcon";
 import FolderSmallIcon from "../icons/smallFolder";
 
 export interface FileItem {
@@ -148,7 +149,7 @@ const FilesTable: React.FC<FilesTableProps> = ({
                       {file.type === "folder" ? (
                         <FolderSmallIcon color="#5f6368" />
                       ) : (
-                        <FileIcon />
+                        <FileTypeIcon fileName={file.name} size={20} />
                       )}
                     </FileIconWrapper>
                     <FileName title={file.name}>{file.name}</FileName>
