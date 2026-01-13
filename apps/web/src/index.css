@@ -20,6 +20,8 @@
   width: 100vw;
   height: 100vh;
   display: block;
+
+  overflow-x: hidden;
 }
 
 /* Hide scrollbar for Chrome, Safari and Opera */
