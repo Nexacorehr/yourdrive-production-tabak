@@ -38,7 +38,7 @@ async function setupDatabase() {
     `);
     console.log("User table created");
 
-    console.log("\n Creating Session table...");
+    console.log("\nCreating Session table...");
     await client.query(`
       CREATE TABLE "Session" (
         id TEXT PRIMARY KEY,
@@ -129,7 +129,79 @@ async function setupDatabase() {
     `);
     console.log("user_files table created");
 
-    console.log("\n Verifying tables...");
+    console.log("\nCreating user_settings table...");
+    await client.query(`
+      CREATE TABLE user_settings (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT UNIQUE NOT NULL,
+        
+        profile JSONB DEFAULT '{"email": "", "firstName": "", "lastName": "", "avatarUrl": null}'::jsonb,
+        security JSONB DEFAULT '{"twoFactorEnabled": false, "clientSideEncryption": false, "offlineModeEnabled": false}'::jsonb,
+        appearance JSONB DEFAULT '{"theme": "system", "fileView": "grid", "thumbnailQuality": "medium"}'::jsonb,
+        language JSONB DEFAULT '{"displayLanguage": "en", "dateFormat": "MM/DD/YYYY", "timeFormat": "12-hour", "timezone": "UTC"}'::jsonb,
+        storage JSONB DEFAULT '{"autoSync": true, "fileVersioning": true, "maxVersionsToKeep": 10}'::jsonb,
+        sharing JSONB DEFAULT '{"defaultLinkPermission": "view", "allowPublicSharing": true, "requirePasswordForLinks": false, "linkExpirationDays": null, "notifyOnShare": true, "allowDownload": true}'::jsonb,
+        preferences JSONB DEFAULT '{"emailNotifications": true, "desktopNotifications": false, "notifyOnUpload": true, "notifyOnShare": true, "notifyOnComment": true, "weeklyDigest": false}'::jsonb,
+        privacy JSONB DEFAULT '{"showOnlineStatus": true, "allowActivityTracking": true, "shareUsageData": false, "indexFilesForSearch": true}'::jsonb,
+        
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        
+        CONSTRAINT user_settings_user_id_fkey FOREIGN KEY (user_id) 
+          REFERENCES "User"(id) ON DELETE CASCADE
+      );
+    `);
+
+    await client.query(`
+      CREATE INDEX idx_user_settings_user_id ON user_settings(user_id);
+    `);
+    console.log("user_settings table created");
+
+    console.log("\nCreating linked_accounts table...");
+    await client.query(`
+      CREATE TABLE linked_accounts (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        provider VARCHAR(50) NOT NULL,
+        provider_user_id VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        access_token TEXT,
+        refresh_token TEXT,
+        linked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_active BOOLEAN DEFAULT true,
+        
+        CONSTRAINT linked_accounts_user_id_fkey FOREIGN KEY (user_id) 
+          REFERENCES "User"(id) ON DELETE CASCADE,
+        UNIQUE(user_id, provider)
+      );
+    `);
+
+    await client.query(`
+      CREATE INDEX idx_linked_accounts_user_id ON linked_accounts(user_id);
+      CREATE INDEX idx_linked_accounts_provider ON linked_accounts(provider);
+    `);
+    console.log("linked_accounts table created");
+
+    console.log("\nCreating update trigger function...");
+    await client.query(`
+      CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        NEW.updated_at = CURRENT_TIMESTAMP;
+        RETURN NEW;
+      END;
+      $$ language 'plpgsql';
+    `);
+
+    await client.query(`
+      CREATE TRIGGER update_user_settings_updated_at 
+        BEFORE UPDATE ON user_settings
+        FOR EACH ROW 
+        EXECUTE FUNCTION update_updated_at_column();
+    `);
+    console.log("Trigger created");
+
+    console.log("\nVerifying tables...");
     const result = await client.query(`
       SELECT table_name 
       FROM information_schema.tables 
@@ -137,12 +209,12 @@ async function setupDatabase() {
       ORDER BY table_name;
     `);
 
-    console.log("\n Tables created:");
+    console.log("\nTables created:");
     result.rows.forEach((row) => {
       console.log(`  - ${row.table_name}`);
     });
 
-    console.log("\n Database setup complete!");
+    console.log("\n✅ Database setup complete!");
   } catch (error) {
     console.error("Error setting up database:", error);
     throw error;
@@ -152,7 +224,7 @@ async function setupDatabase() {
   }
 }
 
-console.log(" Checking environment variables...");
+console.log("Checking environment variables...");
 if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL is not set in environment variables");
   process.exit(1);

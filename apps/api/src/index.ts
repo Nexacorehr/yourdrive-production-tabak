@@ -9,6 +9,7 @@ import { prisma } from "./lib/prisma";
 
 import authRoutes from "./routes/auth.routes";
 import filesRoutes from "./routes/files.routes";
+import settingsRoutes from "./routes/settings.routes";
 
 dotenv.config();
 
@@ -41,6 +42,8 @@ pool.connect((err, client, release) => {
 app.use("/api/auth", authRoutes);
 
 app.use("/api/files", filesRoutes);
+
+app.use("/api/settings", settingsRoutes);
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "API is healthy" });
