@@ -30,11 +30,15 @@ interface FilesTableProps {
   emptySubtext?: string;
   onFileClick?: (file: FileItem) => void;
   onFileDoubleClick?: (file: FileItem) => void;
+  onFilePreview?: (file: FileItem) => void;
+  onFileSelect?: (file: FileItem, selected: boolean) => void;
   onFileContextMenu?: (file: FileItem, event: React.MouseEvent) => void;
   selectedFiles?: Set<string>;
   showOwner?: boolean;
   showLocation?: boolean;
   renderRowActions?: (file: FileItem) => React.ReactNode;
+  // New prop to control click behavior
+  singleClickMode?: "preview" | "select";
 }
 
 const FilesTable: React.FC<FilesTableProps> = ({
@@ -44,11 +48,14 @@ const FilesTable: React.FC<FilesTableProps> = ({
   emptySubtext = "Upload files to get started",
   onFileClick,
   onFileDoubleClick,
+  onFilePreview,
+  onFileSelect,
   onFileContextMenu,
   selectedFiles = new Set(),
   showOwner = true,
   showLocation = true,
   renderRowActions,
+  singleClickMode = "select", // Default to selection mode
 }) => {
   const formatInteraction = (file: FileItem): string => {
     const actionMap = {
@@ -61,12 +68,23 @@ const FilesTable: React.FC<FilesTableProps> = ({
   };
 
   const handleRowClick = (file: FileItem) => {
-    if (onFileClick) {
-      onFileClick(file);
+    if (singleClickMode === "preview") {
+      // Single click opens preview (for recent files page)
+      onFilePreview?.(file);
+    } else {
+      // Single click toggles selection (for your files page)
+      if (onFileClick) {
+        onFileClick(file);
+      }
     }
   };
 
   const handleRowDoubleClick = (file: FileItem) => {
+    if (singleClickMode === "select") {
+      // Double click opens preview (for your files page)
+      onFilePreview?.(file);
+    }
+    // In preview mode, double click does nothing extra
     if (onFileDoubleClick) {
       onFileDoubleClick(file);
     }

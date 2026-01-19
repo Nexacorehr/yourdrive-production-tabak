@@ -16,7 +16,7 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-const s3Client = new S3Client({
+export const s3Client = new S3Client({
   endpoint: process.env.B2_ENDPOINT,
   region: "eu-central-003",
   forcePathStyle: true,
@@ -124,7 +124,7 @@ filesRoutes.post(
               folderPath,
               file.size,
               file.mimetype,
-            ]
+            ],
           );
 
           return {
@@ -134,7 +134,7 @@ filesRoutes.post(
             size: file.size,
             mimeType: file.mimetype,
           };
-        }
+        },
       );
 
       const results = await Promise.all(uploadPromises);
@@ -152,7 +152,7 @@ filesRoutes.post(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 // Get user's files
@@ -170,7 +170,7 @@ filesRoutes.get("/", authMiddleware, async (req: AuthRequest, res) => {
          FROM user_files
          WHERE user_id = $1
          ORDER BY created_at DESC`,
-      [req.userId]
+      [req.userId],
     );
 
     res.json({
@@ -209,7 +209,7 @@ filesRoutes.get("/folders", authMiddleware, async (req: AuthRequest, res) => {
        WHERE user_id = $1
        GROUP BY folder_path
        ORDER BY COUNT(*) DESC`,
-      [req.userId]
+      [req.userId],
     );
 
     const folderMap = new Map<
@@ -285,7 +285,7 @@ filesRoutes.delete(
 
       const fileResult = await pool.query(
         `SELECT s3_key FROM user_files WHERE id = $1 AND user_id = $2`,
-        [fileId, req.userId]
+        [fileId, req.userId],
       );
 
       if (fileResult.rows.length === 0) {
@@ -304,7 +304,7 @@ filesRoutes.delete(
 
       await pool.query(
         `DELETE FROM user_files WHERE id = $1 AND user_id = $2`,
-        [fileId, req.userId]
+        [fileId, req.userId],
       );
 
       res.json({
@@ -318,7 +318,7 @@ filesRoutes.delete(
         error: "Failed to delete file",
       });
     }
-  }
+  },
 );
 
 filesRoutes.get("/usage", authMiddleware, async (req: AuthRequest, res) => {
@@ -336,7 +336,7 @@ filesRoutes.get("/usage", authMiddleware, async (req: AuthRequest, res) => {
         COALESCE(SUM(size), 0) as total_size
        FROM user_files
        WHERE user_id = $1`,
-      [req.userId]
+      [req.userId],
     );
 
     const stats = result.rows[0];
@@ -375,7 +375,7 @@ filesRoutes.get(
         `SELECT id, original_name, s3_key, mime_type, size
          FROM user_files
          WHERE id = $1 AND user_id = $2`,
-        [fileId, req.userId]
+        [fileId, req.userId],
       );
 
       if (fileResult.rows.length === 0) {
@@ -432,7 +432,7 @@ filesRoutes.get(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 filesRoutes.get(
@@ -454,7 +454,7 @@ filesRoutes.get(
         `SELECT id, original_name, s3_key, mime_type
          FROM user_files
          WHERE id = $1 AND user_id = $2`,
-        [fileId, req.userId]
+        [fileId, req.userId],
       );
 
       if (fileResult.rows.length === 0) {
@@ -489,7 +489,7 @@ filesRoutes.get(
         error: "Failed to load file content",
       });
     }
-  }
+  },
 );
 
 filesRoutes.get(
@@ -519,7 +519,7 @@ filesRoutes.get(
        FROM user_files
        WHERE user_id = $1 AND folder_path LIKE $2
        ORDER BY original_name ASC`,
-        [req.userId, `${path}%`]
+        [req.userId, `${path}%`],
       );
 
       const files: Array<{
@@ -570,7 +570,7 @@ filesRoutes.get(
         error: "Failed to fetch folder contents",
       });
     }
-  }
+  },
 );
 
 export default filesRoutes;

@@ -25,6 +25,7 @@ import RecentlyEdited from "../components/dashboard/component/recentlyEdited/Rec
 import Favorited from "../components/dashboard/component/favorited/Favorited";
 import Home from "../components/dashboard/component/main/Home";
 import Settings from "../components/settings/Settings";
+import SharedViewer from "../components/shared/sharedViewer/sharedViewer";
 
 export const ROUTES = {
   HOME: "/",
@@ -42,6 +43,7 @@ export const ROUTES = {
   RECENTLY_EDITED: "/dashboard/recently-edited",
   FAVORITED: "/dashboard/favorited",
   SETTINGS: "/dashboard/settings",
+  SHARED_FILE: "/shared/$token",
 } as const;
 
 function RootComponent() {
@@ -171,6 +173,12 @@ const settingsRoute = createRoute({
   beforeLoad: requireAuthentication,
 });
 
+export const sharedFileRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/shared/$token",
+  component: SharedViewer,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -179,6 +187,7 @@ const routeTree = rootRoute.addChildren([
   howItWorksRoute,
   pricingRoute,
   helpCenterRoute,
+  sharedFileRoute,
   dashboardRoute.addChildren([
     dashboardIndexRoute,
     yourFilesRoute,

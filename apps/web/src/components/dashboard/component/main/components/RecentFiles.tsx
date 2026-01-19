@@ -61,7 +61,6 @@ const RecentFiles: React.FC = () => {
 
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
 
   const { filteredFiles, hasActiveFilters, activeFilterCount } =
@@ -75,25 +74,13 @@ const RecentFiles: React.FC = () => {
     setPreviewFile(null);
   };
 
-  const handleFileSelect = (file: FileItem, selected: boolean) => {
-    setSelectedFiles((prev) => {
-      const newSet = new Set(prev);
-      if (selected) {
-        newSet.add(file.id);
-      } else {
-        newSet.delete(file.id);
-      }
-      return newSet;
-    });
-  };
-
   const handleFileContextMenu = (file: FileItem, event: React.MouseEvent) => {
     console.log(
       "Context menu for:",
       file.name,
       "at",
       event.clientX,
-      event.clientY
+      event.clientY,
     );
     // TODO: Implement context menu
   };
@@ -129,7 +116,7 @@ const RecentFiles: React.FC = () => {
             },
             size: file.size,
             url: file.s3_key,
-          })
+          }),
         );
         setFiles(transformedFiles);
       }
@@ -167,11 +154,10 @@ const RecentFiles: React.FC = () => {
         emptyMessage={getEmptyMessage(hasActiveFilters)}
         emptySubtext={getEmptySubtext(hasActiveFilters)}
         onFilePreview={handleFilePreview}
-        onFileSelect={handleFileSelect}
         onFileContextMenu={handleFileContextMenu}
-        selectedFiles={selectedFiles}
         showOwner={true}
         showLocation={true}
+        singleClickMode="preview"
       />
       {previewFile && (
         <FilePreview

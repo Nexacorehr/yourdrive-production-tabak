@@ -10,6 +10,7 @@ import { prisma } from "./lib/prisma";
 import authRoutes from "./routes/auth.routes";
 import filesRoutes from "./routes/files.routes";
 import settingsRoutes from "./routes/settings.routes";
+import sharingRoutes from "./routes/sharing.routes";
 
 dotenv.config();
 
@@ -21,7 +22,7 @@ app.use(
   cors({
     origin: process.env.FRONTEND_URL || "http://localhost:5173",
     credentials: true,
-  })
+  }),
 );
 app.use(express.json());
 app.use(cookieParser());
@@ -42,6 +43,8 @@ pool.connect((err, client, release) => {
 app.use("/api/auth", authRoutes);
 
 app.use("/api/files", filesRoutes);
+
+app.use("/api/sharing", sharingRoutes);
 
 app.use("/api/settings", settingsRoutes);
 

@@ -9,8 +9,10 @@ import {
 import { Header } from "./components/Header";
 import PreviewRenderer from "./components/Preview";
 import { InfoSidebar } from "./components/InfoSidebar";
+import SharePopup from "../popups/share/SharePopup";
 
 import { useFileLoader } from "../hooks/useFileLoader";
+import { usePopupStore } from "../popups/popup.store";
 
 export interface FilePreviewProps {
   fileId?: string;
@@ -51,7 +53,6 @@ const FilePreview: React.FC<FilePreviewProps> = ({
   onClose,
   onEdit,
   onDownload,
-  onShare,
   onRename,
   onDelete,
   onFavorite,
@@ -67,6 +68,8 @@ const FilePreview: React.FC<FilePreviewProps> = ({
 }) => {
   const [showInfo, setShowInfo] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
+  const toggleSharingPopup = usePopupStore((state) => state.toggleSharingPopup);
+  const isSharingPopupOpen = usePopupStore((state) => state.isSharingPopupOpen);
 
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
@@ -108,7 +111,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({
     onClose,
     onEdit,
     onDownload: handleDownload,
-    onShare,
+    onShare: toggleSharingPopup,
   };
 
   useEffect(() => {
@@ -130,16 +133,6 @@ const FilePreview: React.FC<FilePreviewProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose, files.length, currentIndex, onNavigate]);
 
-  console.log({
-    fileName,
-    mimeType,
-    fileType,
-    detectedType,
-    fileUrl,
-    loading,
-    error,
-  });
-
   return (
     <Overlay onClick={handleBackdropClick}>
       <Container>
@@ -149,8 +142,8 @@ const FilePreview: React.FC<FilePreviewProps> = ({
           currentIndex={currentIndex}
           onNavigate={onNavigate}
           onRename={onRename}
-          onShare={onShare}
           onClose={onClose}
+          handleShare={toggleSharingPopup}
           handleFavorite={handleFavorite}
           isFavorited={isFavorited}
           handleDownload={handleDownload}
@@ -194,6 +187,9 @@ const FilePreview: React.FC<FilePreviewProps> = ({
           />
         </ContentWrapper>
       </Container>
+      {isSharingPopupOpen && fileId && (
+        <SharePopup fileId={fileId} fileName={fileName} onClose={() => {}} />
+      )}
     </Overlay>
   );
 };
