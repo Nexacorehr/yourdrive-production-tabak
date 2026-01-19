@@ -52,7 +52,7 @@ export const NavLink = styled.div`
       transform: translateX(-50%);
       width: 0%;
       height: 2px;
-      background-color: #0366d6;
+      background-color: #1F9AFE;
       transition: width 0.3s ease;
     }
 

@@ -11,14 +11,19 @@ export const ImgNDescCont = styled.div`
     height: 500px;
     display: flex;
     justify-content: space-between;
+    align-items: flex-start;
     margin-top: 3%;
 
 `;
 export const Item = styled.div`
-    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 `;
 export const ImgCont = styled.div`
-    
+    display: flex;
+    justify-content: center;
 `;
 export const Title = styled.div`
     width: max-content;
@@ -38,6 +43,8 @@ export const Desc = styled.div`
     line-height: 27.5px;
     letter-spacing: -0.5px;
     color: #5E616E;
+    display: flex;
+    justify-content: center;
 `;
 export const TextCont = styled.div`
     width: 100%;
@@ -47,6 +54,7 @@ export const TextCont = styled.div`
 `;
 export const Wrap = styled.div`
     display: flex;
+    justify-content: center;
     width: 100%;
     gap: 1ch;
 `;
