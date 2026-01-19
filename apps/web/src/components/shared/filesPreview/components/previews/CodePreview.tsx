@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import { Download, AlertCircle, Loader2, ExternalLink } from "lucide-react";
-import { getLanguageFromExtension } from "../../utils/FileTypeDetector";
 
 interface CodeEditorProps {
   url: string;
@@ -192,8 +191,6 @@ export default function CodeEditor({
   const [isCorsError, setIsCorsError] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
 
-  const language = getLanguageFromExtension(fileName);
-
   useEffect(() => {
     loadFile();
   }, [url]);
@@ -211,18 +208,20 @@ export default function CodeEditor({
 
       if (!response.ok) {
         throw new Error(
-          `Failed to load file: ${response.status} ${response.statusText}`
+          `Failed to load file: ${response.status} ${response.statusText}`,
         );
       }
 
-      const text = await response.text();
+      const arrayBuffer = await response.arrayBuffer();
+      const decoder = new TextDecoder("utf-8");
+      const text = decoder.decode(arrayBuffer);
+
       setContent(text);
       setLoading(false);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to load file";
 
-      // Check if it's a CORS error
       if (
         errorMessage.includes("CORS") ||
         errorMessage.includes("NetworkError") ||

@@ -12,10 +12,10 @@ interface DocumentViewerProps {
 
 const Container = styled.div`
   width: 100%;
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  background: white;
+  background: #ffffff;
 `;
 
 const Button = styled.button<{ $primary?: boolean }>`
@@ -34,18 +34,18 @@ const Button = styled.button<{ $primary?: boolean }>`
     props.$primary
       ? `
     color: white;
-    background: #3b82f6;
+    background: #1a73e8;
     
     &:hover {
-      background: #2563eb;
+      background: #1557b0;
     }
   `
       : `
-    color: #374151;
+    color: #202124;
     background: transparent;
     
     &:hover {
-      background: #f3f4f6;
+      background: #f1f3f4;
     }
   `}
 `;
@@ -53,29 +53,33 @@ const Button = styled.button<{ $primary?: boolean }>`
 const Content = styled.div`
   flex: 1;
   overflow: hidden;
+  background: #ffffff;
 `;
 
 const IFrame = styled.iframe`
   width: 100%;
   height: 100%;
   border: none;
+  background: #ffffff;
 `;
 
 const TextContainer = styled.div`
   width: 100%;
   height: 100%;
   overflow: auto;
-  background: #f9fafb;
-  padding: 1.5rem;
+  background: #ffffff;
+  padding: 2rem;
 `;
 
 const PreFormatted = styled.pre`
-  font-size: 0.875rem;
-  font-family: "Monaco", "Menlo", "Consolas", monospace;
+  font-size: 14px;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
   white-space: pre-wrap;
   word-break: break-word;
-  color: #1f2937;
+  color: #202124;
+  background: #ffffff;
   margin: 0;
+  line-height: 1.6;
 `;
 
 const CenteredContainer = styled.div`
@@ -84,7 +88,7 @@ const CenteredContainer = styled.div`
   align-items: center;
   justify-content: center;
   height: 100%;
-  background: #f9fafb;
+  background: #ffffff;
 `;
 
 const LoadingContainer = styled(CenteredContainer)`
@@ -93,22 +97,23 @@ const LoadingContainer = styled(CenteredContainer)`
 
 const ErrorContainer = styled(CenteredContainer)`
   gap: 0.75rem;
-  color: #dc2626;
+  color: #d93025;
 `;
 
 const UnsupportedContainer = styled(CenteredContainer)`
-  color: #6b7280;
+  color: #5f6368;
 `;
 
 const Title = styled.p`
   font-size: 1.125rem;
   font-weight: 500;
   margin: 0 0 0.5rem 0;
+  color: #202124;
 `;
 
 const Subtitle = styled.p`
   font-size: 0.875rem;
-  color: #6b7280;
+  color: #5f6368;
   margin: 0 0 1rem 0;
 `;
 
@@ -125,7 +130,7 @@ const IconWrapper = styled.div<{ $size?: string; $color?: string }>`
 `;
 
 const SpinningIcon = styled(IconWrapper)`
-  color: #3b82f6;
+  color: #1a73e8;
 
   svg {
     animation: spin 1s linear infinite;
@@ -173,7 +178,12 @@ export default function DocumentViewer({
       if (["txt", "md", "json", "xml", "csv", "log"].includes(ext)) {
         const response = await fetch(url);
         if (!response.ok) throw new Error("Failed to load document");
-        const text = await response.text();
+
+        // Properly decode UTF-8 text
+        const arrayBuffer = await response.arrayBuffer();
+        const decoder = new TextDecoder("utf-8");
+        const text = decoder.decode(arrayBuffer);
+
         setContent(text);
         setLoading(false);
         return;
@@ -206,7 +216,7 @@ export default function DocumentViewer({
 
     if (documentExtensions.includes(fileType)) {
       const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(
-        url
+        url,
       )}&embedded=true`;
       return <IFrame src={viewerUrl} title={fileName} />;
     }
@@ -234,30 +244,34 @@ export default function DocumentViewer({
 
   if (loading) {
     return (
-      <LoadingContainer>
-        <SpinningIcon>
-          <Loader2 />
-        </SpinningIcon>
-        <Subtitle>Loading document...</Subtitle>
-      </LoadingContainer>
+      <Container>
+        <LoadingContainer>
+          <SpinningIcon>
+            <Loader2 />
+          </SpinningIcon>
+          <Subtitle>Loading document...</Subtitle>
+        </LoadingContainer>
+      </Container>
     );
   }
 
   if (error) {
     return (
-      <ErrorContainer>
-        <IconWrapper $size="3rem" $color="#dc2626">
-          <AlertCircle />
-        </IconWrapper>
-        <Title>Failed to load document</Title>
-        <Subtitle>{error}</Subtitle>
-        {onDownload && (
-          <Button $primary onClick={onDownload}>
-            <Download size={16} />
-            Download file
-          </Button>
-        )}
-      </ErrorContainer>
+      <Container>
+        <ErrorContainer>
+          <IconWrapper $size="3rem" $color="#d93025">
+            <AlertCircle />
+          </IconWrapper>
+          <Title>Failed to load document</Title>
+          <Subtitle>{error}</Subtitle>
+          {onDownload && (
+            <Button $primary onClick={onDownload}>
+              <Download size={16} />
+              Download file
+            </Button>
+          )}
+        </ErrorContainer>
+      </Container>
     );
   }
 
