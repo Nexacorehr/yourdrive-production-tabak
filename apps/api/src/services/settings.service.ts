@@ -1,0 +1,424 @@
+import { Pool } from "pg";
+import { prisma } from "../lib/prisma";
+import bcrypt from "bcrypt";
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+} from "@aws-sdk/client-s3";
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+const s3Client = new S3Client({
+  endpoint: process.env.B2_ENDPOINT,
+  region: "eu-central-003",
+  forcePathStyle: true,
+  useArnRegion: false,
+  credentials: {
+    accessKeyId: process.env.B2_KEY_ID ?? "",
+    secretAccessKey: process.env.B2_APPLICATION_KEY ?? "",
+  },
+});
+
+const BUCKET_NAME = process.env.B2_BUCKET_NAME;
+const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || "12");
+
+export class SettingsService {
+  static async initializeSettings(userId: string, email: string) {
+    const result = await pool.query(
+      `INSERT INTO user_settings (user_id, profile)
+       VALUES ($1, $2)
+       ON CONFLICT (user_id) DO NOTHING
+       RETURNING *`,
+      [
+        userId,
+        JSON.stringify({ email, firstName: "", lastName: "", avatarUrl: null }),
+      ]
+    );
+    return result.rows[0];
+  }
+
+  static async getSettings(userId: string) {
+    await this.ensureSettingsExist(userId);
+
+    const result = await pool.query(
+      `SELECT * FROM user_settings WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error("Settings not found");
+    }
+
+    const settings = result.rows[0];
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, name: true },
+    });
+
+    const usageResult = await pool.query(
+      `SELECT COALESCE(SUM(size), 0) as used_storage
+       FROM user_files
+       WHERE user_id = $1`,
+      [userId]
+    );
+
+    const usedStorage = parseInt(usageResult.rows[0].used_storage, 10);
+    const totalStorage = 15 * 1024 * 1024 * 1024;
+
+    const profile = settings.profile || {};
+    const [firstName, lastName] = (user?.name || "").split(" ");
+
+    return {
+      profile: {
+        email: user?.email || profile.email || "",
+        firstName: firstName || profile.firstName || "",
+        lastName: lastName || profile.lastName || "",
+        avatarUrl: profile.avatarUrl || null,
+        avatarInitials: this.getInitials(firstName, lastName),
+      },
+      security: settings.security || {},
+      appearance: settings.appearance || {},
+      language: settings.language || {},
+      storage: {
+        ...(settings.storage || {}),
+        totalStorage,
+        usedStorage,
+      },
+      sharing: settings.sharing || {},
+      preferences: settings.preferences || {},
+      privacy: settings.privacy || {},
+      createdAt: settings.created_at,
+      updatedAt: settings.updated_at,
+    };
+  }
+
+  static async updateProfile(userId: string, data: any) {
+    await this.ensureSettingsExist(userId);
+
+    if (data.email) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { email: data.email },
+      });
+    }
+
+    if (data.firstName || data.lastName) {
+      const currentSettings = await pool.query(
+        `SELECT profile FROM user_settings WHERE user_id = $1`,
+        [userId]
+      );
+      const currentProfile = currentSettings.rows[0]?.profile || {};
+
+      const firstName = data.firstName || currentProfile.firstName || "";
+      const lastName = data.lastName || currentProfile.lastName || "";
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { name: `${firstName} ${lastName}`.trim() },
+      });
+    }
+
+    await pool.query(
+      `UPDATE user_settings
+       SET profile = profile || $1::jsonb,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2`,
+      [JSON.stringify(data), userId]
+    );
+  }
+
+  static async updateSecurity(userId: string, data: any) {
+    await this.ensureSettingsExist(userId);
+
+    await pool.query(
+      `UPDATE user_settings
+       SET security = security || $1::jsonb,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2`,
+      [JSON.stringify(data), userId]
+    );
+  }
+
+  static async updateAppearance(userId: string, data: any) {
+    await this.ensureSettingsExist(userId);
+
+    await pool.query(
+      `UPDATE user_settings
+       SET appearance = appearance || $1::jsonb,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2`,
+      [JSON.stringify(data), userId]
+    );
+  }
+
+  static async updateLanguage(userId: string, data: any) {
+    await this.ensureSettingsExist(userId);
+
+    await pool.query(
+      `UPDATE user_settings
+       SET language = language || $1::jsonb,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2`,
+      [JSON.stringify(data), userId]
+    );
+  }
+
+  static async updateStorage(userId: string, data: any) {
+    await this.ensureSettingsExist(userId);
+
+    await pool.query(
+      `UPDATE user_settings
+       SET storage = storage || $1::jsonb,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2`,
+      [JSON.stringify(data), userId]
+    );
+  }
+
+  static async updateSharing(userId: string, data: any) {
+    await this.ensureSettingsExist(userId);
+
+    await pool.query(
+      `UPDATE user_settings
+       SET sharing = sharing || $1::jsonb,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2`,
+      [JSON.stringify(data), userId]
+    );
+  }
+
+  static async updatePreferences(userId: string, data: any) {
+    await this.ensureSettingsExist(userId);
+
+    await pool.query(
+      `UPDATE user_settings
+       SET preferences = preferences || $1::jsonb,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2`,
+      [JSON.stringify(data), userId]
+    );
+  }
+
+  static async updatePrivacy(userId: string, data: any) {
+    await this.ensureSettingsExist(userId);
+
+    await pool.query(
+      `UPDATE user_settings
+       SET privacy = privacy || $1::jsonb,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2`,
+      [JSON.stringify(data), userId]
+    );
+  }
+
+  static async updatePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+  ) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid) {
+      throw new Error("Current password is incorrect");
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    await pool.query(
+      `UPDATE user_settings
+       SET security = security || $1::jsonb,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2`,
+      [JSON.stringify({ passwordLastChanged: new Date() }), userId]
+    );
+  }
+
+  static async uploadAvatar(
+    userId: string,
+    file: Express.Multer.File
+  ): Promise<string> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const timestamp = Date.now();
+    const extension = file.originalname.split(".").pop();
+    const s3Key = `avatars/${user.email}/${timestamp}.${extension}`;
+
+    const uploadParams = {
+      Bucket: BUCKET_NAME,
+      Key: s3Key,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+      Metadata: {
+        userId: userId,
+        uploadDate: new Date().toISOString(),
+      },
+    };
+
+    await s3Client.send(new PutObjectCommand(uploadParams));
+
+    const avatarUrl = `${process.env.B2_PUBLIC_URL}/${s3Key}`;
+
+    await pool.query(
+      `UPDATE user_settings
+       SET profile = profile || $1::jsonb,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2`,
+      [JSON.stringify({ avatarUrl }), userId]
+    );
+
+    return avatarUrl;
+  }
+
+  static async deleteAvatar(userId: string) {
+    const result = await pool.query(
+      `SELECT profile FROM user_settings WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error("Settings not found");
+    }
+
+    const profile = result.rows[0].profile;
+    const avatarUrl = profile?.avatarUrl;
+
+    if (avatarUrl) {
+      const s3Key = avatarUrl.replace(`${process.env.B2_PUBLIC_URL}/`, "");
+
+      try {
+        await s3Client.send(
+          new DeleteObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: s3Key,
+          })
+        );
+      } catch (err) {
+        console.error("Error deleting avatar from S3:", err);
+      }
+    }
+
+    await pool.query(
+      `UPDATE user_settings
+       SET profile = profile || $1::jsonb,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2`,
+      [JSON.stringify({ avatarUrl: null }), userId]
+    );
+  }
+
+  static async getActiveSessions(userId: string) {
+    const sessions = await prisma.session.findMany({
+      where: {
+        userId,
+        expiresAt: { gt: new Date() },
+      },
+      select: {
+        id: true,
+        createdAt: true,
+        expiresAt: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return sessions.map((session) => ({
+      id: session.id,
+      deviceType: "web" as const,
+      deviceName: "Web Browser",
+      lastActive: session.createdAt,
+      isCurrent: false, // TODO: Determine current session
+    }));
+  }
+
+  static async signOutSession(userId: string, sessionId: string) {
+    await prisma.session.delete({
+      where: {
+        id: sessionId,
+        userId,
+      },
+    });
+  }
+
+  static async signOutAllSessions(userId: string) {
+    await prisma.session.deleteMany({
+      where: { userId },
+    });
+  }
+
+  static async getLinkedAccounts(userId: string) {
+    const result = await pool.query(
+      `SELECT id, provider, email, linked_at, is_active
+       FROM linked_accounts
+       WHERE user_id = $1
+       ORDER BY linked_at DESC`,
+      [userId]
+    );
+
+    return result.rows.map((row) => ({
+      id: row.id.toString(),
+      provider: row.provider,
+      email: row.email,
+      linkedAt: row.linked_at,
+      isActive: row.is_active,
+    }));
+  }
+
+  static async unlinkAccount(userId: string, accountId: string) {
+    await pool.query(
+      `DELETE FROM linked_accounts
+       WHERE id = $1 AND user_id = $2`,
+      [accountId, userId]
+    );
+  }
+
+  static async clearCache(userId: string) {
+    // TODO: Implement cache clearing logic
+    console.log(`Clearing cache for user ${userId}`);
+  }
+
+  private static async ensureSettingsExist(userId: string) {
+    const result = await pool.query(
+      `SELECT id FROM user_settings WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
+
+      await this.initializeSettings(userId, user?.email || "");
+    }
+  }
+
+  private static getInitials(firstName?: string, lastName?: string): string {
+    const first = firstName?.charAt(0)?.toUpperCase() || "";
+    const last = lastName?.charAt(0)?.toUpperCase() || "";
+    return `${first}${last}` || "??";
+  }
+}

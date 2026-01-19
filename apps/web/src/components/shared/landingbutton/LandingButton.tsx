@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect } from "react";
+import React, { forwardRef, useEffect, useMemo } from "react";
 import { useAuthStore } from "../../../store/authStore";
 
 type Variant = "primary" | "secondary" | "ghost";
@@ -124,28 +124,62 @@ const LandingButton = forwardRef<HTMLButtonElement, ButtonProps>((props, ref) =>
       return () => {
         window.location.href = "/login";
       }
-    }
-    if (purps === "register") {
-      if (isLoggedIn()) {
+    }, [variant, size]);
+
+    function onclick(purps?: string) {
+      if (purps === "login") {
+        return () => {
+          window.location.href = "/login";
+        };
+      }
+      if (purps === "register") {
+        if (isLoggedIn()) {
+          return () => {
+            window.location.href = "/dashboard";
+          };
+        }
+        return () => {
+          window.location.href = "/register";
+        };
+      }
+      if (purps === "dashboard") {
         return () => {
           window.location.href = "/dashboard";
-        }
+        };
       }
-      return () => {
-        window.location.href = "/register";
+      if (purps === "howitworks") {
+        return () => {
+          window.location.href = "/howitworks";
+        };
       }
+      return undefined;
     }
-    if (purps === "dashboard") {
-      return () => {
-        window.location.href = "/dashboard";
-      }
-    }
-    if (purps === "howitworks") {
-      return () => {
-        window.location.href = "/howitworks";
-      }
-    }
-    return undefined;
+
+    return (
+      <>
+        <style>
+          {`
+          #${buttonId}:hover:not(:disabled) {
+            transform: translateY(-1px) scale(1.02);
+            ${getHoverStyle(variant)}
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.17) !important;
+          }
+        `}
+        </style>
+        <button
+          id={buttonId}
+          ref={ref}
+          type={type}
+          className={className}
+          style={width ? { ...combinedStyle, width: width } : combinedStyle}
+          onClick={onclick(purp)}
+          disabled={disabled}
+          {...rest}
+        >
+          {children}
+        </button>
+      </>
+    );
   }
 
   return (
