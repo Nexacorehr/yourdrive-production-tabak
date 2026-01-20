@@ -69,7 +69,6 @@ const SharedWithYou: React.FC = () => {
       });
       const data = await res.json();
       if (data.success) {
-        // Transform shared files to FileItem format
         const transformedFiles: FileItem[] = data.sharedFiles.map(
           (file: SharedFile) => ({
             id: file.file_id,
@@ -86,7 +85,7 @@ const SharedWithYou: React.FC = () => {
               ? formatDate(file.expires_at)
               : "Shared",
             lastInteractionType: "shared",
-            url: "", // optional if needed
+            url: "",
           }),
         );
         setSharedFiles(transformedFiles);

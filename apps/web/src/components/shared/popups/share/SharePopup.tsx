@@ -68,7 +68,8 @@ const SharePopup: React.FC<SharePopupProps> = ({
   const [loading, setLoading] = useState(false);
   const [existingShares, setExistingShares] = useState<Share[]>([]);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
-  const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     fetchExistingShares();
@@ -90,6 +91,9 @@ const SharePopup: React.FC<SharePopupProps> = ({
 
   const handleCreateShare = async () => {
     setLoading(true);
+    setError(null);
+    setSuccess(null);
+
     try {
       const recipientsList: Recipient[] = recipients
         .split(/[,\n]/)
@@ -121,18 +125,33 @@ const SharePopup: React.FC<SharePopupProps> = ({
       const data = await response.json();
 
       if (data.success) {
-        setGeneratedUrl(data.share.url);
-        fetchExistingShares();
+        setSuccess(
+          shareType === "link"
+            ? "Share link created successfully!"
+            : `File shared with ${recipientsList.length} recipient(s)!`,
+        );
+        await fetchExistingShares();
 
-        // Reset form
-        setRecipients("");
-        setPassword("");
-        setExpiresIn(null);
-        setMaxDownloads(null);
-        setShowAdvanced(false);
+        // Only reset form if it's a link share
+        if (shareType === "link") {
+          setRecipients("");
+          setPassword("");
+          setExpiresIn(null);
+          setMaxDownloads(null);
+          setShowAdvanced(false);
+        }
+
+        // Auto-switch to manage tab after a delay
+        setTimeout(() => {
+          setActiveTab("manage");
+          setSuccess(null);
+        }, 2000);
+      } else {
+        setError(data.error || "Failed to create share");
       }
     } catch (err) {
       console.error("Error creating share:", err);
+      setError("Failed to create share. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -178,7 +197,7 @@ const SharePopup: React.FC<SharePopupProps> = ({
       <Modal onClick={(e) => e.stopPropagation()}>
         <Header>
           <Title>
-            <Users size={24} />
+            <Users size={20} />
             Share "{fileName}"
           </Title>
           <CloseButton onClick={onClose}>
@@ -203,6 +222,9 @@ const SharePopup: React.FC<SharePopupProps> = ({
 
         {activeTab === "share" && (
           <Content>
+            {error && <ErrorMessage>{error}</ErrorMessage>}
+            {success && <SuccessMessage>{success}</SuccessMessage>}
+
             <Section>
               <SectionTitle>Share via</SectionTitle>
               <ShareTypeSelector>
@@ -210,7 +232,7 @@ const SharePopup: React.FC<SharePopupProps> = ({
                   $active={shareType === "link"}
                   onClick={() => setShareType("link")}
                 >
-                  <Link2 size={20} />
+                  <Link2 size={18} />
                   <div>
                     <OptionTitle>Link</OptionTitle>
                     <OptionDesc>Anyone with the link</OptionDesc>
@@ -220,7 +242,7 @@ const SharePopup: React.FC<SharePopupProps> = ({
                   $active={shareType === "email"}
                   onClick={() => setShareType("email")}
                 >
-                  <Mail size={20} />
+                  <Mail size={18} />
                   <div>
                     <OptionTitle>Email</OptionTitle>
                     <OptionDesc>Send to specific people</OptionDesc>
@@ -230,7 +252,7 @@ const SharePopup: React.FC<SharePopupProps> = ({
                   $active={shareType === "internal"}
                   onClick={() => setShareType("internal")}
                 >
-                  <Users size={20} />
+                  <Users size={18} />
                   <div>
                     <OptionTitle>Internal</OptionTitle>
                     <OptionDesc>Share with team members</OptionDesc>
@@ -265,28 +287,28 @@ const SharePopup: React.FC<SharePopupProps> = ({
                   $active={permission === "view"}
                   onClick={() => setPermission("view")}
                 >
-                  <Eye size={20} />
+                  <Eye size={18} />
                   <PermissionName>View only</PermissionName>
                 </PermissionCard>
                 <PermissionCard
                   $active={permission === "comment"}
                   onClick={() => setPermission("comment")}
                 >
-                  <MessageSquare size={20} />
+                  <MessageSquare size={18} />
                   <PermissionName>Comment</PermissionName>
                 </PermissionCard>
                 <PermissionCard
                   $active={permission === "edit"}
                   onClick={() => setPermission("edit")}
                 >
-                  <Edit3 size={20} />
+                  <Edit3 size={18} />
                   <PermissionName>Edit</PermissionName>
                 </PermissionCard>
                 <PermissionCard
                   $active={permission === "download"}
                   onClick={() => setPermission("download")}
                 >
-                  <Download size={20} />
+                  <Download size={18} />
                   <PermissionName>Download</PermissionName>
                 </PermissionCard>
               </PermissionGrid>
@@ -360,29 +382,10 @@ const SharePopup: React.FC<SharePopupProps> = ({
               </AdvancedSection>
             )}
 
-            {generatedUrl && (
-              <GeneratedLinkSection>
-                <GeneratedLinkLabel>
-                  <Check size={16} color="#10b981" />
-                  Share link created!
-                </GeneratedLinkLabel>
-                <LinkDisplay>
-                  <LinkText>{generatedUrl}</LinkText>
-                  <CopyButton onClick={() => handleCopyUrl(generatedUrl)}>
-                    {copiedUrl === generatedUrl ? (
-                      <Check size={16} />
-                    ) : (
-                      <Copy size={16} />
-                    )}
-                  </CopyButton>
-                </LinkDisplay>
-              </GeneratedLinkSection>
-            )}
-
             <ActionButtons>
               <CancelButton onClick={onClose}>Cancel</CancelButton>
               <CreateButton onClick={handleCreateShare} disabled={loading}>
-                {loading ? "Creating..." : "Create share link"}
+                {loading ? "Sharing..." : "Share"}
               </CreateButton>
             </ActionButtons>
           </Content>
@@ -465,54 +468,61 @@ const Overlay = styled.div`
 
 const Modal = styled.div`
   background: #fff;
-  border-radius: 16px;
+  border-radius: 12px;
   width: 90%;
-  max-width: 600px;
+  max-width: 560px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
 `;
 
 const Header = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 24px 20px;
-  border-bottom: 1px solid #e8eaed;
+  padding: 20px;
+  border-bottom: 1px solid #e5e7eb;
 `;
 
 const Title = styled.h2`
-  font-size: 20px;
-  font-weight: 500;
-  color: #202124;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 `;
 
 const CloseButton = styled.button`
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 8px;
-  border-radius: 50%;
+  padding: 6px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #5f6368;
+  color: #6b7280;
   transition: all 0.15s;
 
   &:hover {
-    background: #f1f3f4;
+    background: #f3f4f6;
+    color: #111827;
   }
 `;
 
 const TabBar = styled.div`
   display: flex;
-  border-bottom: 1px solid #e8eaed;
-  padding: 0 24px;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0 20px;
 `;
 
 const Tab = styled.button<{ $active: boolean }>`
@@ -521,56 +531,101 @@ const Tab = styled.button<{ $active: boolean }>`
   padding: 12px 16px;
   font-size: 14px;
   font-weight: 500;
-  color: ${(p) => (p.$active ? "#1a73e8" : "#5f6368")};
+  color: ${(p) => (p.$active ? "#111827" : "#6b7280")};
   cursor: pointer;
-  border-bottom: 2px solid ${(p) => (p.$active ? "#1a73e8" : "transparent")};
+  border-bottom: 2px solid ${(p) => (p.$active ? "#3b82f6" : "transparent")};
   transition: all 0.15s;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 
   &:hover {
-    color: #1a73e8;
+    color: #111827;
   }
 `;
 
 const Content = styled.div`
-  padding: 24px;
+  padding: 20px;
   overflow-y: auto;
   flex: 1;
 `;
 
+const ErrorMessage = styled.div`
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+`;
+
+const SuccessMessage = styled.div`
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+`;
+
 const Section = styled.div`
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 `;
 
 const SectionTitle = styled.div`
-  font-size: 13px;
-  font-weight: 500;
-  color: #5f6368;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
   margin-bottom: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 `;
 
 const ShareTypeSelector = styled.div`
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: 10px;
 `;
 
 const ShareTypeOption = styled.button<{ $active: boolean }>`
-  background: ${(p) => (p.$active ? "#e8f0fe" : "#f8f9fa")};
-  border: 2px solid ${(p) => (p.$active ? "#1a73e8" : "transparent")};
-  border-radius: 12px;
-  padding: 16px 12px;
+  background: ${(p) => (p.$active ? "#eff6ff" : "#f9fafb")};
+  border: 1.5px solid ${(p) => (p.$active ? "#3b82f6" : "#e5e7eb")};
+  border-radius: 8px;
+  padding: 14px 10px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
   transition: all 0.15s;
-  color: ${(p) => (p.$active ? "#1a73e8" : "#5f6368")};
+  color: ${(p) => (p.$active ? "#3b82f6" : "#6b7280")};
 
   &:hover {
-    background: ${(p) => (p.$active ? "#e8f0fe" : "#f1f3f4")};
+    background: ${(p) => (p.$active ? "#eff6ff" : "#f3f4f6")};
+    border-color: ${(p) => (p.$active ? "#3b82f6" : "#d1d5db")};
   }
 
   svg {
@@ -581,121 +636,171 @@ const ShareTypeOption = styled.button<{ $active: boolean }>`
 const OptionTitle = styled.div`
   font-size: 13px;
   font-weight: 500;
-  color: #202124;
+  color: #111827;
   text-align: center;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 `;
 
 const OptionDesc = styled.div`
   font-size: 11px;
-  color: #5f6368;
+  color: #6b7280;
   text-align: center;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 `;
 
 const Label = styled.label`
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  color: #202124;
+  color: #374151;
   margin-bottom: 8px;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 `;
 
 const Input = styled.input`
   width: 100%;
-  padding: 12px;
-  border: 1px solid #dadce0;
-  border-radius: 8px;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
   font-size: 14px;
-  color: #202124;
+  color: #111827;
+  background: #ffffff;
   transition: all 0.15s;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 
   &:focus {
     outline: none;
-    border-color: #1a73e8;
-    box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+  &::placeholder {
+    color: #9ca3af;
   }
 `;
 
 const Select = styled.select`
   width: 100%;
-  padding: 12px;
-  border: 1px solid #dadce0;
-  border-radius: 8px;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
   font-size: 14px;
-  color: #202124;
-  background: white;
+  color: #111827;
+  background: #ffffff;
   cursor: pointer;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 
   &:focus {
     outline: none;
-    border-color: #1a73e8;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 `;
 
 const PermissionGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: 10px;
 `;
 
 const PermissionCard = styled.button<{ $active: boolean }>`
-  background: ${(p) => (p.$active ? "#e8f0fe" : "#f8f9fa")};
-  border: 2px solid ${(p) => (p.$active ? "#1a73e8" : "transparent")};
-  border-radius: 12px;
-  padding: 16px 12px;
+  background: ${(p) => (p.$active ? "#eff6ff" : "#f9fafb")};
+  border: 1.5px solid ${(p) => (p.$active ? "#3b82f6" : "#e5e7eb")};
+  border-radius: 8px;
+  padding: 14px 10px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
   transition: all 0.15s;
-  color: ${(p) => (p.$active ? "#1a73e8" : "#5f6368")};
+  color: ${(p) => (p.$active ? "#3b82f6" : "#6b7280")};
 
   &:hover {
-    background: ${(p) => (p.$active ? "#e8f0fe" : "#f1f3f4")};
+    background: ${(p) => (p.$active ? "#eff6ff" : "#f3f4f6")};
+    border-color: ${(p) => (p.$active ? "#3b82f6" : "#d1d5db")};
   }
 `;
 
 const PermissionName = styled.div`
   font-size: 12px;
   font-weight: 500;
-  color: #202124;
+  color: #111827;
   text-align: center;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 `;
 
 const AdvancedToggle = styled.button`
   width: 100%;
   background: transparent;
   border: none;
-  padding: 12px;
+  padding: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  color: #1a73e8;
+  color: #3b82f6;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 6px;
   transition: all 0.15s;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 
   &:hover {
-    background: #f1f3f4;
+    background: #f3f4f6;
   }
 `;
 
 const AdvancedSection = styled.div`
-  background: #f8f9fa;
-  border-radius: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
   padding: 16px;
-  margin-top: 16px;
+  margin-top: 12px;
+  margin-bottom: 20px;
 `;
 
 const AdvancedRow = styled.div`
   display: grid;
-  grid-template-columns: 180px 1fr;
+  grid-template-columns: 160px 1fr;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 12px;
 
   &:last-child {
     margin-bottom: 0;
@@ -706,97 +811,65 @@ const AdvancedLabel = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
-  color: #5f6368;
-`;
-
-const GeneratedLinkSection = styled.div`
-  background: #e8f5e9;
-  border: 1px solid #10b981;
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 24px;
-`;
-
-const GeneratedLinkLabel = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #10b981;
-  margin-bottom: 12px;
-`;
-
-const LinkDisplay = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: white;
-  border-radius: 8px;
-  padding: 12px;
-`;
-
-const LinkText = styled.div`
-  flex: 1;
   font-size: 13px;
-  color: #202124;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
-const CopyButton = styled.button`
-  background: #f8f9fa;
-  border: none;
-  padding: 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  color: #5f6368;
-  transition: all 0.15s;
-
-  &:hover {
-    background: #e8eaed;
-  }
+  color: #6b7280;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 `;
 
 const ActionButtons = styled.div`
   display: flex;
-  gap: 12px;
+  gap: 10px;
   justify-content: flex-end;
+  margin-top: 20px;
 `;
 
 const CancelButton = styled.button`
-  padding: 12px 24px;
+  padding: 10px 20px;
   background: transparent;
-  border: 1px solid #dadce0;
-  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
-  color: #5f6368;
+  color: #6b7280;
   cursor: pointer;
   transition: all 0.15s;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 
   &:hover {
-    background: #f8f9fa;
+    background: #f9fafb;
+    color: #111827;
   }
 `;
 
 const CreateButton = styled.button`
-  padding: 12px 24px;
-  background: #1a73e8;
+  padding: 10px 20px;
+  background: #3b82f6;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
   color: white;
   cursor: pointer;
   transition: all 0.15s;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 
   &:hover:not(:disabled) {
-    background: #1557b0;
+    background: #2563eb;
   }
 
   &:disabled {
@@ -808,13 +881,13 @@ const CreateButton = styled.button`
 const SharesList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 `;
 
 const ShareItem = styled.div`
-  background: #f8f9fa;
-  border-radius: 12px;
-  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 14px;
 `;
 
 const ShareItemHeader = styled.div`
@@ -827,14 +900,20 @@ const ShareItemHeader = styled.div`
 const ShareItemInfo = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
-  color: #5f6368;
+  gap: 10px;
+  color: #6b7280;
 `;
 
 const ShareItemTitle = styled.div`
   font-size: 14px;
   font-weight: 500;
-  color: #202124;
+  color: #111827;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 `;
 
 const ShareItemActions = styled.div`
@@ -845,22 +924,23 @@ const ShareItemActions = styled.div`
 const IconButton = styled.button`
   background: transparent;
   border: none;
-  padding: 8px;
-  border-radius: 6px;
+  padding: 6px;
+  border-radius: 4px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  color: #5f6368;
+  color: #6b7280;
   transition: all 0.15s;
 
   &:hover {
-    background: #e8eaed;
+    background: #e5e7eb;
+    color: #111827;
   }
 `;
 
 const ShareItemDetails = styled.div`
   display: flex;
-  gap: 16px;
+  gap: 14px;
   flex-wrap: wrap;
 `;
 
@@ -869,7 +949,13 @@ const Detail = styled.div`
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #5f6368;
+  color: #6b7280;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 `;
 
 const EmptyState = styled.div`
@@ -877,20 +963,32 @@ const EmptyState = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px 24px;
+  padding: 40px 20px;
 `;
 
 const EmptyText = styled.div`
   font-size: 16px;
   font-weight: 500;
-  color: #5f6368;
-  margin-top: 16px;
+  color: #6b7280;
+  margin-top: 14px;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 `;
 
 const EmptySubtext = styled.div`
   font-size: 14px;
-  color: #80868b;
+  color: #9ca3af;
   margin-top: 4px;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 `;
 
 export default SharePopup;
