@@ -49,13 +49,15 @@ async function setupCoreTables(client) {
     `CREATE INDEX "Session_userId_idx" ON "Session"("userId");`,
   );
 
-  console.log("Creating Devices table...");
+  console.log("Creating enhanced Devices table...");
   await client.query(`
     CREATE TABLE user_devices (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
       user_id TEXT NOT NULL,
       device_name TEXT NOT NULL,
+      device_nickname TEXT,
       device_type TEXT NOT NULL,
+      device_color VARCHAR(7) DEFAULT '#1a73e8',
       browser TEXT,
       os TEXT,
       ip_address TEXT,
@@ -63,6 +65,11 @@ async function setupCoreTables(client) {
       last_active TIMESTAMP DEFAULT NOW(),
       created_at TIMESTAMP DEFAULT NOW(),
       is_current BOOLEAN DEFAULT false,
+      is_trusted BOOLEAN DEFAULT false,
+      sync_enabled BOOLEAN DEFAULT true,
+      storage_limit BIGINT,
+      notifications_enabled BOOLEAN DEFAULT true,
+      last_location TEXT,
       CONSTRAINT user_devices_user_id_fkey FOREIGN KEY (user_id)
         REFERENCES "User"(id) ON DELETE CASCADE
     );
@@ -105,6 +112,7 @@ async function setupCoreTables(client) {
       size BIGINT NOT NULL,
       mime_type TEXT NOT NULL,
       created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW(),
       deleted_at TIMESTAMP NULL,
       CONSTRAINT user_files_user_id_fkey FOREIGN KEY (user_id)
         REFERENCES "User"(id) ON DELETE CASCADE
@@ -117,9 +125,11 @@ async function setupCoreTables(client) {
   await client.query(
     `CREATE INDEX idx_user_files_folder_path ON user_files(folder_path);`,
   );
-
   await client.query(
     `CREATE INDEX idx_user_files_deleted_at ON user_files(deleted_at);`,
+  );
+  await client.query(
+    `CREATE INDEX idx_user_files_updated_at ON user_files(updated_at);`,
   );
 
   console.log("Creating user_settings table...");
@@ -174,7 +184,7 @@ async function setupCoreTables(client) {
     `CREATE INDEX idx_linked_accounts_provider ON linked_accounts(provider);`,
   );
 
-  console.log("Creating update trigger function...");
+  console.log("Creating trigger functions...");
   await client.query(`
     CREATE OR REPLACE FUNCTION update_updated_at_column()
     RETURNS TRIGGER AS $$
@@ -190,6 +200,21 @@ async function setupCoreTables(client) {
       BEFORE UPDATE ON user_settings
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column();
+  `);
+
+  await client.query(`
+    CREATE OR REPLACE FUNCTION update_user_files_updated_at()
+    RETURNS TRIGGER AS $$
+    BEGIN
+      NEW.updated_at = NOW();
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    CREATE TRIGGER trigger_update_user_files_updated_at
+      BEFORE UPDATE ON user_files
+      FOR EACH ROW
+      EXECUTE FUNCTION update_user_files_updated_at();
   `);
 }
 
@@ -363,25 +388,158 @@ async function setupFileActivityTable(client) {
     CREATE INDEX idx_file_activity_type ON file_activity(activity_type);
   `);
 
+  console.log("✓ File activity table created");
+}
+
+async function setupDeviceFilesTables(client) {
+  console.log("Creating device_files junction table...");
+
   await client.query(`
-    ALTER TABLE user_files 
-    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+    CREATE TABLE device_files (
+      id SERIAL PRIMARY KEY,
+      device_id TEXT NOT NULL REFERENCES user_devices(id) ON DELETE CASCADE,
+      file_id INTEGER NOT NULL REFERENCES user_files(id) ON DELETE CASCADE,
+      pinned BOOLEAN DEFAULT false,
+      offline_available BOOLEAN DEFAULT false,
+      last_accessed TIMESTAMP DEFAULT NOW(),
+      created_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(device_id, file_id)
+    );
   `);
 
   await client.query(`
-    CREATE OR REPLACE FUNCTION update_user_files_updated_at()
+    CREATE INDEX idx_device_files_device ON device_files(device_id);
+    CREATE INDEX idx_device_files_file ON device_files(file_id);
+    CREATE INDEX idx_device_files_pinned ON device_files(pinned) WHERE pinned = true;
+  `);
+
+  console.log("✓ Device files table created for device-specific file tracking");
+}
+
+async function setupDeviceGroupAndActionsTables(client) {
+  console.log("Creating device_groups table...");
+
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS device_groups (
+      id SERIAL PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT,
+      icon TEXT DEFAULT '📱',
+      color VARCHAR(7) DEFAULT '#1a73e8',
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_device_groups_user_id
+    ON device_groups(user_id);
+  `);
+
+  console.log("Creating device_group_members table...");
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS device_group_members (
+      device_id TEXT NOT NULL REFERENCES user_devices(id) ON DELETE CASCADE,
+      group_id INTEGER NOT NULL REFERENCES device_groups(id) ON DELETE CASCADE,
+      added_at TIMESTAMP DEFAULT NOW(),
+      PRIMARY KEY (device_id, group_id)
+    );
+  `);
+
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_device_group_members_device
+    ON device_group_members(device_id);
+
+    CREATE INDEX IF NOT EXISTS idx_device_group_members_group
+    ON device_group_members(group_id);
+  `);
+
+  console.log("Creating device_actions table...");
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS device_actions (
+      id SERIAL PRIMARY KEY,
+      device_id TEXT NOT NULL REFERENCES user_devices(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
+      action_type VARCHAR(50) NOT NULL CHECK (action_type IN ('lock', 'logout', 'wipe', 'message', 'locate')),
+      status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'executing', 'completed', 'failed', 'cancelled')),
+      payload JSONB DEFAULT '{}'::jsonb,
+      executed_at TIMESTAMP,
+      completed_at TIMESTAMP,
+      error_message TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_device_actions_device
+    ON device_actions(device_id);
+
+    CREATE INDEX IF NOT EXISTS idx_device_actions_status
+    ON device_actions(status)
+    WHERE status = 'pending';
+
+    CREATE INDEX IF NOT EXISTS idx_device_actions_created
+    ON device_actions(created_at DESC);
+  `);
+
+  console.log("Creating device_activity_audit table...");
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS device_activity_audit (
+      id SERIAL PRIMARY KEY,
+      device_id TEXT NOT NULL REFERENCES user_devices(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
+      action VARCHAR(100) NOT NULL,
+      details JSONB DEFAULT '{}'::jsonb,
+      ip_address TEXT,
+      user_agent TEXT,
+      created_at TIMESTAMP DEFAULT NOW()
+    );
+  `);
+
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_device_activity_audit_device
+    ON device_activity_audit(device_id);
+
+    CREATE INDEX IF NOT EXISTS idx_device_activity_audit_user
+    ON device_activity_audit(user_id);
+
+    CREATE INDEX IF NOT EXISTS idx_device_activity_audit_created
+    ON device_activity_audit(created_at DESC);
+  `);
+
+  console.log("Adding remote-control columns to user_devices...");
+  await client.query(`
+    ALTER TABLE user_devices
+    ADD COLUMN IF NOT EXISTS is_locked BOOLEAN DEFAULT false,
+    ADD COLUMN IF NOT EXISTS lock_message TEXT,
+    ADD COLUMN IF NOT EXISTS locked_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS wiped_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS force_logout BOOLEAN DEFAULT false;
+  `);
+
+  console.log("Creating update_device_groups_updated_at trigger...");
+  await client.query(`
+    CREATE OR REPLACE FUNCTION update_device_groups_updated_at()
     RETURNS TRIGGER AS $$
     BEGIN
       NEW.updated_at = NOW();
       RETURN NEW;
     END;
     $$ LANGUAGE plpgsql;
-
-    CREATE TRIGGER trigger_update_user_files_updated_at
-      BEFORE UPDATE ON user_files
-      FOR EACH ROW
-      EXECUTE FUNCTION update_user_files_updated_at();
   `);
+
+  await client.query(`
+    CREATE TRIGGER trigger_update_device_groups_updated_at
+    BEFORE UPDATE ON device_groups
+    FOR EACH ROW
+    EXECUTE FUNCTION update_device_groups_updated_at();
+  `);
+
+  console.log(
+    "✓ Device groups, device actions & remote control tables created",
+  );
 }
 
 async function setupDatabase() {
@@ -395,11 +553,14 @@ async function setupDatabase() {
     await setupSharingTables(client);
     await setupRecycleBinTables(client);
     await setupFileActivityTable(client);
+    await setupDeviceFilesTables(client);
+    await setupDeviceGroupAndActionsTables(client);
 
     console.log("\n✅ ALL TABLES CREATED SUCCESSFULLY!");
-    console.log(
-      "✅ Recycle bin is now independent - deleted files will persist!",
-    );
+    console.log("✅ Enhanced devices table with advanced features");
+    console.log("✅ Device-file relationship tracking enabled");
+    console.log("✅ File activity tracking enabled");
+    console.log("✅ Recycle bin is independent - deleted files will persist!");
   } catch (err) {
     console.error("❌ Database setup failed:", err);
     throw err;

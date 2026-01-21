@@ -11,6 +11,7 @@ import authRoutes from "./routes/auth.routes";
 import filesRoutes from "./routes/files.routes";
 import settingsRoutes from "./routes/settings.routes";
 import sharingRoutes from "./routes/sharing.routes";
+import devicesRoutes from "./routes/devices.routes";
 
 dotenv.config();
 
@@ -47,6 +48,8 @@ app.use("/api/files", filesRoutes);
 app.use("/api/sharing", sharingRoutes);
 
 app.use("/api/settings", settingsRoutes);
+
+app.use("/api/devices", devicesRoutes);
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "API is healthy" });

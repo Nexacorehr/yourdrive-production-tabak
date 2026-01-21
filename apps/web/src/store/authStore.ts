@@ -14,15 +14,27 @@ interface User {
   updatedAt: string;
 }
 
-interface Device {
+export interface Device {
   id: string;
   device_name: string;
+  device_nickname?: string;
   device_type: string;
+  device_color: string;
   browser: string;
   os: string;
+  ip_address?: string;
   last_active: string;
   created_at: string;
   is_current: boolean;
+  is_trusted: boolean;
+  sync_enabled: boolean;
+  notifications_enabled: boolean;
+  storage_limit?: number;
+  last_location?: string;
+  file_count?: number;
+  total_storage?: number;
+  pinned_count?: number;
+  offline_count?: number;
 }
 
 interface AuthState {
@@ -47,14 +59,18 @@ interface AuthState {
   checkAuth: () => Promise<void>;
   clearError: () => void;
 
+  // Enhanced device management
   fetchCurrentDevice: (accessToken: string) => Promise<void>;
   fetchDevices: (accessToken: string) => Promise<void>;
+  updateDevice: (deviceId: string, updates: Partial<Device>) => Promise<void>;
+  removeDevice: (deviceId: string) => Promise<void>;
 }
 
 interface LoginResponse {
   success: boolean;
   user: User;
   accessToken: string;
+  currentDevice?: Device;
 }
 
 interface RefreshResponse {
@@ -65,6 +81,12 @@ interface RefreshResponse {
 interface MeResponse {
   success: boolean;
   user: User;
+}
+
+interface DevicesResponse {
+  success: boolean;
+  devices: Device[];
+  count: number;
 }
 
 interface ErrorResponse {
@@ -109,7 +131,7 @@ export const useAuthStore = create<AuthState>()(
           const response = await axios.post<LoginResponse>(
             `${API_URL}/auth/login`,
             { email, password },
-            { withCredentials: true }
+            { withCredentials: true },
           );
 
           set({
@@ -117,7 +139,13 @@ export const useAuthStore = create<AuthState>()(
             accessToken: response.data.accessToken,
             isAuthenticated: true,
             isLoading: false,
+            currentDevice: response.data.currentDevice || null,
           });
+
+          // Fetch all devices after login
+          if (response.data.accessToken) {
+            await get().fetchDevices(response.data.accessToken);
+          }
         } catch (error: unknown) {
           const errorMessage = getErrorMessage(error);
           set({ error: errorMessage, isLoading: false });
@@ -128,14 +156,14 @@ export const useAuthStore = create<AuthState>()(
       register: async (
         email: string,
         password: string,
-        name?: string
+        name?: string,
       ): Promise<void> => {
         set({ isLoading: true, error: null });
         try {
           await axios.post(
             `${API_URL}/auth/register`,
             { email, password, name },
-            { withCredentials: true }
+            { withCredentials: true },
           );
 
           await get().login(email, password);
@@ -151,7 +179,7 @@ export const useAuthStore = create<AuthState>()(
           await axios.post(
             `${API_URL}/auth/logout`,
             {},
-            { withCredentials: true }
+            { withCredentials: true },
           );
         } catch (error: unknown) {
           console.error("Logout error:", getErrorMessage(error));
@@ -174,7 +202,7 @@ export const useAuthStore = create<AuthState>()(
           const response = await axios.post<RefreshResponse>(
             `${API_URL}/auth/refresh`,
             {},
-            { withCredentials: true }
+            { withCredentials: true },
           );
 
           set({ accessToken: response.data.accessToken });
@@ -201,6 +229,9 @@ export const useAuthStore = create<AuthState>()(
             user: response.data.user,
             isAuthenticated: true,
           });
+
+          // Refresh devices list on auth check
+          await get().fetchDevices(token);
         } catch (error: unknown) {
           console.error("Auth check error:", getErrorMessage(error));
           try {
@@ -209,7 +240,7 @@ export const useAuthStore = create<AuthState>()(
           } catch (refreshError: unknown) {
             console.error(
               "Token refresh error:",
-              getErrorMessage(refreshError)
+              getErrorMessage(refreshError),
             );
             await get().logout();
           }
@@ -218,16 +249,15 @@ export const useAuthStore = create<AuthState>()(
 
       fetchCurrentDevice: async (accessToken: string) => {
         try {
-          const response = await fetch(`${API_URL}/auth/device/current`, {
+          const response = await axios.get(`${API_URL}/auth/device/current`, {
             headers: {
               Authorization: `Bearer ${accessToken}`,
             },
-            credentials: "include",
+            withCredentials: true,
           });
 
-          const data = await response.json();
-          if (data.success) {
-            set({ currentDevice: data.device });
+          if (response.data.success) {
+            set({ currentDevice: response.data.device });
           }
         } catch (error) {
           console.error("Failed to fetch current device:", error);
@@ -236,19 +266,94 @@ export const useAuthStore = create<AuthState>()(
 
       fetchDevices: async (accessToken: string) => {
         try {
-          const response = await fetch(`${API_URL}/auth/devices`, {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
+          const response = await axios.get<DevicesResponse>(
+            `${API_URL}/devices`,
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+              },
+              withCredentials: true,
             },
-            credentials: "include",
-          });
+          );
 
-          const data = await response.json();
-          if (data.success) {
-            set({ devices: data.devices });
+          if (response.data.success) {
+            set({ devices: response.data.devices });
+
+            // Update current device if it's in the list
+            const currentDevice = response.data.devices.find(
+              (d) => d.is_current,
+            );
+            if (currentDevice) {
+              set({ currentDevice });
+            }
           }
         } catch (error) {
           console.error("Failed to fetch devices:", error);
+        }
+      },
+
+      updateDevice: async (
+        deviceId: string,
+        updates: Partial<Device>,
+      ): Promise<void> => {
+        const token = get().accessToken;
+        if (!token) {
+          throw new Error("Not authenticated");
+        }
+
+        try {
+          const response = await axios.patch(
+            `${API_URL}/devices/${deviceId}`,
+            updates,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              withCredentials: true,
+            },
+          );
+
+          if (response.data.success) {
+            // Update local state
+            const updatedDevice = response.data.device;
+            set((state) => ({
+              devices: state.devices.map((d) =>
+                d.id === deviceId ? { ...d, ...updatedDevice } : d,
+              ),
+              currentDevice:
+                state.currentDevice?.id === deviceId
+                  ? { ...state.currentDevice, ...updatedDevice }
+                  : state.currentDevice,
+            }));
+          }
+        } catch (error) {
+          console.error("Failed to update device:", error);
+          throw error;
+        }
+      },
+
+      removeDevice: async (deviceId: string): Promise<void> => {
+        const token = get().accessToken;
+        if (!token) {
+          throw new Error("Not authenticated");
+        }
+
+        try {
+          const response = await axios.delete(
+            `${API_URL}/devices/${deviceId}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              withCredentials: true,
+            },
+          );
+
+          if (response.data.success) {
+            // Remove from local state
+            set((state) => ({
+              devices: state.devices.filter((d) => d.id !== deviceId),
+            }));
+          }
+        } catch (error) {
+          console.error("Failed to remove device:", error);
+          throw error;
         }
       },
 
@@ -263,6 +368,6 @@ export const useAuthStore = create<AuthState>()(
         accessToken: state.accessToken,
         isAuthenticated: state.isAuthenticated,
       }),
-    }
-  )
+    },
+  ),
 );

@@ -3,8 +3,13 @@ import rateLimit from "express-rate-limit";
 import { AuthService } from "../services/auth.service";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { DeviceService } from "../services/device.service";
+import { Pool } from "pg";
 
 const authRoutes = express.Router();
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -46,7 +51,7 @@ authRoutes.post(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 authRoutes.post("/login", loginLimiter, async (req: Request, res: Response) => {
@@ -61,7 +66,7 @@ authRoutes.post("/login", loginLimiter, async (req: Request, res: Response) => {
     const device = await DeviceService.trackDevice(
       result.user.id,
       deviceInfo,
-      req.body.deviceName
+      req.body.deviceName,
     );
 
     res.cookie("refreshToken", result.refreshToken, {
@@ -143,7 +148,7 @@ authRoutes.get(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 authRoutes.post("/logout", async (req: Request, res: Response) => {
@@ -200,6 +205,7 @@ authRoutes.get("/status", async (req: Request, res: Response) => {
   }
 });
 
+// Legacy device endpoints - kept for backward compatibility
 authRoutes.get(
   "/device/current",
   authMiddleware,
@@ -226,7 +232,7 @@ authRoutes.get(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 authRoutes.get(
@@ -234,11 +240,36 @@ authRoutes.get(
   authMiddleware,
   async (req: AuthRequest, res: Response) => {
     try {
-      const devices = await DeviceService.getUserDevices(req.userId!);
+      // Redirect to new endpoint with enhanced data
+      const devices = await pool.query(
+        `
+        SELECT 
+          d.id,
+          d.device_name,
+          d.device_nickname,
+          d.device_type,
+          d.device_color,
+          d.browser,
+          d.os,
+          d.ip_address,
+          d.last_active,
+          d.created_at,
+          d.is_current,
+          d.is_trusted,
+          d.sync_enabled,
+          d.storage_limit,
+          d.notifications_enabled,
+          d.last_location
+        FROM user_devices d
+        WHERE d.user_id = $1
+        ORDER BY d.is_current DESC, d.last_active DESC
+        `,
+        [req.userId],
+      );
 
       res.json({
         success: true,
-        devices,
+        devices: devices.rows,
       });
     } catch (error: any) {
       res.status(500).json({
@@ -246,7 +277,7 @@ authRoutes.get(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 authRoutes.patch(
@@ -260,7 +291,7 @@ authRoutes.patch(
       const device = await DeviceService.updateDeviceName(
         deviceId,
         req.userId!,
-        name
+        name,
       );
 
       res.json({
@@ -273,7 +304,7 @@ authRoutes.patch(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 authRoutes.delete(
@@ -295,7 +326,7 @@ authRoutes.delete(
         error: error.message,
       });
     }
-  }
+  },
 );
 
 export default authRoutes;

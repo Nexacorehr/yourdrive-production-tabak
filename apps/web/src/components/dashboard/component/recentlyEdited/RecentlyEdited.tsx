@@ -68,34 +68,38 @@ const RecentlyEdited: React.FC = () => {
           <Title>Recently Edited</Title>
         </TitleSection>
 
-        <Controls>
-          <FilterButtons>
-            <FilterButton
-              $active={timeFilter === 7}
-              onClick={() => setTimeFilter(7)}
-            >
-              Last 7 days
-            </FilterButton>
-            <FilterButton
-              $active={timeFilter === 30}
-              onClick={() => setTimeFilter(30)}
-            >
-              Last 30 days
-            </FilterButton>
-            <FilterButton
-              $active={timeFilter === 90}
-              onClick={() => setTimeFilter(90)}
-            >
-              Last 90 days
-            </FilterButton>
-          </FilterButtons>
+        {!loading && files.length > 0 ? (
+          <Controls>
+            <FilterButtons>
+              <FilterButton
+                $active={timeFilter === 7}
+                onClick={() => setTimeFilter(7)}
+              >
+                Last 7 days
+              </FilterButton>
+              <FilterButton
+                $active={timeFilter === 30}
+                onClick={() => setTimeFilter(30)}
+              >
+                Last 30 days
+              </FilterButton>
+              <FilterButton
+                $active={timeFilter === 90}
+                onClick={() => setTimeFilter(90)}
+              >
+                Last 90 days
+              </FilterButton>
+            </FilterButtons>
 
-          {files.length > 0 && (
-            <FileCount>
-              {files.length} {files.length === 1 ? "file" : "files"}
-            </FileCount>
-          )}
-        </Controls>
+            {files.length > 0 && (
+              <FileCount>
+                {files.length} {files.length === 1 ? "file" : "files"}
+              </FileCount>
+            )}
+          </Controls>
+        ) : (
+          <></>
+        )}
       </Header>
 
       {!loading && files.length === 0 ? (
