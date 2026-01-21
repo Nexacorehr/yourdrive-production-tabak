@@ -4,6 +4,7 @@ import EnhancedFilesTable from "../../../shared/enhancedFileTable/EnhancedFilesT
 import FilePreview from "../../../shared/filesPreview/FilesPreview";
 import { useAuthStore } from "../../../../store/authStore";
 import axios from "axios";
+import toast from "react-hot-toast";
 
 const RecycleBin: React.FC = () => {
   const token = useAuthStore((s) => s.accessToken);
@@ -17,9 +18,11 @@ const RecycleBin: React.FC = () => {
       const res = await axios.get("/api/files/recycle-bin", {
         headers: { Authorization: `Bearer ${token}` },
       });
+      console.log("Fetched recycle bin files:", res.data.files);
       setFiles(res.data.files || []);
     } catch (err) {
       console.error("Failed to fetch recycle bin:", err);
+      toast.error("Failed to load recycle bin");
     } finally {
       setLoading(false);
     }
@@ -39,25 +42,44 @@ const RecycleBin: React.FC = () => {
 
   const handleRestore = async (fileId: string) => {
     try {
-      await axios.post(
+      const response = await axios.post(
         `/api/files/recycle-bin/restore/${fileId}`,
         {},
         { headers: { Authorization: `Bearer ${token}` } },
       );
-      fetchRecycleBin();
-    } catch (err) {
+
+      console.log("Restore response:", response.data);
+
+      if (response.data.success) {
+        toast.success("File restored successfully");
+        await fetchRecycleBin();
+      } else {
+        toast.error(response.data.error || "Failed to restore file");
+      }
+    } catch (err: any) {
       console.error("Restore failed:", err);
+      toast.error(err?.response?.data?.error || "Failed to restore file");
     }
   };
 
   const handlePermanentDelete = async (fileId: string) => {
+    console.log("Permanently deleting file with ID:", fileId);
     try {
-      await axios.delete(`/api/files/recycle-bin/delete/${fileId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      fetchRecycleBin();
-    } catch (err) {
+      const response = await axios.post(
+        `/api/files/recycle-bin/delete/${fileId}`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+
+      if (response.data.success) {
+        toast.success("File permanently deleted");
+        await fetchRecycleBin();
+      } else {
+        toast.error("Failed to delete file");
+      }
+    } catch (err: any) {
       console.error("Permanent delete failed:", err);
+      toast.error(err?.response?.data?.error || "Failed to delete file");
     }
   };
 
@@ -79,15 +101,15 @@ const RecycleBin: React.FC = () => {
           size: f.size,
           mimeType: f.mime_type,
           location: f.folder_path || "Root",
-          isRecycleBin: true,
-          onPreview: () => handlePreview(f),
-          onRestoreFile: () => handleRestore(f.file_id),
-          onDeletePermanently: () => handlePermanentDelete(f.file_id),
         }))}
         loading={loading}
         showOwner={false}
         showLocation={true}
         isRecycleBin={true}
+        onRestoreFile={handleRestore}
+        onDeletePermanently={handlePermanentDelete}
+        onFilePreview={handlePreview}
+        emptyMessage="Recycle Bin is empty"
         emptySubtext="Delete files to see them here"
       />
 

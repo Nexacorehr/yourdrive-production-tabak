@@ -364,31 +364,6 @@ filesRoutes.delete(
   },
 );
 
-filesRoutes.post(
-  "/recycle-bin/restore/:fileId",
-  authMiddleware,
-  async (req: AuthRequest, res) => {
-    try {
-      if (!req.userId)
-        return res.status(401).json({ success: false, error: "Unauthorized" });
-
-      const { fileId } = req.params;
-
-      await pool.query(
-        `DELETE FROM recycle_bin WHERE user_id = $1 AND file_id = $2`,
-        [req.userId, fileId],
-      );
-
-      return res.json({ success: true, message: "File restored" });
-    } catch (err) {
-      console.error("Restore error:", err);
-      return res
-        .status(500)
-        .json({ success: false, error: "Failed to restore file" });
-    }
-  },
-);
-
 filesRoutes.get("/usage", authMiddleware, async (req: AuthRequest, res) => {
   try {
     if (!req.userId) {
@@ -757,20 +732,32 @@ filesRoutes.post(
         `SELECT * FROM user_files WHERE id = $1 AND user_id = $2`,
         [fileId, userId],
       );
+
       if (!fileRes.rowCount) {
         await client.query("ROLLBACK");
         return res
           .status(404)
           .json({ success: false, error: "File not found" });
       }
-      const file = fileRes.rows[0];
 
+      const file = fileRes.rows[0];
       console.log("Moving file to recycle bin:", file);
 
       await client.query(
-        `INSERT INTO recycle_bin (user_id, file_id, original_name, mime_type, size, folder_path, s3_key, user_email)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-       ON CONFLICT (user_id, file_id) DO UPDATE SET deleted_at = CURRENT_TIMESTAMP`,
+        `INSERT INTO recycle_bin (
+          user_id, 
+          file_id, 
+          original_name, 
+          mime_type, 
+          size, 
+          folder_path, 
+          s3_key, 
+          user_email,
+          deleted_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
+        ON CONFLICT (user_id, file_id) 
+        DO UPDATE SET deleted_at = CURRENT_TIMESTAMP`,
         [
           userId,
           file.id,
@@ -783,18 +770,28 @@ filesRoutes.post(
         ],
       );
 
-      //this is where the functionality gets clunky
-      //await client.query(
-      //  `DELETE FROM user_files WHERE id = $1 AND user_id = $2`,
-      //  [fileId, userId],
-      //);
+      await client.query(
+        `DELETE FROM user_files WHERE id = $1 AND user_id = $2`,
+        [fileId, userId],
+      );
 
       await client.query("COMMIT");
-      res.json({ success: true, message: "File moved to Recycle Bin" });
+
+      console.log(`File ${fileId} successfully moved to recycle bin`);
+
+      res.json({
+        success: true,
+        message: "File moved to Recycle Bin",
+        fileId: file.id,
+      });
     } catch (err) {
       await client.query("ROLLBACK");
-      console.error(err);
-      res.status(500).json({ success: false, error: "Delete failed" });
+      console.error("Delete operation failed:", err);
+      res.status(500).json({
+        success: false,
+        error: "Delete failed",
+        details: err instanceof Error ? err.message : "Unknown error",
+      });
     } finally {
       client.release();
     }
@@ -816,41 +813,84 @@ filesRoutes.post(
         `SELECT * FROM recycle_bin WHERE user_id = $1 AND file_id = $2`,
         [userId, fileId],
       );
+
       if (!recycleRes.rowCount) {
         await client.query("ROLLBACK");
         return res
           .status(404)
           .json({ success: false, error: "File not in recycle bin" });
       }
+
       const file = recycleRes.rows[0];
+      console.log("Restoring file from recycle bin:", file);
 
-      await client.query(
-        `INSERT INTO user_files (id, user_id, user_email, original_name, s3_key, folder_path, size, mime_type, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,CURRENT_TIMESTAMP)
-       ON CONFLICT (id) DO NOTHING`,
-        [
-          file.file_id,
-          file.user_id,
-          file.user_email,
-          file.original_name,
-          file.s3_key,
-          file.folder_path,
-          file.size,
-          file.mime_type,
-        ],
+      const existingFile = await client.query(
+        `SELECT id FROM user_files WHERE id = $1`,
+        [file.file_id],
       );
 
-      await client.query(
-        `DELETE FROM recycle_bin WHERE user_id = $1 AND file_id = $2`,
-        [userId, fileId],
-      );
+      if (existingFile.rowCount > 0) {
+        console.log(
+          "File already exists in user_files, just removing from recycle bin",
+        );
+        await client.query(
+          `DELETE FROM recycle_bin WHERE user_id = $1 AND file_id = $2`,
+          [userId, fileId],
+        );
+      } else {
+        const insertResult = await client.query(
+          `INSERT INTO user_files (
+            id, 
+            user_id, 
+            user_email, 
+            original_name, 
+            s3_key, 
+            folder_path, 
+            size, 
+            mime_type, 
+            created_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+          RETURNING id`,
+          [
+            file.file_id,
+            file.user_id,
+            file.user_email,
+            file.original_name,
+            file.s3_key,
+            file.folder_path || "",
+            file.size,
+            file.mime_type,
+          ],
+        );
+
+        console.log("File restored with ID:", insertResult.rows[0].id);
+
+        await client.query(
+          `SELECT setval('user_files_id_seq', (SELECT MAX(id) FROM user_files))`,
+        );
+
+        await client.query(
+          `DELETE FROM recycle_bin WHERE user_id = $1 AND file_id = $2`,
+          [userId, fileId],
+        );
+      }
 
       await client.query("COMMIT");
-      res.json({ success: true, message: "File restored successfully" });
+
+      res.json({
+        success: true,
+        message: "File restored successfully",
+        fileId: file.file_id,
+      });
     } catch (err) {
       await client.query("ROLLBACK");
-      console.error(err);
-      res.status(500).json({ success: false, error: "Restore failed" });
+      console.error("Restore failed:", err);
+      res.status(500).json({
+        success: false,
+        error: "Restore failed",
+        details: err instanceof Error ? err.message : "Unknown error",
+      });
     } finally {
       client.release();
     }

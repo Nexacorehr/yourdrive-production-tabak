@@ -313,7 +313,7 @@ async function setupRecycleBinTables(client) {
     CREATE TABLE recycle_bin (
       id SERIAL PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
-      file_id INTEGER NOT NULL REFERENCES user_files(id) ON DELETE CASCADE,
+      file_id INTEGER NOT NULL,
       original_name TEXT NOT NULL,
       s3_key TEXT NOT NULL,
       user_email TEXT NOT NULL,
@@ -332,22 +332,33 @@ async function setupRecycleBinTables(client) {
   await client.query(`
     CREATE INDEX idx_recycle_bin_deleted_at ON recycle_bin(deleted_at DESC);
   `);
+
+  await client.query(`
+    CREATE INDEX idx_recycle_bin_file_id ON recycle_bin(file_id);
+  `);
+
+  console.log(
+    "✓ Recycle bin table created WITHOUT CASCADE constraint on file_id",
+  );
 }
 
 async function setupDatabase() {
   const client = await pool.connect();
 
   try {
-    console.log("Connected");
+    console.log("Connected to database...\n");
 
     await setupCoreTables(client);
     await setupFavoriteTables(client);
     await setupSharingTables(client);
     await setupRecycleBinTables(client);
 
-    console.log("\n ALL TABLES CREATED SUCCESSFULLY!");
+    console.log("\n✅ ALL TABLES CREATED SUCCESSFULLY!");
+    console.log(
+      "✅ Recycle bin is now independent - deleted files will persist!",
+    );
   } catch (err) {
-    console.error(err);
+    console.error("❌ Database setup failed:", err);
     throw err;
   } finally {
     client.release();

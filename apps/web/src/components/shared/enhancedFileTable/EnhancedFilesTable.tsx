@@ -207,28 +207,64 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
 
                   {quickActionsFile === file.id && (
                     <QuickActionsMenu>
-                      <QuickAction onClick={() => onFilePreview?.(file)}>
-                        <Info size={16} /> Preview
-                      </QuickAction>
-                      <QuickActionDivider />
-                      <QuickAction
-                        onClick={() => console.log("Share:", file.id)}
-                      >
-                        <Share2 size={16} /> Share
-                      </QuickAction>
-                      <QuickAction
-                        $danger={isRecycleBin}
-                        onClick={() =>
-                          isRecycleBin
-                            ? onDeletePermanently?.(file.id)
-                            : performFileAction("delete", {
+                      {isRecycleBin ? (
+                        <>
+                          <QuickAction
+                            onClick={() => {
+                              console.log("Restoring file:", file.id);
+                              onRestoreFile?.(file.id);
+                              setQuickActionsFile(null);
+                            }}
+                          >
+                            <RotateCcw size={16} /> Restore
+                          </QuickAction>
+                          <QuickActionDivider />
+                          <QuickAction
+                            $danger
+                            onClick={() => {
+                              console.log(
+                                "Permanently deleting file:",
+                                file.id,
+                              );
+                              onDeletePermanently?.(file.id);
+                              setQuickActionsFile(null);
+                            }}
+                          >
+                            <Trash2 size={16} /> Delete forever
+                          </QuickAction>
+                        </>
+                      ) : (
+                        <>
+                          <QuickAction
+                            onClick={() => {
+                              onFilePreview?.(file);
+                              setQuickActionsFile(null);
+                            }}
+                          >
+                            <Info size={16} /> Preview
+                          </QuickAction>
+                          <QuickActionDivider />
+                          <QuickAction
+                            onClick={() => {
+                              console.log("Share:", file.id);
+                              setQuickActionsFile(null);
+                            }}
+                          >
+                            <Share2 size={16} /> Share
+                          </QuickAction>
+                          <QuickAction
+                            $danger
+                            onClick={() => {
+                              performFileAction("delete", {
                                 fileIds: [file.id],
-                              })
-                        }
-                      >
-                        <Trash2 size={16} />{" "}
-                        {isRecycleBin ? "Delete forever" : "Delete"}
-                      </QuickAction>
+                              });
+                              setQuickActionsFile(null);
+                            }}
+                          >
+                            <Trash2 size={16} /> Delete
+                          </QuickAction>
+                        </>
+                      )}
                     </QuickActionsMenu>
                   )}
                 </>
@@ -240,6 +276,7 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
     </Container>
   );
 };
+
 const fadeIn = keyframes`
   from {
     opacity: 0;
