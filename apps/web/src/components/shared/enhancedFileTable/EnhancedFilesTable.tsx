@@ -12,6 +12,7 @@ import {
   MoreVertical,
   X,
   RotateCcw,
+  Eye,
 } from "lucide-react";
 import { useFileActions } from "./fileActions";
 
@@ -82,6 +83,16 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
     setSelectedFiles(new Set());
   };
 
+  const handlePreviewSelected = () => {
+    if (selectedFiles.size === 1) {
+      const fileId = Array.from(selectedFiles)[0];
+      const file = files.find((f) => f.id === fileId);
+      if (file) {
+        onFilePreview?.(file);
+      }
+    }
+  };
+
   return (
     <Container>
       {selectedFiles.size > 0 && (
@@ -94,6 +105,12 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
           </LeftSection>
 
           <CenterSection>
+            {selectedFiles.size === 1 && !isRecycleBin && (
+              <IconButton onClick={handlePreviewSelected} title="Preview">
+                <Eye size={18} />
+              </IconButton>
+            )}
+
             <IconButton
               onClick={() => console.log("Share:", selectedFiles)}
               title="Share"
@@ -241,7 +258,7 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
                               setQuickActionsFile(null);
                             }}
                           >
-                            <Info size={16} /> Preview
+                            <Eye size={16} /> Preview
                           </QuickAction>
                           <QuickActionDivider />
                           <QuickAction
