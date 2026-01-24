@@ -17,6 +17,7 @@ const ApplicationContainer = styled.div`
   overflow: hidden;
   position: relative;
   background: #f8f9fa;
+  overflow-y: hidden;
 `;
 
 export default Application;

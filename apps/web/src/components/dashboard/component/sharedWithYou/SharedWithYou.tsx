@@ -52,13 +52,45 @@ const SharedWithYou: React.FC = () => {
   const accessToken = useAuthStore((s) => s.accessToken);
   const [sharedFiles, setSharedFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number>(-1);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
 
   const { filteredFiles, hasActiveFilters, activeFilterCount } =
     useFileSearch(sharedFiles);
 
-  const handleFilePreview = (file: FileItem) => setPreviewFile(file);
-  const handleClosePreview = () => setPreviewFile(null);
+  const navigableFiles =
+    selectedFiles.size > 0
+      ? filteredFiles.filter((f) => selectedFiles.has(f.id))
+      : filteredFiles;
+
+  const previewFile = previewIndex >= 0 ? navigableFiles[previewIndex] : null;
+
+  const handleFilePreview = (file: FileItem) => {
+    const index = navigableFiles.findIndex((f) => f.id === file.id);
+    setPreviewIndex(index);
+  };
+
+  const handleNavigate = (newIndex: number) => {
+    if (newIndex >= 0 && newIndex < navigableFiles.length) {
+      setPreviewIndex(newIndex);
+    }
+  };
+
+  const handleClosePreview = () => {
+    setPreviewIndex(-1);
+  };
+
+  const handleFileSelect = (file: FileItem, selected: boolean) => {
+    setSelectedFiles((prev) => {
+      const newSet = new Set(prev);
+      if (selected) {
+        newSet.add(file.id);
+      } else {
+        newSet.delete(file.id);
+      }
+      return newSet;
+    });
+  };
 
   const fetchSharedFiles = async () => {
     if (!accessToken) return;
@@ -130,9 +162,12 @@ const SharedWithYou: React.FC = () => {
         emptyMessage={getEmptyMessage(hasActiveFilters)}
         emptySubtext={getEmptySubtext(hasActiveFilters)}
         onFilePreview={handleFilePreview}
+        onFileSelect={handleFileSelect}
+        selectedFiles={selectedFiles}
         showOwner={true}
         showLocation={true}
         isShared={true}
+        maxHeight={770}
       />
 
       {previewFile && (
@@ -142,6 +177,9 @@ const SharedWithYou: React.FC = () => {
           mimeType={previewFile.mimeType}
           ownerName={previewFile.owner.name}
           onClose={handleClosePreview}
+          allFiles={navigableFiles}
+          currentIndex={previewIndex}
+          onNavigate={handleNavigate}
         />
       )}
     </Container>

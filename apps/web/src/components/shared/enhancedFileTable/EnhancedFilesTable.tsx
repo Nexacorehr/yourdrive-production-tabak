@@ -20,13 +20,17 @@ interface EnhancedFilesTableProps {
   files: EnhancedFileItem[];
   loading?: boolean;
   onFilePreview?: (file: FileItem) => void;
+  onFileSelect?: (file: FileItem, selected: boolean) => void;
+  selectedFiles?: Set<string>;
   showOwner?: boolean;
   showLocation?: boolean;
-
   isRecycleBin?: boolean;
   onRestoreFile?: (fileId: string) => void;
   onDeletePermanently?: (fileId: string) => void;
+  emptyMessage?: string;
   emptySubtext?: string;
+  maxHeight?: number;
+  isShared?: boolean;
 }
 
 export interface EnhancedFileItem extends FileItem {
@@ -39,38 +43,88 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
   files,
   loading,
   onFilePreview,
+  onFileSelect,
+  selectedFiles: externalSelectedFiles,
   showOwner,
   showLocation,
   isRecycleBin,
   onRestoreFile,
   onDeletePermanently,
+  emptyMessage,
   emptySubtext,
+  maxHeight = 770,
+  isShared,
 }) => {
-  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [internalSelectedFiles, setInternalSelectedFiles] = useState<
+    Set<string>
+  >(new Set());
   const [hoveredFileId, setHoveredFileId] = useState<string | null>(null);
   const [quickActionsFile, setQuickActionsFile] = useState<string | null>(null);
+
+  const selectedFiles = externalSelectedFiles ?? internalSelectedFiles;
+  const setSelectedFiles = onFileSelect
+    ? (updater: Set<string> | ((prev: Set<string>) => Set<string>)) => {
+        const newSet =
+          typeof updater === "function" ? updater(selectedFiles) : updater;
+        const oldSet = selectedFiles;
+
+        newSet.forEach((id) => {
+          if (!oldSet.has(id)) {
+            const file = files.find((f) => f.id === id);
+            if (file) onFileSelect(file, true);
+          }
+        });
+
+        oldSet.forEach((id) => {
+          if (!newSet.has(id)) {
+            const file = files.find((f) => f.id === id);
+            if (file) onFileSelect(file, false);
+          }
+        });
+      }
+    : setInternalSelectedFiles;
 
   const { performFileAction } = useFileActions();
 
   const handleFileClick = (file: FileItem) => {
-    setSelectedFiles((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(file.id)) {
-        newSet.delete(file.id);
-      } else {
-        newSet.add(file.id);
-      }
-      return newSet;
-    });
+    if (onFileSelect) {
+      const isSelected = selectedFiles.has(file.id);
+      onFileSelect(file, !isSelected);
+    } else {
+      setSelectedFiles((prev) => {
+        const newSet = new Set(prev);
+        if (newSet.has(file.id)) {
+          newSet.delete(file.id);
+        } else {
+          newSet.add(file.id);
+        }
+        return newSet;
+      });
+    }
   };
 
   const handleFileDoubleClick = (file: FileItem) => {
     onFilePreview?.(file);
   };
 
-  const handleClearSelection = () => setSelectedFiles(new Set());
-  const handleSelectAll = () =>
-    setSelectedFiles(new Set(files.map((f) => f.id)));
+  const handleClearSelection = () => {
+    if (onFileSelect) {
+      selectedFiles.forEach((id) => {
+        const file = files.find((f) => f.id === id);
+        if (file) onFileSelect(file, false);
+      });
+    } else {
+      setSelectedFiles(new Set());
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (onFileSelect) {
+      files.forEach((file) => onFileSelect(file, true));
+    } else {
+      setSelectedFiles(new Set(files.map((f) => f.id)));
+    }
+  };
 
   const handleAction = (action: "delete" | "deletePermanently" | "restore") => {
     if (action === "restore") {
@@ -80,11 +134,11 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
     } else {
       performFileAction(action, { fileIds: Array.from(selectedFiles) });
     }
-    setSelectedFiles(new Set());
+    handleClearSelection();
   };
 
   const handlePreviewSelected = () => {
-    if (selectedFiles.size === 1) {
+    if (selectedFiles.size >= 1) {
       const fileId = Array.from(selectedFiles)[0];
       const file = files.find((f) => f.id === fileId);
       if (file) {
@@ -105,7 +159,7 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
           </LeftSection>
 
           <CenterSection>
-            {selectedFiles.size === 1 && !isRecycleBin && (
+            {selectedFiles.size >= 1 && !isRecycleBin && (
               <IconButton onClick={handlePreviewSelected} title="Preview">
                 <Eye size={18} />
               </IconButton>
@@ -197,10 +251,13 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
           loading={loading}
           onFileClick={handleFileClick}
           onFileDoubleClick={handleFileDoubleClick}
+          onFileSelect={onFileSelect}
           selectedFiles={selectedFiles}
           showOwner={showOwner}
           showLocation={showLocation}
+          emptyMessage={emptyMessage}
           emptySubtext={emptySubtext}
+          maxHeight={maxHeight}
           renderRowActions={(file) => (
             <QuickActionsWrapper
               onMouseEnter={() => setHoveredFileId(file.id)}

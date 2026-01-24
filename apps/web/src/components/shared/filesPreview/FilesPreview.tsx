@@ -14,6 +14,7 @@ import SharePopup from "../popups/share/SharePopup";
 import { useFileLoader } from "../hooks/useFileLoader";
 import { usePopupStore } from "../popups/popup.store";
 import { useAuthStore } from "../../../store/authStore";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export interface FilePreviewProps {
   fileId?: string;
@@ -28,6 +29,16 @@ export interface FilePreviewProps {
   onRename?: () => void;
   onDelete?: () => void;
   onFavorite?: () => void;
+  allFiles?: Array<{
+    id: string;
+    name: string;
+    type?: string;
+    mimeType?: string;
+    url?: string;
+  }>;
+  currentIndex?: number;
+  onNavigate?: (index: number) => void;
+  ownerName?: string;
   files?: Array<{
     url?: string;
     fileId?: string;
@@ -35,8 +46,6 @@ export interface FilePreviewProps {
     fileType?: string;
     mimeType?: string;
   }>;
-  currentIndex?: number;
-  onNavigate?: (index: number) => void;
   metadata?: Record<string, any>;
   comments?: Array<{ user: string; text: string; timestamp: string }>;
   activityLog?: Array<{ action: string; user: string; timestamp: string }>;
@@ -57,9 +66,11 @@ const FilePreview: React.FC<FilePreviewProps> = ({
   onRename,
   onDelete,
   onFavorite,
-  files = [],
-  currentIndex = 0,
+  allFiles = [],
+  currentIndex = -1,
   onNavigate,
+  ownerName,
+  files = [],
   metadata,
   comments = [],
   activityLog = [],
@@ -73,6 +84,10 @@ const FilePreview: React.FC<FilePreviewProps> = ({
 
   const toggleSharingPopup = usePopupStore((state) => state.toggleSharingPopup);
   const isSharingPopupOpen = usePopupStore((state) => state.isSharingPopupOpen);
+
+  const hasNavigation = allFiles.length > 1 && currentIndex >= 0 && onNavigate;
+  const hasPrevious = hasNavigation && currentIndex > 0;
+  const hasNext = hasNavigation && currentIndex < allFiles.length - 1;
 
   const { fileUrl, detectedType, loading, error } = useFileLoader({
     fileId,
@@ -92,6 +107,18 @@ const FilePreview: React.FC<FilePreviewProps> = ({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (hasPrevious && onNavigate) {
+      onNavigate(currentIndex - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (hasNext && onNavigate) {
+      onNavigate(currentIndex + 1);
     }
   };
 
@@ -152,20 +179,16 @@ const FilePreview: React.FC<FilePreviewProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onClose();
-      }
-      if (files.length > 1 && onNavigate) {
-        if (e.key === "ArrowLeft" && currentIndex > 0) {
-          onNavigate(currentIndex - 1);
-        }
-        if (e.key === "ArrowRight" && currentIndex < files.length - 1) {
-          onNavigate(currentIndex + 1);
-        }
+      } else if (hasNavigation && e.key === "ArrowLeft" && hasPrevious) {
+        onNavigate(currentIndex - 1);
+      } else if (hasNavigation && e.key === "ArrowRight" && hasNext) {
+        onNavigate(currentIndex + 1);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, files.length, currentIndex, onNavigate]);
+  }, [onClose, hasNavigation, hasPrevious, hasNext, currentIndex, onNavigate]);
 
   useEffect(() => {
     if (fileId && accessToken) {
@@ -178,8 +201,9 @@ const FilePreview: React.FC<FilePreviewProps> = ({
       <Container>
         <Header
           fileName={fileName}
-          files={files}
-          currentIndex={currentIndex}
+          ownerName={ownerName}
+          files={allFiles.length > 0 ? allFiles : files}
+          currentIndex={currentIndex >= 0 ? currentIndex : 0}
           onNavigate={onNavigate}
           onRename={onRename}
           onClose={onClose}
@@ -199,7 +223,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({
             </LoadingContainer>
           ) : error ? (
             <ErrorContainer>
-              <ErrorIcon>error</ErrorIcon>
+              <ErrorIcon>⚠️</ErrorIcon>
               <ErrorText>{error}</ErrorText>
               <ErrorSubtext>Please try again or contact support</ErrorSubtext>
             </ErrorContainer>
@@ -207,8 +231,8 @@ const FilePreview: React.FC<FilePreviewProps> = ({
             <PreviewRenderer
               type={detectedType}
               common={commonProps}
-              files={files}
-              index={currentIndex}
+              files={allFiles.length > 0 ? allFiles : files}
+              index={currentIndex >= 0 ? currentIndex : 0}
               onNavigate={onNavigate}
             />
           )}
@@ -226,6 +250,18 @@ const FilePreview: React.FC<FilePreviewProps> = ({
             relatedFiles={relatedFiles}
           />
         </ContentWrapper>
+
+        {hasPrevious && (
+          <NavButton $position="left" onClick={handlePrevious}>
+            <ChevronLeft size={32} />
+          </NavButton>
+        )}
+
+        {hasNext && (
+          <NavButton $position="right" onClick={handleNext}>
+            <ChevronRight size={32} />
+          </NavButton>
+        )}
       </Container>
       {isSharingPopupOpen && fileId && (
         <SharePopup
@@ -237,6 +273,47 @@ const FilePreview: React.FC<FilePreviewProps> = ({
     </Overlay>
   );
 };
+
+const NavButton = styled.button<{ $position: "left" | "right" }>`
+  position: absolute;
+  top: 50%;
+  ${({ $position }) => ($position === "left" ? "left: 24px;" : "right: 24px;")}
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.95);
+  border: none;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #202124;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s;
+  z-index: 10;
+  opacity: 0;
+  animation: fadeIn 0.3s ease-out forwards;
+
+  &:hover {
+    background: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    transform: translateY(-50%) scale(1.05);
+  }
+
+  &:active {
+    transform: translateY(-50%) scale(0.95);
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+`;
 
 const LoadingContainer = styled.div`
   width: 100%;

@@ -35,7 +35,7 @@ export default function PreviewRenderer({
   index = 0,
   onNavigate,
 }: PreviewRendererProps) {
-  // radi polovno
+  // Documents: PDF, Word, Excel, PowerPoint, OpenDocument, EPUB, DocBook
   if (type === "document" || type === "office") {
     return (
       <DocumentViewer
@@ -47,7 +47,7 @@ export default function PreviewRenderer({
     );
   }
 
-  // neradi
+  // Code files: all programming languages and text files
   if (type === "code") {
     return (
       <CodeEditor
@@ -65,7 +65,7 @@ export default function PreviewRenderer({
     );
   }
 
-  // radi
+  // Images: JPEG, PNG, GIF, SVG, WebP, etc.
   if (type === "image") {
     return (
       <ImagePreview
@@ -82,16 +82,43 @@ export default function PreviewRenderer({
       />
     );
   }
-  // neradi
 
+  // Video: MP4, WebM, AVI, MOV, etc.
   if (type === "video") {
-    return <VideoPreview url={common.url} fileName={common.fileName} />;
+    return (
+      <VideoPreview
+        url={common.url}
+        fileName={common.fileName}
+        fileType={common.fileType}
+        onClose={common.onClose}
+        onEdit={common.onEdit}
+        onDownload={common.onDownload}
+        onShare={common.onShare}
+      />
+    );
   }
-  // neradi
 
+  // Audio: MP3, WAV, OGG, FLAC, etc.
   if (type === "audio") {
-    return <AudioPreview url={common.url} fileName={common.fileName} />;
+    return (
+      <AudioPreview
+        url={common.url}
+        fileName={common.fileName}
+        fileType={common.fileType}
+        onClose={common.onClose}
+        onEdit={common.onEdit}
+        onDownload={common.onDownload}
+        onShare={common.onShare}
+      />
+    );
   }
 
-  return <UnsupportedState fileName={common.fileName} fileType={type} />;
+  // Fallback for unsupported file types
+  return (
+    <UnsupportedState
+      fileName={common.fileName}
+      fileType={type}
+      onDownload={common.onDownload}
+    />
+  );
 }

@@ -4,8 +4,8 @@ import styled from "styled-components";
 interface AudioPreviewProps {
   url: string;
   fileName: string;
-  fileType: string;
-  onClose: () => void;
+  fileType?: string;
+  onClose?: () => void;
   onEdit?: () => void;
   onDownload?: () => void;
   onShare?: () => void;
@@ -20,7 +20,6 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({ url, fileName }) => {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [showLyrics, setShowLyrics] = useState(false);
   const [isLooping, setIsLooping] = useState(false);
   const animationFrameRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -42,7 +41,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({ url, fileName }) => {
 
       analyser.getByteFrequencyData(dataArray);
 
-      ctx.fillStyle = "#f8f9fa";
+      ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const barWidth = (canvas.width / dataArray.length) * 2.5;
@@ -56,7 +55,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({ url, fileName }) => {
           0,
           canvas.height - barHeight,
           0,
-          canvas.height
+          canvas.height,
         );
         gradient.addColorStop(0, "#1a73e8");
         gradient.addColorStop(1, "#4285f4");
@@ -243,7 +242,7 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({ url, fileName }) => {
           <SecondaryButton onClick={skipBackward} title="Skip back 10s">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
               <path
-                d="M11.99 5V1l-5 5 5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6h-2c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8zm-1.1 11h-.85v-3.26l-1.01.31v-.69l1.77-.63h.09V16zm4.28-1.76c0 .32-.03.6-.1.82s-.17.42-.29.57-.28.26-.45.33-.37.1-.59.10-.41-.03-.59-.1-.33-.18-.46-.33-.23-.34-.3-.57-.11-.5-.11-.82v-.74c0-.32.03-.6.1-.82s.17-.42.29-.57.28-.26.45-.33.37-.1.59-.1.41.03.59.1.33.18.46.33.23.34.3.57.11.5.11.82v.74zm-.85-.86c0-.19-.01-.35-.04-.48s-.07-.23-.12-.31-.11-.14-.19-.17-.16-.05-.25-.05-.18.02-.25.05-.14.09-.19.17-.09.18-.12.31-.04.29-.04.48v.97c0 .19.01.35.04.48s.07.24.12.32.11.14.19.17.16.05.25.05.18-.02.25-.05.14-.09.19-.17.09-.19.11-.32.04-.29.04-.48v-.97z"
+                d="M11.99 5V1l-5 5 5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6h-2c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8zm-1.1 11h-.85v-3.26l-1.01.31v-.69l1.77-.63h.09V16zm4.28-1.76c0 .32-.03.6-.1.82s-.17.42-.29.57-.28.26-.45.33-.37.1-.59.1-.41-.03-.59-.1-.33-.18-.46-.33-.23-.34-.3-.57-.11-.5-.11-.82v-.74c0-.32.03-.6.1-.82s.17-.42.29-.57.28-.26.45-.33.37-.1.59-.1.41.03.59.1.33.18.46.33.23.34.3.57.11.5.11.82v.74zm-.85-.86c0-.19-.01-.35-.04-.48s-.07-.23-.12-.31-.11-.14-.19-.17-.16-.05-.25-.05-.18.02-.25.05-.14.09-.19.17-.09.18-.12.31-.04.29-.04.48v.97c0 .19.01.35.04.48s.07.24.12.32.11.14.19.17.16.05.25.05.18-.02.25-.05.14-.09.19-.17.09-.19.11-.32.04-.29.04-.48v-.97z"
                 fill="currentColor"
               />
             </svg>
@@ -338,32 +337,9 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({ url, fileName }) => {
                 />
               </svg>
             </IconButton>
-
-            <IconButton
-              onClick={() => setShowLyrics(!showLyrics)}
-              title="Lyrics"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"
-                  fill="currentColor"
-                />
-              </svg>
-            </IconButton>
           </RightGroup>
         </BottomControls>
       </ControlsSection>
-
-      {showLyrics && (
-        <LyricsPanel>
-          <LyricsTitle>Lyrics</LyricsTitle>
-          <LyricsContent>
-            <LyricsPlaceholder>
-              Lyrics not available for this track.
-            </LyricsPlaceholder>
-          </LyricsContent>
-        </LyricsPanel>
-      )}
     </Container>
   );
 };
@@ -375,6 +351,7 @@ const Container = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  background: #e9eef6;
   padding: 40px;
 `;
 
@@ -383,7 +360,7 @@ const WaveformContainer = styled.div`
   background: white;
   border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   margin-bottom: 32px;
 `;
 
@@ -392,26 +369,13 @@ const WaveformCanvas = styled.canvas`
   border-radius: 8px;
 `;
 
-const FileNameOverlay = styled.div`
-  position: absolute;
-  top: 32px;
-  left: 32px;
-  background: rgba(26, 115, 232, 0.9);
-  color: white;
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: 500;
-  backdrop-filter: blur(4px);
-`;
-
 const ControlsSection = styled.div`
   background: white;
   border-radius: 12px;
   padding: 24px;
   width: 100%;
   max-width: 800px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 `;
 
 const ProgressContainer = styled.div`
@@ -478,7 +442,7 @@ const PlayButton = styled.button`
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(26, 115, 232, 0.3);
+  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.3);
 
   &:hover {
     background: #1557b0;
@@ -504,7 +468,7 @@ const SecondaryButton = styled.button`
   transition: all 0.2s;
 
   &:hover {
-    background: #f1f3f4;
+    background: #f8f9fa;
     color: #202124;
   }
 `;
@@ -547,7 +511,7 @@ const IconButton = styled.button<{ $active?: boolean }>`
   transition: all 0.2s;
 
   &:hover {
-    background: #f1f3f4;
+    background: #f8f9fa;
     color: #1a73e8;
   }
 `;
@@ -599,44 +563,12 @@ const SpeedButton = styled.button<{ $active: boolean }>`
   font-weight: 500;
   transition: all 0.2s;
   box-shadow: ${(props) =>
-    props.$active ? "0 2px 4px rgba(0,0,0,0.1)" : "none"};
+    props.$active ? "0 1px 3px rgba(0,0,0,0.1)" : "none"};
 
   &:hover {
     background: white;
     color: #1a73e8;
   }
-`;
-
-const LyricsPanel = styled.div`
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  width: 100%;
-  max-width: 800px;
-  margin-top: 24px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-`;
-
-const LyricsTitle = styled.h3`
-  margin: 0 0 16px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #202124;
-`;
-
-const LyricsContent = styled.div`
-  color: #5f6368;
-  font-size: 14px;
-  line-height: 1.8;
-  max-height: 300px;
-  overflow-y: auto;
-`;
-
-const LyricsPlaceholder = styled.div`
-  text-align: center;
-  padding: 40px;
-  color: #80868b;
-  font-style: italic;
 `;
 
 export default AudioPreview;

@@ -293,7 +293,7 @@ const Container = styled.div`
   width: 100%;
   height: 100%;
   position: relative;
-  background: #202124;
+  background: #e9eef6;
   display: flex;
   align-items: center;
   justify-content: center;

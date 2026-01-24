@@ -10,8 +10,45 @@ const RecentlyEdited: React.FC = () => {
   const token = useAuthStore((s) => s.accessToken);
   const [files, setFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [previewFile, setPreviewFile] = useState<any | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number>(-1);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [timeFilter, setTimeFilter] = useState<7 | 30 | 90>(30);
+
+  const transformedFiles = files.map((f) => ({
+    id: f.id,
+    name: f.original_name,
+    size: f.size,
+    mimeType: f.mime_type,
+    location: f.folder_path || "Root",
+    modifiedTime: formatRelativeTime(f.last_edited_at),
+    editCount: f.edit_count,
+  }));
+
+  const navigableFiles =
+    selectedFiles.size > 0
+      ? transformedFiles.filter((f) => selectedFiles.has(f.id))
+      : transformedFiles;
+
+  const previewFile = previewIndex >= 0 ? navigableFiles[previewIndex] : null;
+
+  const formatRelativeTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60)
+      return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
+    if (diffHours < 24)
+      return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+    if (diffDays < 30)
+      return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? "s" : ""} ago`;
+    return date.toLocaleDateString();
+  };
 
   const fetchRecentFiles = async () => {
     try {
@@ -35,30 +72,30 @@ const RecentlyEdited: React.FC = () => {
   }, [token, timeFilter]);
 
   const handlePreview = (file: any) => {
-    setPreviewFile({
-      id: file.id,
-      name: file.original_name,
-      mimeType: file.mime_type,
-    });
+    const index = navigableFiles.findIndex((f) => f.id === file.id);
+    setPreviewIndex(index);
   };
 
-  const formatRelativeTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+  const handleNavigate = (newIndex: number) => {
+    if (newIndex >= 0 && newIndex < navigableFiles.length) {
+      setPreviewIndex(newIndex);
+    }
+  };
 
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60)
-      return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
-    if (diffHours < 24)
-      return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
-    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
-    if (diffDays < 30)
-      return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? "s" : ""} ago`;
-    return date.toLocaleDateString();
+  const handleClosePreview = () => {
+    setPreviewIndex(-1);
+  };
+
+  const handleFileSelect = (file: any, selected: boolean) => {
+    setSelectedFiles((prev) => {
+      const newSet = new Set(prev);
+      if (selected) {
+        newSet.add(file.id);
+      } else {
+        newSet.delete(file.id);
+      }
+      return newSet;
+    });
   };
 
   return (
@@ -113,21 +150,16 @@ const RecentlyEdited: React.FC = () => {
         </EmptyState>
       ) : (
         <EnhancedFilesTable
-          files={files.map((f) => ({
-            id: f.id,
-            name: f.original_name,
-            size: f.size,
-            mimeType: f.mime_type,
-            location: f.folder_path || "Root",
-            modifiedTime: formatRelativeTime(f.last_edited_at),
-            editCount: f.edit_count,
-          }))}
+          files={transformedFiles}
           loading={loading}
           showOwner={false}
           showLocation={true}
           onFilePreview={handlePreview}
+          onFileSelect={handleFileSelect}
+          selectedFiles={selectedFiles}
           emptyMessage="No recent activity"
           emptySubtext="Files you edit will appear here"
+          maxHeight={770}
         />
       )}
 
@@ -136,7 +168,10 @@ const RecentlyEdited: React.FC = () => {
           fileId={previewFile.id}
           fileName={previewFile.name}
           mimeType={previewFile.mimeType}
-          onClose={() => setPreviewFile(null)}
+          onClose={handleClosePreview}
+          allFiles={navigableFiles}
+          currentIndex={previewIndex}
+          onNavigate={handleNavigate}
         />
       )}
     </Container>

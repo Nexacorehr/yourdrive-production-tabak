@@ -61,17 +61,44 @@ const RecentFiles: React.FC = () => {
 
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number>(-1);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
 
   const { filteredFiles, hasActiveFilters, activeFilterCount } =
     useFileSearch(files);
 
+  const navigableFiles =
+    selectedFiles.size > 0
+      ? filteredFiles.filter((f) => selectedFiles.has(f.id))
+      : filteredFiles;
+
+  const previewFile = previewIndex >= 0 ? navigableFiles[previewIndex] : null;
+
   const handleFilePreview = (file: FileItem) => {
-    setPreviewFile(file);
+    const index = navigableFiles.findIndex((f) => f.id === file.id);
+    setPreviewIndex(index);
+  };
+
+  const handleNavigate = (newIndex: number) => {
+    if (newIndex >= 0 && newIndex < navigableFiles.length) {
+      setPreviewIndex(newIndex);
+    }
   };
 
   const handleClosePreview = () => {
-    setPreviewFile(null);
+    setPreviewIndex(-1);
+  };
+
+  const handleFileSelect = (file: FileItem, selected: boolean) => {
+    setSelectedFiles((prev) => {
+      const newSet = new Set(prev);
+      if (selected) {
+        newSet.add(file.id);
+      } else {
+        newSet.delete(file.id);
+      }
+      return newSet;
+    });
   };
 
   const handleFileContextMenu = (file: FileItem, event: React.MouseEvent) => {
@@ -82,7 +109,6 @@ const RecentFiles: React.FC = () => {
       event.clientX,
       event.clientY,
     );
-    // TODO: Implement context menu
   };
 
   const fetchRecentFiles = async () => {
@@ -154,10 +180,13 @@ const RecentFiles: React.FC = () => {
         emptyMessage={getEmptyMessage(hasActiveFilters)}
         emptySubtext={getEmptySubtext(hasActiveFilters)}
         onFilePreview={handleFilePreview}
+        onFileSelect={handleFileSelect}
         onFileContextMenu={handleFileContextMenu}
+        selectedFiles={selectedFiles}
         showOwner={true}
         showLocation={true}
         singleClickMode="preview"
+        maxHeight={650}
       />
       {previewFile && (
         <FilePreview
@@ -165,6 +194,9 @@ const RecentFiles: React.FC = () => {
           fileName={previewFile.name}
           mimeType={previewFile.mimeType}
           onClose={handleClosePreview}
+          allFiles={navigableFiles}
+          currentIndex={previewIndex}
+          onNavigate={handleNavigate}
         />
       )}
     </Container>

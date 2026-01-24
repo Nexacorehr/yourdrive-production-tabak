@@ -10,7 +10,21 @@ const RecycleBin: React.FC = () => {
   const token = useAuthStore((s) => s.accessToken);
   const [files, setFiles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [previewFile, setPreviewFile] = useState<any | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number>(-1);
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+
+  const transformedFiles = files.map((f) => ({
+    id: f.file_id,
+    name: f.original_name,
+    size: f.size,
+    mimeType: f.mime_type,
+    location: f.folder_path || "Root",
+  }));
+
+  const navigableFiles =
+    selectedFiles.size > 0
+      ? transformedFiles.filter((f) => selectedFiles.has(f.id))
+      : transformedFiles;
 
   const fetchRecycleBin = async () => {
     try {
@@ -33,10 +47,29 @@ const RecycleBin: React.FC = () => {
   }, [token]);
 
   const handlePreview = (file: any) => {
-    setPreviewFile({
-      id: file.file_id,
-      name: file.original_name,
-      mimeType: file.mime_type,
+    const index = navigableFiles.findIndex((f) => f.id === file.id);
+    setPreviewIndex(index);
+  };
+
+  const handleNavigate = (newIndex: number) => {
+    if (newIndex >= 0 && newIndex < navigableFiles.length) {
+      setPreviewIndex(newIndex);
+    }
+  };
+
+  const handleClosePreview = () => {
+    setPreviewIndex(-1);
+  };
+
+  const handleFileSelect = (file: any, selected: boolean) => {
+    setSelectedFiles((prev) => {
+      const newSet = new Set(prev);
+      if (selected) {
+        newSet.add(file.id);
+      } else {
+        newSet.delete(file.id);
+      }
+      return newSet;
     });
   };
 
@@ -83,6 +116,8 @@ const RecycleBin: React.FC = () => {
     }
   };
 
+  const previewFile = previewIndex >= 0 ? navigableFiles[previewIndex] : null;
+
   return (
     <Container>
       <Header>
@@ -95,13 +130,7 @@ const RecycleBin: React.FC = () => {
       </Header>
 
       <EnhancedFilesTable
-        files={files.map((f) => ({
-          id: f.file_id,
-          name: f.original_name,
-          size: f.size,
-          mimeType: f.mime_type,
-          location: f.folder_path || "Root",
-        }))}
+        files={transformedFiles}
         loading={loading}
         showOwner={false}
         showLocation={true}
@@ -109,8 +138,11 @@ const RecycleBin: React.FC = () => {
         onRestoreFile={handleRestore}
         onDeletePermanently={handlePermanentDelete}
         onFilePreview={handlePreview}
+        onFileSelect={handleFileSelect}
+        selectedFiles={selectedFiles}
         emptyMessage="Recycle Bin is empty"
         emptySubtext="Delete files to see them here"
+        maxHeight={770}
       />
 
       {previewFile && (
@@ -118,7 +150,10 @@ const RecycleBin: React.FC = () => {
           fileId={previewFile.id}
           fileName={previewFile.name}
           mimeType={previewFile.mimeType}
-          onClose={() => setPreviewFile(null)}
+          onClose={handleClosePreview}
+          allFiles={navigableFiles}
+          currentIndex={previewIndex}
+          onNavigate={handleNavigate}
         />
       )}
     </Container>

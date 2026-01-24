@@ -43,8 +43,8 @@ interface FilesTableProps {
   showOwner?: boolean;
   showLocation?: boolean;
   renderRowActions?: (file: FileItem) => React.ReactNode;
-  // New prop to control click behavior
   singleClickMode?: "preview" | "select";
+  maxHeight?: number;
 }
 
 const FilesTable: React.FC<FilesTableProps> = ({
@@ -61,7 +61,8 @@ const FilesTable: React.FC<FilesTableProps> = ({
   showOwner = true,
   showLocation = true,
   renderRowActions,
-  singleClickMode = "select", // Default to selection mode
+  singleClickMode = "select",
+  maxHeight = 650,
 }) => {
   const formatInteraction = (file: FileItem): string => {
     const actionMap = {
@@ -77,25 +78,17 @@ const FilesTable: React.FC<FilesTableProps> = ({
 
   const handleRowClick = (file: FileItem) => {
     if (singleClickMode === "preview") {
-      // Single click opens preview (for recent files page)
       onFilePreview?.(file);
     } else {
-      // Single click toggles selection (for your files page)
-      if (onFileClick) {
-        onFileClick(file);
-      }
+      onFileClick?.(file);
     }
   };
 
   const handleRowDoubleClick = (file: FileItem) => {
     if (singleClickMode === "select") {
-      // Double click opens preview (for your files page)
       onFilePreview?.(file);
     }
-    // In preview mode, double click does nothing extra
-    if (onFileDoubleClick) {
-      onFileDoubleClick(file);
-    }
+    onFileDoubleClick?.(file);
   };
 
   const handleContextMenu = (file: FileItem, e: React.MouseEvent) => {
@@ -140,99 +133,133 @@ const FilesTable: React.FC<FilesTableProps> = ({
           </TableRow>
         </TableHead>
       </Table>
-      <ScrollableArea>
-        <Table>
-          <TableBody>
-            {files.map((file) => (
-              <TableRow
-                key={file.id}
-                onClick={() => handleRowClick(file)}
-                onDoubleClick={() => handleRowDoubleClick(file)}
-                onContextMenu={(e) => handleContextMenu(file, e)}
-                $selected={selectedFiles.has(file.id)}
-                tabIndex={0}
-              >
-                <TableCell>
-                  <NameCell>
-                    <FileIconWrapper>
-                      {file.type === "folder" ? (
-                        <FolderSmallIcon color="#5f6368" />
-                      ) : (
-                        <FileTypeIcon fileName={file.name} size={20} />
-                      )}
-                    </FileIconWrapper>
-                    <FileName title={file.name}>{file.name}</FileName>
-                  </NameCell>
-                </TableCell>
-                <TableCell>
-                  <InteractionText>{formatInteraction(file)}</InteractionText>
-                </TableCell>
-                {showLocation && (
+
+      <ScrollContainer $maxHeight={maxHeight}>
+        <ScrollableArea>
+          <Table>
+            <TableBody>
+              {files.map((file) => (
+                <TableRow
+                  key={file.id}
+                  onClick={() => handleRowClick(file)}
+                  onDoubleClick={() => handleRowDoubleClick(file)}
+                  onContextMenu={(e) => handleContextMenu(file, e)}
+                  $selected={selectedFiles.has(file.id)}
+                  tabIndex={0}
+                >
                   <TableCell>
-                    <LocationCell>
-                      <FolderSmallIcon color="#5f6368" size={16} />
-                      <LocationText>{file.location}</LocationText>
-                    </LocationCell>
+                    <NameCell>
+                      <FileIconWrapper>
+                        {file.type === "folder" ? (
+                          <FolderSmallIcon color="#5f6368" />
+                        ) : (
+                          <FileTypeIcon fileName={file.name} size={20} />
+                        )}
+                      </FileIconWrapper>
+                      <FileName title={file.name}>{file.name}</FileName>
+                    </NameCell>
                   </TableCell>
-                )}
-                {showOwner && (
+
                   <TableCell>
-                    <OwnerCell>
-                      {file.owner.avatar ? (
-                        <OwnerAvatar
-                          src={file.owner.avatar}
-                          alt={file.owner.name}
-                        />
-                      ) : (
-                        <OwnerAvatarPlaceholder>
-                          {file.owner.name.charAt(0).toUpperCase()}
-                        </OwnerAvatarPlaceholder>
-                      )}
-                      {file.owner.isYou && <OwnerName>me</OwnerName>}
-                    </OwnerCell>
+                    <InteractionText>{formatInteraction(file)}</InteractionText>
                   </TableCell>
-                )}
-                {renderRowActions && (
-                  <TableCell
-                    style={{ width: "60px", padding: "8px" }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {renderRowActions(file)}
-                  </TableCell>
-                )}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </ScrollableArea>
+
+                  {showLocation && (
+                    <TableCell>
+                      <LocationCell>
+                        <FolderSmallIcon color="#5f6368" size={16} />
+                        <LocationText>{file.location}</LocationText>
+                      </LocationCell>
+                    </TableCell>
+                  )}
+
+                  {showOwner && (
+                    <TableCell>
+                      <OwnerCell>
+                        {file.owner.avatar ? (
+                          <OwnerAvatar
+                            src={file.owner.avatar}
+                            alt={file.owner.name}
+                          />
+                        ) : (
+                          <OwnerAvatarPlaceholder>
+                            {file.owner.name.charAt(0).toUpperCase()}
+                          </OwnerAvatarPlaceholder>
+                        )}
+                        {file.owner.isYou && <OwnerName>me</OwnerName>}
+                      </OwnerCell>
+                    </TableCell>
+                  )}
+
+                  {renderRowActions && (
+                    <TableCell
+                      style={{ width: "60px", padding: "8px" }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {renderRowActions(file)}
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </ScrollableArea>
+        <BottomFade />
+      </ScrollContainer>
     </TableContainer>
   );
 };
 
+const TableContainer = styled.div`
+  width: 100%;
+  background: #f8f9fa;
+  border-radius: 8px;
+`;
+
+const ScrollContainer = styled.div<{ $maxHeight: number }>`
+  position: relative;
+  height: ${({ $maxHeight }) => $maxHeight}px;
+  overflow: hidden;
+`;
+
 const ScrollableArea = styled.div`
-  max-height: 750px;
+  height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
 
   &::-webkit-scrollbar {
     width: 8px;
   }
+
   &::-webkit-scrollbar-track {
     background: transparent;
   }
+
   &::-webkit-scrollbar-thumb {
-    background: #c2c2c2;
+    background: #dadce0;
     border-radius: 4px;
   }
+
   &::-webkit-scrollbar-thumb:hover {
-    background: #a0a0a0;
+    background: #bdc1c6;
   }
 `;
 
-const TableContainer = styled.div`
-  width: 100%;
-  background: #f8f9fa;
-  border-radius: 8px;
+const BottomFade = styled.div`
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(248, 249, 250, 0) 0%,
+    rgba(248, 249, 250, 0.5) 30%,
+    rgba(248, 249, 250, 0.8) 60%,
+    rgba(248, 249, 250, 1) 100%
+  );
+  z-index: 10;
 `;
 
 const Table = styled.table`
@@ -242,7 +269,6 @@ const Table = styled.table`
 `;
 
 const TableHead = styled.thead``;
-
 const TableBody = styled.tbody``;
 
 const TableRow = styled.tr<{ $selected?: boolean }>`
@@ -291,12 +317,12 @@ const NameCell = styled.div`
 `;
 
 const FileIconWrapper = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
   width: 32px;
   height: 32px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 `;
 
 const FileName = styled.span`
@@ -354,13 +380,13 @@ const OwnerName = styled.span`
 `;
 
 const LoadingState = styled.div`
+  padding: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 48px;
-  color: #5f6368;
   font-size: 14px;
+  color: #5f6368;
 `;
 
 const LoadingSpinner = styled.div`
@@ -390,9 +416,9 @@ const EmptyText = styled.div`
 `;
 
 const EmptySubtext = styled.div`
+  margin-top: 4px;
   font-size: 13px;
   color: #80868b;
-  margin-top: 4px;
 `;
 
 export default FilesTable;
