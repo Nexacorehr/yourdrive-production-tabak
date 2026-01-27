@@ -9,7 +9,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [firstName, setFirstName] = useState(""); // CHANGED: name → firstName
+  const [firstName, setFirstName] = useState("");
   const [validationError, setValidationError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -17,16 +17,20 @@ export default function RegisterPage() {
     clearError();
     setValidationError("");
 
+    const registrationApproval = email && password && firstName;
+
     if (password !== confirmPassword) {
       setValidationError("Passwords do not match");
       return;
     }
 
-    try {
-      await register(email, password, firstName || undefined); // CHANGED: name → firstName
-      navigate({ to: "/dashboard" });
-    } catch (error) {
-      console.error("Registration failed:", error);
+    if (registrationApproval) {
+      try {
+        await register(email, password, firstName);
+        navigate({ to: "/dashboard" });
+      } catch (error) {
+        console.error("Registration failed:", error);
+      }
     }
   };
 

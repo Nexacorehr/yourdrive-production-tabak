@@ -156,13 +156,13 @@ export const useAuthStore = create<AuthState>()(
       register: async (
         email: string,
         password: string,
-        name?: string,
+        firstName?: string,
       ): Promise<void> => {
         set({ isLoading: true, error: null });
         try {
           await axios.post(
             `${API_URL}/auth/register`,
-            { email, password, name },
+            { email, password, firstName },
             { withCredentials: true },
           );
 

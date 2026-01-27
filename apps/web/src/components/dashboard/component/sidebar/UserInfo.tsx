@@ -14,6 +14,13 @@ interface UserInfoProps {
 }
 
 const UserInfo = ({ user, currentDevice }: UserInfoProps) => {
+  console.log(
+    "Rendering UserInfo with user:",
+    user,
+    "and device:",
+    currentDevice,
+  );
+
   return (
     <>
       <UserName>{user?.firstName || ""}</UserName>
