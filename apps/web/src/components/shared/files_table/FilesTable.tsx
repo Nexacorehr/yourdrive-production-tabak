@@ -283,6 +283,14 @@ const FilesTable: React.FC<FilesTableProps> = ({
     return dataTransfer.files;
   };
 
+  const countTotalItems = (node: FolderNode): number => {
+    let count = node.files.length;
+    Array.from(node.subfolders.values()).forEach((subfolder) => {
+      count += countTotalItems(subfolder);
+    });
+    return count;
+  };
+
   const renderFolderNode = (
     node: FolderNode,
     level: number = 0,
@@ -292,6 +300,7 @@ const FilesTable: React.FC<FilesTableProps> = ({
     // Render subfolders first
     Array.from(node.subfolders.values()).forEach((subfolder) => {
       const isExpanded = expandedFolders.has(subfolder.path);
+      const itemCount = countTotalItems(subfolder);
 
       // Folder row
       elements.push(
@@ -302,28 +311,23 @@ const FilesTable: React.FC<FilesTableProps> = ({
         >
           <TableCell>
             <NameCell>
+              <FolderIndent $level={level} />
               <FolderToggle>
                 {isExpanded ? (
-                  <ChevronDown size={16} />
+                  <ChevronDown size={14} />
                 ) : (
-                  <ChevronRight size={16} />
+                  <ChevronRight size={14} />
                 )}
               </FolderToggle>
-              <FileIconWrapper>
-                <FolderSmallIcon color="#5f6368" />
+              <FileIconWrapper $compact>
+                <FolderSmallIcon color="#5f6368" size={18} />
               </FileIconWrapper>
-              <FileName>{subfolder.name}</FileName>
+              <FileName $folder>{subfolder.name}</FileName>
+              <ItemCount>{itemCount}</ItemCount>
             </NameCell>
           </TableCell>
           <TableCell>
-            <InteractionText>
-              {subfolder.files.length +
-                Array.from(subfolder.subfolders.values()).reduce(
-                  (sum, sf) => sum + sf.files.length,
-                  0,
-                )}{" "}
-              items
-            </InteractionText>
+            <InteractionText />
           </TableCell>
           {showLocation && <TableCell></TableCell>}
           {showOwner && <TableCell></TableCell>}
@@ -354,8 +358,8 @@ const FilesTable: React.FC<FilesTableProps> = ({
           <TableCell>
             <NameCell>
               <FolderIndent $level={level} />
-              <FileIconWrapper>
-                <FileTypeIcon fileName={file.name} size={20} />
+              <FileIconWrapper $compact>
+                <FileTypeIcon fileName={file.name} size={18} />
               </FileIconWrapper>
               <FileName title={file.name}>{file.name}</FileName>
             </NameCell>
@@ -366,7 +370,7 @@ const FilesTable: React.FC<FilesTableProps> = ({
           {showLocation && (
             <TableCell>
               <LocationCell>
-                <FolderSmallIcon color="#5f6368" size={16} />
+                <FolderSmallIcon color="#5f6368" size={14} />
                 <LocationText>{file.location}</LocationText>
               </LocationCell>
             </TableCell>
@@ -684,6 +688,7 @@ const TableRow = styled.tr<{ $selected?: boolean; $level?: number }>`
 
 const FolderRow = styled(TableRow)<{ $level: number }>`
   font-weight: 500;
+  height: 36px;
 
   &:hover {
     background: rgba(201, 201, 201, 0.15);
@@ -702,7 +707,7 @@ const TableHeader = styled.th`
 `;
 
 const TableCell = styled.td`
-  padding: 12px 16px;
+  padding: 10px 16px;
   font-size: 14px;
   color: #202124;
   vertical-align: middle;
@@ -711,12 +716,12 @@ const TableCell = styled.td`
 const NameCell = styled.div`
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 `;
 
 const FolderIndent = styled.div<{ $level: number }>`
-  width: ${({ $level }) => $level * 32}px;
+  width: ${({ $level }) => $level * 16}px;
   flex-shrink: 0;
 `;
 
@@ -724,26 +729,36 @@ const FolderToggle = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   color: #5f6368;
+  margin-right: 2px;
 `;
 
-const FileIconWrapper = styled.div`
-  width: 32px;
-  height: 32px;
+const FileIconWrapper = styled.div<{ $compact?: boolean }>`
+  width: ${({ $compact }) => ($compact ? "24px" : "32px")};
+  height: ${({ $compact }) => ($compact ? "24px" : "32px")};
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
 `;
 
-const FileName = styled.span`
-  font-weight: 400;
+const FileName = styled.span<{ $folder?: boolean }>`
+  font-weight: ${({ $folder }) => ($folder ? "500" : "400")};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: ${({ $folder }) => ($folder ? "13px" : "14px")};
+`;
+
+const ItemCount = styled.span`
+  font-size: 12px;
+  color: #80868b;
+  font-weight: 400;
+  margin-left: 6px;
+  white-space: nowrap;
 `;
 
 const InteractionText = styled.span`

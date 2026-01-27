@@ -348,14 +348,14 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
                             <Eye size={16} /> Preview
                           </QuickAction>
                           <QuickActionDivider />
-                          <QuickAction
+                          {/* <QuickAction
                             onClick={() => {
                               setConversionFile(file);
                               setQuickActionsFile(null);
                             }}
-                          >
+                            >
                             <Zap size={16} /> Convert
-                          </QuickAction>
+                            </QuickAction> */}
 
                           <QuickAction
                             onClick={() => {
