@@ -1,115 +1,327 @@
 import React, { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import styled from "styled-components";
+import { Lock, Mail, X, Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
+
+const Page = styled.div`
+  min-height: 100vh;
+  display: flex;
+  background: #a3b0bd;
+  overflow-y: hidden;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+`;
+
+const Left = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  padding: 32px 48px;
+  position: relative;
+`;
+
+const Header = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 80px;
+`;
+
+const Logo = styled.h1`
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin: 0;
+  color: #000000;
+`;
+
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  padding: 8px;
+
+  &:hover {
+    color: #334155;
+  }
+`;
+
+const Content = styled.div`
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const Card = styled.div`
+  width: 100%;
+  max-width: 480px;
+`;
+
+const Title = styled.h2`
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #000000;
+`;
+
+const Subtitle = styled.p`
+  color: #64748b;
+  font-size: 14px;
+  margin-top: 0;
+  margin-bottom: 40px;
+`;
+
+const Form = styled.form`
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+`;
+
+const InputWrapper = styled.div`
+  position: relative;
+`;
+
+const Icon = styled.div`
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  transform: translateY(-50%);
+  color: #64748b;
+  display: flex;
+  align-items: center;
+`;
+
+const ToggleIcon = styled.button`
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  padding: 0;
+
+  &:hover {
+    color: #334155;
+  }
+`;
+
+const Input = styled.input`
+  width: 100%;
+  padding: 16px 16px 16px 48px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  font-size: 14px;
+  color: #000000;
+  box-sizing: border-box;
+
+  &::placeholder {
+    color: #94a3b8;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+  }
+`;
+
+const ForgotPassword = styled.div`
+  text-align: right;
+  margin-top: -8px;
+
+  button {
+    background: none;
+    border: none;
+    color: #3b82f6;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+`;
+
+const Button = styled.button`
+  background: #3b82f6;
+  border: none;
+  border-radius: 12px;
+  padding: 16px;
+  color: white;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: 0.2s;
+  margin-top: 12px;
+
+  &:hover {
+    background: #2563eb;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
+
+const LinkRow = styled.div`
+  margin-top: 24px;
+  text-align: center;
+  font-size: 14px;
+  color: #64748b;
+
+  button {
+    border: none;
+    background: none;
+    color: #3b82f6;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+`;
+
+const Right = styled.div`
+  flex: 1;
+  background: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+
+  @media (max-width: 900px) {
+    display: none;
+  }
+`;
+
+const RightContent = styled.div`
+  text-align: center;
+  color: #ffffff;
+  max-width: 600px;
+
+  h2 {
+    font-size: 48px;
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0;
+  }
+
+  span {
+    color: #3b82f6;
+  }
+`;
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login, isLoading, error, clearError } = useAuthStore();
+  const { login, isLoading } = useAuthStore();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    clearError();
-
-    try {
-      await login(email, password);
-      navigate({ to: "/dashboard" });
-    } catch (error) {
-      // Error is handled in store
-      console.error("Login failed:", error);
-    }
+    await login(email, password);
+    navigate({ to: "/dashboard" });
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="text-center text-3xl font-extrabold text-gray-900">
-            Sign in to YourDrive
+    <Page>
+      <Left>
+        <Header>
+          <Logo>YOURDRIVE</Logo>
+          <CloseButton onClick={() => navigate({ to: "/" })}>
+            <X size={20} />
+            Close
+          </CloseButton>
+        </Header>
+
+        <Content>
+          <Card>
+            <Title>Welcome Back,</Title>
+            <Subtitle>Please enter your details to login.</Subtitle>
+
+            <Form onSubmit={handleSubmit}>
+              <InputWrapper>
+                <Icon>
+                  <Mail size={20} />
+                </Icon>
+                <Input
+                  type="email"
+                  placeholder="Email Address"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </InputWrapper>
+
+              <InputWrapper>
+                <Icon>
+                  <Lock size={20} />
+                </Icon>
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <ToggleIcon
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </ToggleIcon>
+              </InputWrapper>
+
+              <ForgotPassword>
+                <button type="button">Forgot Password?</button>
+              </ForgotPassword>
+
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? "Logging in..." : "Login"}
+              </Button>
+            </Form>
+
+            <LinkRow>
+              Don't have an account?{" "}
+              <button onClick={() => navigate({ to: "/register" })}>
+                Sign Up
+              </button>
+            </LinkRow>
+          </Card>
+        </Content>
+      </Left>
+
+      <Right>
+        <RightContent>
+          <h2>
+            Send, receive and edit files
+            <br />
+            with <span>YourDrive</span>
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Or{" "}
-            <button
-              onClick={() => navigate({ to: "/register" })}
-              className="font-medium text-indigo-600 hover:text-indigo-500"
-            >
-              create a new account
-            </button>
-          </p>
-        </div>
-
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-              {error}
-            </div>
-          )}
-
-          <div className="rounded-md shadow-sm space-y-4">
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Enter your email"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Enter your password"
-              />
-            </div>
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? "Signing in..." : "Sign in"}
-            </button>
-          </div>
-
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={() => navigate({ to: "/" })}
-              className="text-sm text-gray-600 hover:text-gray-900"
-            >
-              ← Back to home
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </RightContent>
+      </Right>
+    </Page>
   );
 }

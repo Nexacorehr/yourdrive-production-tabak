@@ -22,6 +22,13 @@ model User {
   userDevices   UserDevice[]
   userFiles     UserFile[]
   userSettings  UserSettings?
+
+  totpSecret     String?  @map("totp_secret")
+  totpEnabled    Boolean  @default(false) @map("totp_enabled")
+  
+  webauthnCredentials WebAuthnCredential[]
+  socialAccounts      SocialAccount[]
+  recoveryCodes       TotpRecoveryCode[]
   
   @@map("User")
 }
@@ -30,6 +37,7 @@ model Session {
   id           String   @id @default(uuid())
   userId       String   @map("userId")
   refreshToken String   @unique
+  deviceInfo   Json?
   expiresAt    DateTime @map("expiresAt")
   createdAt    DateTime @default(now()) @map("createdAt")
   
@@ -113,4 +121,55 @@ model UserSettings {
   
   @@index([userId])
   @@map("user_settings")
+}
+
+model WebAuthnCredential {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  credentialId String   @unique @map("credential_id")
+  publicKey    String   @map("public_key")
+  signCount    BigInt   @default(0) @map("sign_count")
+  deviceName   String?  @map("device_name")
+  createdAt    DateTime @default(now()) @map("created_at")
+  lastUsed     DateTime? @map("last_used")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([credentialId])
+  @@map("webauthn_credentials")
+}
+
+model SocialAccount {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  provider       String
+  providerUserId String   @map("provider_user_id")
+  email          String?
+  accessToken    String?  @map("access_token")
+  refreshToken   String?  @map("refresh_token")
+  profileData    Json     @default("{}") @map("profile_data")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([provider, providerUserId])
+  @@index([userId])
+  @@index([provider])
+  @@map("social_accounts")
+}
+
+model TotpRecoveryCode {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  codeHash  String    @map("code_hash")
+  used      Boolean   @default(false)
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@map("totp_recovery_codes")
 }

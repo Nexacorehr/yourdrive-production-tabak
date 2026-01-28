@@ -3,13 +3,8 @@ import rateLimit from "express-rate-limit";
 import { AuthService } from "../services/auth.service";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { DeviceService } from "../services/device.service";
-import { Pool } from "pg";
 
 const authRoutes = express.Router();
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
 
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -26,6 +21,10 @@ const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// ============================================
+// Registration & Login Routes
+// ============================================
 
 authRoutes.post(
   "/register",
@@ -62,24 +61,39 @@ authRoutes.post(
 
 authRoutes.post("/login", loginLimiter, async (req: Request, res: Response) => {
   try {
-    const result = await AuthService.login(req.body);
+    const { email, password, deviceName } = req.body;
 
     const deviceInfo = {
       userAgent: req.headers["user-agent"] || "",
       ip: req.ip || (req.headers["x-forwarded-for"] as string) || "",
     };
 
+    const result = await AuthService.login(email, password, {
+      ...deviceInfo,
+      deviceName,
+    });
+
+    if (result.requires2FA) {
+      return res.json({
+        success: true,
+        requires2FA: true,
+        tempToken: result.tempToken,
+      });
+    }
+
+    // Track device
     const device = await DeviceService.trackDevice(
       result.user.id,
       deviceInfo,
-      req.body.deviceName,
+      deviceName,
     );
 
+    // Set cookies
     res.cookie("refreshToken", result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: "/",
     });
 
@@ -137,6 +151,40 @@ authRoutes.post("/refresh", async (req: Request, res: Response) => {
   }
 });
 
+authRoutes.post("/logout", async (req: Request, res: Response) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+
+    if (refreshToken) {
+      await AuthService.logout(refreshToken);
+    }
+
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      path: "/",
+    });
+
+    res.clearCookie("deviceId", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      path: "/",
+    });
+
+    res.json({
+      success: true,
+      message: "Logged out successfully",
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 authRoutes.get(
   "/me",
   authMiddleware,
@@ -156,33 +204,6 @@ authRoutes.get(
     }
   },
 );
-
-authRoutes.post("/logout", async (req: Request, res: Response) => {
-  try {
-    const refreshToken = req.cookies.refreshToken;
-
-    if (refreshToken) {
-      await AuthService.logout(refreshToken);
-    }
-
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
-      path: "/",
-    });
-
-    res.json({
-      success: true,
-      message: "Logged out successfully",
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
 
 authRoutes.get("/status", async (req: Request, res: Response) => {
   try {
@@ -211,29 +232,285 @@ authRoutes.get("/status", async (req: Request, res: Response) => {
   }
 });
 
-// Legacy device endpoints - kept for backward compatibility
-authRoutes.get(
-  "/device/current",
+// ============================================
+// 2FA / TOTP Routes
+// ============================================
+
+authRoutes.post(
+  "/totp/setup",
   authMiddleware,
   async (req: AuthRequest, res: Response) => {
     try {
-      const deviceId = req.cookies.deviceId;
+      const result = await AuthService.setupTOTP(req.userId!);
 
-      if (!deviceId) {
-        return res.status(404).json({
-          success: false,
-          error: "No device information found",
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  },
+);
+
+authRoutes.post(
+  "/totp/verify-and-enable",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { token } = req.body;
+      const result = await AuthService.verifyAndEnableTOTP(req.userId!, token);
+
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  },
+);
+
+authRoutes.post("/totp/verify", async (req: Request, res: Response) => {
+  try {
+    const { tempToken, token, recoveryCode } = req.body;
+
+    let result;
+    if (recoveryCode) {
+      result = await AuthService.completeTOTPLoginWithRecoveryCode(
+        tempToken,
+        recoveryCode,
+      );
+    } else {
+      result = await AuthService.completeTOTPLogin(tempToken, token);
+    }
+
+    // Track device
+    const deviceInfo = {
+      userAgent: req.headers["user-agent"] || "",
+      ip: req.ip || (req.headers["x-forwarded-for"] as string) || "",
+    };
+
+    const device = await DeviceService.trackDevice(
+      result.user.id,
+      deviceInfo,
+      "2FA Login",
+    );
+
+    // Set cookies
+    res.cookie("refreshToken", result.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: "/",
+    });
+
+    res.cookie("deviceId", device.id, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      maxAge: 365 * 24 * 60 * 60 * 1000,
+      path: "/",
+    });
+
+    res.json({
+      success: true,
+      user: result.user,
+      accessToken: result.accessToken,
+      currentDevice: device,
+    });
+  } catch (error: any) {
+    res.status(401).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+authRoutes.post(
+  "/totp/disable",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      await AuthService.disableTOTP(req.userId!);
+
+      res.json({
+        success: true,
+        message: "2FA disabled successfully",
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  },
+);
+
+// ============================================
+// WebAuthn / Passkey Routes
+// ============================================
+
+authRoutes.get(
+  "/webauthn/registration-options",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const options = await AuthService.generateWebAuthnRegistrationOptions(
+        req.userId!,
+      );
+
+      req.session.challenge = options.challenge;
+
+      res.json({
+        success: true,
+        options,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  },
+);
+
+authRoutes.post(
+  "/webauthn/register",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { response: credentialResponse, deviceName } = req.body;
+
+      await AuthService.verifyWebAuthnRegistration(
+        req.userId!,
+        credentialResponse,
+        deviceName,
+      );
+
+      res.json({
+        success: true,
+        message: "Passkey registered successfully",
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  },
+);
+
+authRoutes.get(
+  "/webauthn/authentication-options",
+  async (req: Request, res: Response) => {
+    try {
+      const { email } = req.query;
+
+      let userId: string | undefined;
+      if (email) {
+        const { default: prisma } = await import("../lib/prisma");
+        const user = await prisma.user.findUnique({
+          where: { email: email as string },
         });
+        userId = user?.id;
       }
 
-      const device = await DeviceService.getDevice(deviceId, req.userId!);
+      const options =
+        await AuthService.generateWebAuthnAuthenticationOptions(userId);
+
+      if (req.session) {
+        req.session.challenge = options.challenge;
+      }
 
       res.json({
         success: true,
-        device,
+        options,
       });
     } catch (error: any) {
-      res.status(404).json({
+      res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  },
+);
+
+authRoutes.post(
+  "/webauthn/authenticate",
+  async (req: Request, res: Response) => {
+    try {
+      const { response: credentialResponse } = req.body;
+
+      const user =
+        await AuthService.verifyWebAuthnAuthentication(credentialResponse);
+
+      console.log(user);
+
+      // Generate tokens
+      const accessToken = AuthService.generateAccessToken(user.id);
+      const refreshToken = AuthService.generateRefreshToken(user.id);
+
+      // Create session
+      const { default: prisma } = await import("../lib/prisma");
+      const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+      await prisma.session.create({
+        data: {
+          userId: user.id,
+          refreshToken: hashedRefreshToken,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+
+      // Track device
+      const deviceInfo = {
+        userAgent: req.headers["user-agent"] || "",
+        ip: req.ip || (req.headers["x-forwarded-for"] as string) || "",
+      };
+
+      const device = await DeviceService.trackDevice(
+        user.id,
+        deviceInfo,
+        "Passkey Login",
+      );
+
+      // Set cookies
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: "/",
+      });
+
+      res.cookie("deviceId", device.id, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+        maxAge: 365 * 24 * 60 * 60 * 1000,
+        path: "/",
+      });
+
+      res.json({
+        success: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          emailVerified: user.emailVerified,
+        },
+        accessToken,
+        currentDevice: device,
+      });
+    } catch (error: any) {
+      res.status(401).json({
         success: false,
         error: error.message,
       });
@@ -242,67 +519,15 @@ authRoutes.get(
 );
 
 authRoutes.get(
-  "/devices",
+  "/passkeys",
   authMiddleware,
   async (req: AuthRequest, res: Response) => {
     try {
-      // Redirect to new endpoint with enhanced data
-      const devices = await pool.query(
-        `
-        SELECT 
-          d.id,
-          d.device_name,
-          d.device_nickname,
-          d.device_type,
-          d.device_color,
-          d.browser,
-          d.os,
-          d.ip_address,
-          d.last_active,
-          d.created_at,
-          d.is_current,
-          d.is_trusted,
-          d.sync_enabled,
-          d.storage_limit,
-          d.notifications_enabled,
-          d.last_location
-        FROM user_devices d
-        WHERE d.user_id = $1
-        ORDER BY d.is_current DESC, d.last_active DESC
-        `,
-        [req.userId],
-      );
+      const passkeys = await AuthService.getUserPasskeys(req.userId!);
 
       res.json({
         success: true,
-        devices: devices.rows,
-      });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        error: error.message,
-      });
-    }
-  },
-);
-
-authRoutes.patch(
-  "/device/:deviceId/name",
-  authMiddleware,
-  async (req: AuthRequest, res: Response) => {
-    try {
-      const { deviceId } = req.params;
-      const { name } = req.body;
-
-      const device = await DeviceService.updateDeviceName(
-        deviceId,
-        req.userId!,
-        name,
-      );
-
-      res.json({
-        success: true,
-        device,
+        passkeys,
       });
     } catch (error: any) {
       res.status(400).json({
@@ -314,17 +539,63 @@ authRoutes.patch(
 );
 
 authRoutes.delete(
-  "/device/:deviceId",
+  "/passkeys/:passkeyId",
   authMiddleware,
   async (req: AuthRequest, res: Response) => {
     try {
-      const { deviceId } = req.params;
+      const { passkeyId } = req.params;
 
-      await DeviceService.removeDevice(deviceId, req.userId!);
+      await AuthService.deletePasskey(req.userId!, passkeyId);
 
       res.json({
         success: true,
-        message: "Device removed successfully",
+        message: "Passkey deleted successfully",
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  },
+);
+
+// ============================================
+// Social Accounts Routes
+// ============================================
+
+authRoutes.get(
+  "/social-accounts",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const accounts = await AuthService.getUserSocialAccounts(req.userId!);
+
+      res.json({
+        success: true,
+        accounts,
+      });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+  },
+);
+
+authRoutes.delete(
+  "/social-accounts/:provider",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const { provider } = req.params;
+
+      await AuthService.unlinkSocialAccount(req.userId!, provider);
+
+      res.json({
+        success: true,
+        message: "Social account unlinked successfully",
       });
     } catch (error: any) {
       res.status(400).json({

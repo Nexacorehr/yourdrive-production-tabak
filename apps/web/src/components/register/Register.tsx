@@ -1,169 +1,497 @@
 import React, { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import styled, { createGlobalStyle } from "styled-components";
+import { Mail, Lock, User, X, Eye, EyeOff } from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
+
+const FontStyles = () => {
+  const GlobalFontStyle = createGlobalStyle`
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+  `;
+
+  return <GlobalFontStyle />;
+};
+
+const Page = styled.div`
+  min-height: 100vh;
+  display: flex;
+  background: #a3b0bd;
+  overflow-y: hidden;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  font-family: "Poppins", sans-serif;
+`;
+
+const Left = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  padding: 32px 48px;
+  position: relative;
+`;
+
+const Header = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 80px;
+`;
+
+const Logo = styled.h1`
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin: 0;
+  color: #000000;
+  font-family: "Poppins", sans-serif;
+`;
+
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  padding: 8px;
+  font-family: "Poppins", sans-serif;
+
+  &:hover {
+    color: #334155;
+  }
+`;
+
+const Content = styled.div`
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const Card = styled.div`
+  width: 100%;
+  max-width: 480px;
+`;
+
+const Title = styled.h2`
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #000000;
+  font-family: "Poppins", sans-serif;
+`;
+
+const Subtitle = styled.p`
+  color: #64748b;
+  font-size: 14px;
+  margin-top: 0;
+  margin-bottom: 40px;
+  font-family: "Poppins", sans-serif;
+`;
+
+const Form = styled.form`
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+`;
+
+const Row = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+`;
+
+const InputWrapper = styled.div`
+  position: relative;
+`;
+
+const Icon = styled.div`
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  transform: translateY(-50%);
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  z-index: 1;
+  transition: color 0.2s ease;
+`;
+
+const ToggleIcon = styled.button`
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  z-index: 2;
+
+  &:hover {
+    color: #334155;
+  }
+`;
+
+const Input = styled.input`
+  width: 100%;
+  padding: 16px 16px 16px 48px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  font-size: 14px;
+  color: #000000;
+  box-sizing: border-box;
+  font-family: "Poppins", sans-serif;
+  transition: all 0.2s ease;
+  position: relative;
+
+  &::placeholder {
+    color: #94a3b8;
+    font-family: "Poppins", sans-serif;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+
+    & + ${Icon} {
+      color: #3b82f6;
+    }
+  }
+
+  &:hover:not(:focus) {
+    border-color: #cbd5e1;
+  }
+
+  /* Invalid state */
+  &:invalid:not(:placeholder-shown):not(:focus) {
+    border-color: #ef4444;
+
+    & + ${Icon} {
+      color: #ef4444;
+    }
+  }
+
+  /* Valid state when filled */
+  &:valid:not(:placeholder-shown):not(:focus) {
+    border-color: #10b981;
+
+    & + ${Icon} {
+      color: #10b981;
+    }
+  }
+
+  /* Disabled state */
+  &:disabled {
+    background-color: #f8fafc;
+    border-color: #e2e8f0;
+    color: #94a3b8;
+    cursor: not-allowed;
+
+    & + ${Icon} {
+      color: #cbd5e1;
+    }
+  }
+
+  /* Error state (for programmatic validation) */
+  &.error {
+    border-color: #ef4444;
+
+    & + ${Icon} {
+      color: #ef4444;
+    }
+  }
+
+  /* Success state (for programmatic validation) */
+  &.success {
+    border-color: #10b981;
+
+    & + ${Icon} {
+      color: #10b981;
+    }
+  }
+`;
+
+const ForgotPassword = styled.div`
+  text-align: right;
+  margin-top: -8px;
+
+  button {
+    background: none;
+    border: none;
+    color: #3b82f6;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0;
+    font-family: "Poppins", sans-serif;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+`;
+
+const Button = styled.button`
+  background: #3b82f6;
+  border: none;
+  border-radius: 12px;
+  padding: 16px;
+  color: white;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: 0.2s;
+  margin-top: 12px;
+  font-family: "Poppins", sans-serif;
+
+  &:hover {
+    background: #2563eb;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
+
+const LinkRow = styled.div`
+  margin-top: 24px;
+  text-align: center;
+  font-size: 14px;
+  color: #64748b;
+  font-family: "Poppins", sans-serif;
+
+  button {
+    border: none;
+    background: none;
+    color: #3b82f6;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    font-family: "Poppins", sans-serif;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+`;
+
+const Right = styled.div`
+  flex: 1;
+  background: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+
+  @media (max-width: 900px) {
+    display: none;
+  }
+`;
+
+const RightContent = styled.div`
+  text-align: center;
+  color: #ffffff;
+  max-width: 600px;
+
+  h2 {
+    font-size: 48px;
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0;
+    font-family: "Poppins", sans-serif;
+  }
+
+  span {
+    color: #3b82f6;
+  }
+`;
 
 export default function RegisterPage() {
   const navigate = useNavigate();
-  const { register, isLoading, error, clearError } = useAuthStore();
+  const { register, isLoading } = useAuthStore();
 
+  const [firstName, setFirstName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [validationError, setValidationError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [errors, setErrors] = useState({
+    firstName: false,
+    email: false,
+    password: false,
+  });
+
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    clearError();
-    setValidationError("");
 
-    const registrationApproval = email && password && firstName;
+    const newErrors = {
+      firstName: firstName.trim().length === 0,
+      email: !validateEmail(email),
+      password: password.length < 6,
+    };
 
-    if (password !== confirmPassword) {
-      setValidationError("Passwords do not match");
+    setErrors(newErrors);
+
+    if (Object.values(newErrors).some((error) => error)) {
       return;
     }
 
-    if (registrationApproval) {
-      try {
-        await register(email, password, firstName);
-        navigate({ to: "/dashboard" });
-      } catch (error) {
-        console.error("Registration failed:", error);
-      }
+    await register(email, password, firstName);
+    navigate({ to: "/dashboard" });
+  };
+
+  const handleInputChange = (field: string, value: string) => {
+    setErrors((prev) => ({
+      ...prev,
+      [field]: false,
+    }));
+
+    switch (field) {
+      case "firstName":
+        setFirstName(value);
+        break;
+      case "email":
+        setEmail(value);
+        break;
+      case "password":
+        setPassword(value);
+        break;
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="text-center text-3xl font-extrabold text-gray-900">
-            Create your account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Already have an account?{" "}
-            <button
-              onClick={() => navigate({ to: "/login" })}
-              className="font-medium text-indigo-600 hover:text-indigo-500"
-            >
-              Sign in
-            </button>
-          </p>
-        </div>
+    <>
+      <FontStyles />
+      <Page>
+        <Left>
+          <Header>
+            <Logo>Nexa Core</Logo>
+            <CloseButton onClick={() => navigate({ to: "/" })}>
+              <X size={20} />
+              Close
+            </CloseButton>
+          </Header>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {(error || validationError) && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
-              {error || validationError}
-            </div>
-          )}
+          <Content>
+            <Card>
+              <Title>Create an Account</Title>
+              <Subtitle>Please enter your details to register.</Subtitle>
 
-          <div className="rounded-md shadow-sm space-y-4">
-            <div>
-              <label
-                htmlFor="firstName"
-                className="block text-sm font-medium text-gray-700"
-              >
-                First name (optional)
-              </label>
-              <input
-                id="firstName"
-                name="firstName"
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                placeholder="Enter your first name"
-              />
-            </div>
+              <Form onSubmit={handleSubmit}>
+                <InputWrapper>
+                  <Icon>
+                    <User size={20} />
+                  </Icon>
+                  <Input
+                    placeholder="First Name"
+                    value={firstName}
+                    onChange={(e) =>
+                      handleInputChange("firstName", e.target.value)
+                    }
+                    required
+                    autoComplete="off"
+                    className={
+                      errors.firstName ? "error" : firstName ? "success" : ""
+                    }
+                  />
+                </InputWrapper>
 
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Email address
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                placeholder="Enter your email"
-              />
-            </div>
+                <InputWrapper>
+                  <Icon>
+                    <Mail size={20} />
+                  </Icon>
+                  <Input
+                    type="email"
+                    placeholder="Email Address"
+                    value={email}
+                    onChange={(e) => handleInputChange("email", e.target.value)}
+                    required
+                    autoComplete="off"
+                    className={
+                      errors.email
+                        ? "error"
+                        : email && validateEmail(email)
+                          ? "success"
+                          : ""
+                    }
+                  />
+                </InputWrapper>
 
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                placeholder="Create a password"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Must be 8+ characters with uppercase, lowercase, number, and
-                special character
-              </p>
-            </div>
+                <InputWrapper>
+                  <Icon>
+                    <Lock size={20} />
+                  </Icon>
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Password (min. 6 characters)"
+                    value={password}
+                    onChange={(e) =>
+                      handleInputChange("password", e.target.value)
+                    }
+                    required
+                    minLength={6}
+                    autoComplete="off"
+                    className={
+                      errors.password
+                        ? "error"
+                        : password.length >= 6
+                          ? "success"
+                          : ""
+                    }
+                  />
+                  <ToggleIcon
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </ToggleIcon>
+                </InputWrapper>
 
-            <div>
-              <label
-                htmlFor="confirmPassword"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Confirm password
-              </label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                placeholder="Confirm your password"
-              />
-            </div>
-          </div>
+                <ForgotPassword>
+                  <button type="button">Forgot Password?</button>
+                </ForgotPassword>
 
-          <div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? "Creating account..." : "Create account"}
-            </button>
-          </div>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? "Creating account..." : "Sign Up"}
+                </Button>
+              </Form>
 
-          <div className="text-center">
-            <button
-              type="button"
-              onClick={() => navigate({ to: "/" })}
-              className="text-sm text-gray-600 hover:text-gray-900"
-            >
-              ← Back to home
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+              <LinkRow>
+                Already have an account?{" "}
+                <button onClick={() => navigate({ to: "/login" })}>
+                  Sign in
+                </button>
+              </LinkRow>
+            </Card>
+          </Content>
+        </Left>
+
+        <Right>
+          <RightContent>
+            <h2>
+              Send, receive and edit files with <span>YourDrive</span>
+            </h2>
+          </RightContent>
+        </Right>
+      </Page>
+    </>
   );
 }

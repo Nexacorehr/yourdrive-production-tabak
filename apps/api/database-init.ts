@@ -545,6 +545,81 @@ async function setupDeviceGroupAndActionsTables(client) {
   );
 }
 
+async function setupSecurityTables(client) {
+  console.log("Adding TOTP 2FA columns to User table...");
+  await client.query(`
+    ALTER TABLE "User"
+    ADD COLUMN IF NOT EXISTS totp_secret TEXT,
+    ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN DEFAULT false;
+  `);
+
+  console.log("Creating WebAuthn credentials table...");
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS webauthn_credentials (
+      id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::TEXT,
+      user_id TEXT NOT NULL,
+      credential_id TEXT NOT NULL UNIQUE,
+      public_key TEXT NOT NULL,
+      sign_count BIGINT NOT NULL DEFAULT 0,
+      device_name TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      last_used TIMESTAMP,
+      CONSTRAINT webauthn_credentials_user_id_fkey FOREIGN KEY (user_id)
+        REFERENCES "User"(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user_id
+      ON webauthn_credentials(user_id);
+
+    CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_credential_id
+      ON webauthn_credentials(credential_id);
+  `);
+
+  console.log("Creating Social Accounts table...");
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS social_accounts (
+      id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::TEXT,
+      user_id TEXT NOT NULL,
+      provider VARCHAR(50) NOT NULL,
+      provider_user_id VARCHAR(255) NOT NULL,
+      email VARCHAR(255),
+      access_token TEXT,
+      refresh_token TEXT,
+      profile_data JSONB DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      CONSTRAINT social_accounts_user_id_fkey FOREIGN KEY (user_id)
+        REFERENCES "User"(id) ON DELETE CASCADE,
+      UNIQUE(provider, provider_user_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_social_accounts_user_id
+      ON social_accounts(user_id);
+
+    CREATE INDEX IF NOT EXISTS idx_social_accounts_provider
+      ON social_accounts(provider);
+  `);
+
+  console.log("Creating TOTP Recovery Codes table...");
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS totp_recovery_codes (
+      id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::TEXT,
+      user_id TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      used BOOLEAN DEFAULT false,
+      used_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW(),
+      CONSTRAINT totp_recovery_codes_user_id_fkey FOREIGN KEY (user_id)
+        REFERENCES "User"(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_totp_recovery_codes_user_id
+      ON totp_recovery_codes(user_id);
+  `);
+
+  console.log("✓ Security tables ready (TOTP, Passkeys, Social Logins)");
+}
+
 async function setupDatabase() {
   const client = await pool.connect();
 
@@ -558,6 +633,7 @@ async function setupDatabase() {
     await setupFileActivityTable(client);
     await setupDeviceFilesTables(client);
     await setupDeviceGroupAndActionsTables(client);
+    await setupSecurityTables(client);
 
     console.log("\n✅ ALL TABLES CREATED SUCCESSFULLY!");
     console.log("✅ Enhanced devices table with advanced features");
@@ -565,6 +641,7 @@ async function setupDatabase() {
     console.log("✅ File activity tracking enabled");
     console.log("✅ Recycle bin is independent - deleted files will persist!");
     console.log("✅ Changed 'name' field to 'first_name' in User table");
+    console.log("✅ Security tables ready (TOTP, Passkeys, Social Logins)");
   } catch (err) {
     console.error("❌ Database setup failed:", err);
     throw err;
