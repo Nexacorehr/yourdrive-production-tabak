@@ -76,6 +76,96 @@ const chunkUpload = multer({
 filesRoutes.use("/favorites", favoritesRoutes);
 
 filesRoutes.post(
+  "/upload",
+  authMiddleware,
+  directUpload.array("files", 50),
+  async (req: AuthRequest, res) => {
+    try {
+      const userId = req.userId;
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          error: "Authentication required",
+        });
+      }
+
+      const files = req.files as Express.Multer.File[];
+      if (!files || files.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: "No files provided",
+        });
+      }
+
+      const folderPaths = req.body.folderPaths
+        ? JSON.parse(req.body.folderPaths)
+        : {};
+
+      const uploadedFiles = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const folderPath = folderPaths[i] || "";
+
+        const s3Key = `${userId}/${Date.now()}-${file.originalname}`;
+
+        const upload = new Upload({
+          client: s3Client,
+          params: {
+            Bucket: BUCKET_NAME,
+            Key: s3Key,
+            Body: file.buffer,
+            ContentType: file.mimetype,
+          },
+        });
+
+        await upload.done();
+
+        const result = await pool.query(
+          `INSERT INTO user_files 
+           (user_id, user_email, original_name, s3_key, folder_path, size, mime_type, created_at, updated_at)
+           VALUES (
+             $1, 
+             (SELECT email FROM "User" WHERE id = $1), 
+             $2, 
+             $3, 
+             $4, 
+             $5, 
+             $6,
+             NOW(),
+             NOW()
+           )
+           RETURNING id, original_name, s3_key, folder_path, size, mime_type, created_at, updated_at`,
+          [
+            userId,
+            file.originalname,
+            s3Key,
+            folderPath,
+            file.size,
+            file.mimetype,
+          ],
+        );
+
+        uploadedFiles.push(result.rows[0]);
+      }
+
+      res.json({
+        success: true,
+        files: uploadedFiles,
+        count: uploadedFiles.length,
+      });
+    } catch (err) {
+      console.error("Upload error:", err);
+      res.status(500).json({
+        success: false,
+        error: "Upload failed",
+        details: err instanceof Error ? err.message : "Unknown error",
+      });
+    }
+  },
+);
+
+filesRoutes.post(
   "/upload-chunk",
   authMiddleware,
   chunkUpload.single("chunk"),

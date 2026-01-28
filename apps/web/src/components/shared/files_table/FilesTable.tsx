@@ -94,7 +94,6 @@ const FilesTable: React.FC<FilesTableProps> = ({
   const dragCounter = useRef(0);
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
-  // Build folder structure
   const folderStructure = useMemo(() => {
     if (!showFolderStructure) return null;
 
@@ -110,12 +109,10 @@ const FilesTable: React.FC<FilesTableProps> = ({
       const path = file.location || "";
 
       if (!path || path === "Your Files") {
-        // File at root level
         root.files.push(file);
         return;
       }
 
-      // Build folder hierarchy
       const parts = path.split("/").filter(Boolean);
       let current = root;
       let currentPath = "";
@@ -426,13 +423,13 @@ const FilesTable: React.FC<FilesTableProps> = ({
       >
         <EmptyState $isDragging={isDragging}>
           {isDragging ? (
-            <>
+            <DragOverlayContent>
               <UploadIconWrapper>
                 <Upload size={48} />
               </UploadIconWrapper>
               <EmptyText>Drop files or folders here</EmptyText>
               <EmptySubtext>Release to upload</EmptySubtext>
-            </>
+            </DragOverlayContent>
           ) : (
             <>
               <EmptyText>{emptyMessage}</EmptyText>
