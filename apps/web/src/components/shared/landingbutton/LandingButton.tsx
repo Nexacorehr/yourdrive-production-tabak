@@ -42,19 +42,19 @@ const sizeStyles: Record<Size, React.CSSProperties> = {
 
 const variantStyles: Record<Variant, React.CSSProperties> = {
   primary: {
-    backgroundColor: "#1F9AFE",
+    background: "linear-gradient(135deg, #3AADFF 0%, #0D6EFD 100%)",
     color: "#EFF3FD",
-    border: "1px solid rgba(0,0,0,0.1)",
+    border: "none",
   },
   secondary: {
-    backgroundColor: "#EFF3FD",
+    background: "#E3ECFA",
     color: "#111",
-    border: "1px solid rgba(0,0,0,0.08)",
+    border: "none",
   },
   ghost: {
-    backgroundColor: "#363840",
+    background: "linear-gradient(135deg, #3A3C45 0%, #2E3038 100%)",
     color: "#EFF3FD",
-    border: "1px solid transparent",
+    border: "none",
   },
 };
 
@@ -103,7 +103,7 @@ const LandingButton = forwardRef<HTMLButtonElement, ButtonProps>(
         cursor: disabled ? "not-allowed" : "pointer",
         transition: "transform 0.2s ease, box-shadow 0.2s ease",
         ...sizeStyles[size],
-        backgroundColor: variantStyles[variant].backgroundColor,
+        background: variantStyles[variant].background,
         color: variantStyles[variant].color,
         border: variantStyles[variant].border,
         ...(disabled && { opacity: 0.6 }),

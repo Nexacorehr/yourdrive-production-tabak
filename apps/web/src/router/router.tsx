@@ -25,6 +25,9 @@ import RecentlyEdited from "../components/dashboard/component/recentlyEdited/Rec
 import Favorited from "../components/dashboard/component/favorited/Favorited";
 import Home from "../components/dashboard/component/main/Home";
 import Settings from "../components/settings/Settings";
+import Features from "../components/features/Features";
+import TermsOfService from "../components/termsofservice/TermsOfService";
+import PrivacyPolicy from "../components/privacypolicy/PrivacyPolicy";
 
 export const ROUTES = {
   HOME: "/",
@@ -32,9 +35,12 @@ export const ROUTES = {
   PRICING: "/pricing",
   HOWITWORKS: "/howitworks",
   HELPCENTER: "/helpcenter",
+  FEATURES: "/features",
   LOGIN: "/login",
   REGISTER: "/register",
   DASHBOARD: "/dashboard",
+  TERMS: "/terms",
+  PRIVACY: "/privacy",
   YOUR_FILES: "/dashboard/your-files",
   SHARED_WITH_YOU: "/dashboard/shared-with-you",
   RECYCLE_BIN: "/dashboard/recycle-bin",
@@ -110,6 +116,24 @@ const aboutUsRoute = createRoute({
   component: AboutUs,
 });
 
+const privacyPolicyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/privacy",
+  component: PrivacyPolicy,
+});
+
+const termsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/terms",
+  component: TermsOfService,
+});
+
+const featuresRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/features",
+  component: Features,
+});
+
 const howItWorksRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/howitworks",
@@ -178,6 +202,9 @@ const routeTree = rootRoute.addChildren([
   aboutUsRoute,
   howItWorksRoute,
   pricingRoute,
+  privacyPolicyRoute,
+  termsRoute,
+  featuresRoute,
   helpCenterRoute,
   dashboardRoute.addChildren([
     dashboardIndexRoute,

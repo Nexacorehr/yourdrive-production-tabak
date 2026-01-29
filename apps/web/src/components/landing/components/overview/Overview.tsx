@@ -13,7 +13,7 @@ const Overview: React.FC = () => {
       </DetailDesc>
       <ItemCont>
         <Item><Image src="/SvgIcons/UE.svg" width={18} height={18}/>Universal Editor</Item>
-        <Item><Image src="/SvgIcons/IP.svg" width={18} height={18} />Instant previews</Item>
+        <Item><Image src="/SvgIcons/IP.svg" width={18} height={18} /><span style={{color:"rgb(14, 132, 255)"}}>Instant previews</span></Item>
         <Item><Image src="/SvgIcons/US.svg" width={18} height={18} />Universal Search</Item>
       </ItemCont>
     </OverviewContainer>
