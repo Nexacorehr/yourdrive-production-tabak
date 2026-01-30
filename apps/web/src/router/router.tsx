@@ -173,7 +173,7 @@ const settingsRoute = createRoute({
   beforeLoad: requireAuthentication,
 });
 
-export const sharedFileRoute = createRoute({
+const sharedFileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/shared/$token",
   component: SharedViewer,

@@ -100,7 +100,7 @@ async function setupDatabase() {
         size BIGINT NOT NULL,
         file_hash TEXT,
         mime_type TEXT NOT NULL,
-        is_folder BOOLEAN DEFAULT false,
+        is_folder BOOLEAN DEFAULT false NOT NULL,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW(),
         deleted_at TIMESTAMP,
@@ -332,6 +332,21 @@ async function setupDatabase() {
       CREATE INDEX idx_share_activity_created_at ON share_activity(created_at DESC);
     `);
 
+    console.log("Creating share_comments table...");
+    await client.query(`
+      CREATE TABLE share_comments (
+        id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::TEXT,
+        share_id TEXT NOT NULL,
+        user_name TEXT NOT NULL,
+        text TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT share_comments_share_id_fkey FOREIGN KEY (share_id)
+          REFERENCES file_shares(id) ON DELETE CASCADE
+      );
+      CREATE INDEX idx_share_comments_share_id ON share_comments(share_id);
+      CREATE INDEX idx_share_comments_created_at ON share_comments(created_at DESC);
+    `);
+
     console.log("Creating device_files table...");
     await client.query(`
       CREATE TABLE device_files (
@@ -473,6 +488,7 @@ async function setupDatabase() {
     console.log("✅ Matches Prisma schema exactly");
     console.log("✅ Session.deviceInfo included");
     console.log("✅ user_files.is_folder for folder tracking");
+    console.log("✅ share_comments table added");
     console.log("✅ All foreign keys and indexes created");
     console.log("✅ Triggers configured");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");

@@ -1,19 +1,42 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
-import { Lock, AlertCircle, Download } from "lucide-react";
+import {
+  Lock,
+  AlertCircle,
+  Download,
+  MessageSquare,
+  Edit3,
+  Eye,
+  User,
+} from "lucide-react";
 import { useParams } from "@tanstack/react-router";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 interface SharedFile {
   id: string;
   fileName: string;
   fileSize: number;
   mimeType: string;
-  permission: string;
+  permission: "view" | "comment" | "edit" | "download";
   ownerName: string;
   hasPassword: boolean;
   expiresAt: string | null;
   maxDownloads: number | null;
   downloadCount: number;
+}
+
+interface Comment {
+  id: string;
+  userName: string;
+  text: string;
+  timestamp: string;
+}
+
+interface User {
+  id: string;
+  firstName: string;
+  email: string;
 }
 
 const SharedViewer: React.FC = () => {
@@ -29,6 +52,18 @@ const SharedViewer: React.FC = () => {
   const [fileContent, setFileContent] = useState<string>("");
   const [contentLoading, setContentLoading] = useState(false);
 
+  // Authenticated user
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // Permission-based states
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState("");
+  const [showComments, setShowComments] = useState(false);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [loadingComments, setLoadingComments] = useState(false);
+
   const getFileExtension = (fileName: string): string => {
     const parts = fileName.split(".");
     return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : "";
@@ -42,12 +77,47 @@ const SharedViewer: React.FC = () => {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
   };
 
+  const canDownload = () => {
+    return file?.permission === "download" || file?.permission === "edit";
+  };
+
+  const canComment = () => {
+    return file?.permission === "comment" || file?.permission === "edit";
+  };
+
+  const canEdit = () => {
+    return file?.permission === "edit";
+  };
+
+  // Fetch current authenticated user
+  const fetchCurrentUser = async () => {
+    try {
+      const response = await fetch(`${API_URL}/auth/me`, {
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.user) {
+          setCurrentUser(data.user);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch current user:", err);
+    }
+  };
+
   const fetchShareInfo = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/sharing/public/${token}`);
+      const response = await fetch(`${API_URL}/sharing/public/${token}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
       const data = await response.json();
 
       if (!data.success) {
@@ -66,7 +136,11 @@ const SharedViewer: React.FC = () => {
       }
     } catch (err) {
       console.error("Error fetching share info:", err);
-      setError("Failed to load shared file");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to connect to server. Please check your connection.",
+      );
       setLoading(false);
     }
   };
@@ -76,13 +150,17 @@ const SharedViewer: React.FC = () => {
     setError(null);
 
     try {
-      const response = await fetch(`/api/sharing/access/${token}`, {
+      const response = await fetch(`${API_URL}/sharing/access/${token}`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json; charset=UTF-8",
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ password: pwd || password }),
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
 
       const data = await response.json();
 
@@ -102,7 +180,7 @@ const SharedViewer: React.FC = () => {
       }
     } catch (err) {
       console.error("Error accessing file:", err);
-      setError("Failed to access file");
+      setError(err instanceof Error ? err.message : "Failed to access file");
       setAuthenticating(false);
     } finally {
       setAuthenticating(false);
@@ -145,20 +223,48 @@ const SharedViewer: React.FC = () => {
       setContentLoading(true);
       try {
         const response = await fetch(fileUrl);
+        if (!response.ok) {
+          throw new Error("Failed to load file content");
+        }
         const arrayBuffer = await response.arrayBuffer();
         const decoder = new TextDecoder("utf-8");
         const text = decoder.decode(arrayBuffer);
         setFileContent(text);
+        setEditedContent(text);
       } catch (err) {
         console.error("Failed to load file content:", err);
+        setError("Failed to load file content");
       } finally {
         setContentLoading(false);
       }
     }
   };
 
+  const loadComments = async () => {
+    if (!token || !canComment()) return;
+
+    setLoadingComments(true);
+    try {
+      const response = await fetch(`${API_URL}/sharing/comments/${token}`);
+
+      if (!response.ok) {
+        throw new Error("Failed to load comments");
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.comments) {
+        setComments(data.comments);
+      }
+    } catch (err) {
+      console.error("Failed to load comments:", err);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
   const handleDownload = () => {
-    if (fileUrl) {
+    if (fileUrl && canDownload()) {
       const link = document.createElement("a");
       link.href = fileUrl;
       link.download = file?.fileName || "download";
@@ -167,6 +273,85 @@ const SharedViewer: React.FC = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!canEdit() || !file) return;
+
+    setSaving(true);
+    try {
+      const response = await fetch(`${API_URL}/sharing/edit/${token}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content: editedContent }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save changes");
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        setFileContent(editedContent);
+        setIsEditing(false);
+        alert("Changes saved successfully!");
+      } else {
+        throw new Error(data.error || "Failed to save changes");
+      }
+    } catch (err) {
+      console.error("Failed to save changes:", err);
+      alert(
+        err instanceof Error
+          ? err.message
+          : "Failed to save changes. Please try again.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddComment = async () => {
+    if (!canComment() || !newComment.trim()) return;
+
+    // Use authenticated user's name or "Anonymous"
+    const userName = currentUser?.firstName || "Anonymous";
+
+    try {
+      const response = await fetch(`${API_URL}/sharing/comments/${token}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          text: newComment,
+          userName: userName,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to add comment");
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.comment) {
+        setComments([...comments, data.comment]);
+        setNewComment("");
+      } else {
+        throw new Error(data.error || "Failed to add comment");
+      }
+    } catch (err) {
+      console.error("Failed to add comment:", err);
+      alert(
+        err instanceof Error
+          ? err.message
+          : "Failed to add comment. Please try again.",
+      );
     }
   };
 
@@ -263,6 +448,39 @@ const SharedViewer: React.FC = () => {
         );
       }
 
+      // Edit mode for text files
+      if (isEditing && canEdit()) {
+        return (
+          <EditContainer>
+            <EditToolbar>
+              <EditInfo>
+                <Edit3 size={16} />
+                Editing mode
+              </EditInfo>
+              <EditActions>
+                <CancelEditButton
+                  onClick={() => {
+                    setIsEditing(false);
+                    setEditedContent(fileContent);
+                  }}
+                >
+                  Cancel
+                </CancelEditButton>
+                <SaveEditButton onClick={handleSaveEdit} disabled={saving}>
+                  {saving ? "Saving..." : "Save Changes"}
+                </SaveEditButton>
+              </EditActions>
+            </EditToolbar>
+            <EditTextArea
+              value={editedContent}
+              onChange={(e) => setEditedContent(e.target.value)}
+              spellCheck={false}
+            />
+          </EditContainer>
+        );
+      }
+
+      // View mode for text files
       const lines = fileContent.split("\n");
 
       return (
@@ -291,7 +509,6 @@ const SharedViewer: React.FC = () => {
       );
     }
 
-    // Unsupported file type
     return (
       <CenteredContainer>
         <UnsupportedIcon>📄</UnsupportedIcon>
@@ -299,7 +516,7 @@ const SharedViewer: React.FC = () => {
         <UnsupportedText>
           This file type cannot be previewed in the browser
         </UnsupportedText>
-        {file.permission === "download" && (
+        {canDownload() && (
           <DownloadButton onClick={handleDownload}>
             <Download size={18} />
             Download to view
@@ -312,12 +529,14 @@ const SharedViewer: React.FC = () => {
   useEffect(() => {
     if (token) {
       fetchShareInfo();
+      fetchCurrentUser();
     }
   }, [token]);
 
   useEffect(() => {
     if (fileUrl && file) {
       loadFileContent();
+      loadComments();
     }
   }, [fileUrl]);
 
@@ -388,10 +607,43 @@ const SharedViewer: React.FC = () => {
               <FileInfo>
                 {formatFileSize(file.fileSize)} · Shared by {file.ownerName}
               </FileInfo>
+              <PermissionBadge $permission={file.permission}>
+                {file.permission === "view" && <Eye size={14} />}
+                {file.permission === "comment" && <MessageSquare size={14} />}
+                {file.permission === "edit" && <Edit3 size={14} />}
+                {file.permission === "download" && <Download size={14} />}
+                {file.permission === "view" && "View only"}
+                {file.permission === "comment" && "Can comment"}
+                {file.permission === "edit" && "Can edit"}
+                {file.permission === "download" && "Can download"}
+              </PermissionBadge>
             </HeaderLeft>
 
             <HeaderRight>
-              {file.permission === "download" && (
+              {canEdit() && fileContent && (
+                <HeaderButton
+                  onClick={() => setIsEditing(!isEditing)}
+                  title={isEditing ? "View mode" : "Edit mode"}
+                  $active={isEditing}
+                >
+                  <Edit3 size={20} />
+                </HeaderButton>
+              )}
+
+              {canComment() && (
+                <HeaderButton
+                  onClick={() => setShowComments(!showComments)}
+                  title="Comments"
+                  $active={showComments}
+                >
+                  <MessageSquare size={20} />
+                  {comments.length > 0 && (
+                    <CommentBadge>{comments.length}</CommentBadge>
+                  )}
+                </HeaderButton>
+              )}
+
+              {canDownload() && (
                 <HeaderButton onClick={handleDownload} title="Download">
                   <Download size={20} />
                 </HeaderButton>
@@ -399,7 +651,78 @@ const SharedViewer: React.FC = () => {
             </HeaderRight>
           </PreviewHeader>
 
-          <PreviewContent>{renderPreview()}</PreviewContent>
+          <ContentWrapper>
+            <PreviewContent $withComments={showComments && canComment()}>
+              {renderPreview()}
+            </PreviewContent>
+
+            <CommentsPanel $show={showComments && canComment()}>
+              <CommentsPanelHeader>
+                <CommentsPanelTitle>
+                  <MessageSquare size={18} />
+                  Comments ({comments.length})
+                </CommentsPanelTitle>
+              </CommentsPanelHeader>
+
+              <CommentsList>
+                {loadingComments ? (
+                  <CenteredContainer>
+                    <LoadingSpinner />
+                    <LoadingText>Loading comments...</LoadingText>
+                  </CenteredContainer>
+                ) : comments.length === 0 ? (
+                  <EmptyComments>
+                    <MessageSquare size={32} color="#dadce0" />
+                    <EmptyCommentsText>No comments yet</EmptyCommentsText>
+                    <EmptyCommentsSubtext>
+                      Be the first to comment
+                    </EmptyCommentsSubtext>
+                  </EmptyComments>
+                ) : (
+                  comments.map((comment) => (
+                    <CommentItem key={comment.id}>
+                      <CommentHeader>
+                        <CommentAvatar>
+                          <User size={14} />
+                        </CommentAvatar>
+                        <CommentAuthor>{comment.userName}</CommentAuthor>
+                      </CommentHeader>
+                      <CommentText>{comment.text}</CommentText>
+                      <CommentTime>
+                        {new Date(comment.timestamp).toLocaleString()}
+                      </CommentTime>
+                    </CommentItem>
+                  ))
+                )}
+              </CommentsList>
+
+              <CommentInputContainer>
+                {currentUser ? (
+                  <CurrentUserBadge>
+                    <User size={12} />
+                    Commenting as: <strong>{currentUser.firstName}</strong>
+                  </CurrentUserBadge>
+                ) : (
+                  <AnonymousBadge>
+                    <User size={12} />
+                    Commenting as: <strong>Anonymous</strong>
+                  </AnonymousBadge>
+                )}
+                <CommentTextArea
+                  placeholder="Add a comment..."
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  rows={3}
+                />
+                <CommentButton
+                  onClick={handleAddComment}
+                  disabled={!newComment.trim()}
+                >
+                  Post Comment
+                </CommentButton>
+              </CommentInputContainer>
+            </CommentsPanel>
+          </ContentWrapper>
 
           {file.expiresAt && (
             <ExpirationNotice>
@@ -408,7 +731,7 @@ const SharedViewer: React.FC = () => {
             </ExpirationNotice>
           )}
 
-          {file.maxDownloads && (
+          {file.maxDownloads && canDownload() && (
             <DownloadNotice>
               {file.downloadCount} / {file.maxDownloads} downloads used
             </DownloadNotice>
@@ -524,6 +847,7 @@ const PasswordInput = styled.input`
   border-radius: 8px;
   font-size: 16px;
   color: #202124;
+  box-sizing: border-box;
 
   &:focus {
     outline: none;
@@ -605,6 +929,42 @@ const FileInfo = styled.div`
   color: #5f6368;
 `;
 
+const PermissionBadge = styled.div<{ $permission: string }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: ${(p) => {
+    switch (p.$permission) {
+      case "edit":
+        return "#e8f5e9";
+      case "comment":
+        return "#fff3e0";
+      case "download":
+        return "#e3f2fd";
+      default:
+        return "#f5f5f5";
+    }
+  }};
+  color: ${(p) => {
+    switch (p.$permission) {
+      case "edit":
+        return "#2e7d32";
+      case "comment":
+        return "#f57c00";
+      case "download":
+        return "#1976d2";
+      default:
+        return "#616161";
+    }
+  }};
+  width: fit-content;
+  margin-top: 4px;
+`;
+
 const HeaderRight = styled.div`
   display: flex;
   align-items: center;
@@ -612,8 +972,9 @@ const HeaderRight = styled.div`
   margin-left: 16px;
 `;
 
-const HeaderButton = styled.button`
-  background: transparent;
+const HeaderButton = styled.button<{ $active?: boolean }>`
+  position: relative;
+  background: ${(p) => (p.$active ? "#e8f0fe" : "transparent")};
   border: none;
   width: 40px;
   height: 40px;
@@ -622,12 +983,12 @@ const HeaderButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #5f6368;
+  color: ${(p) => (p.$active ? "#1a73e8" : "#5f6368")};
   transition: all 0.2s;
 
   &:hover {
-    background: #f1f3f4;
-    color: #202124;
+    background: ${(p) => (p.$active ? "#e8f0fe" : "#f1f3f4")};
+    color: ${(p) => (p.$active ? "#1a73e8" : "#202124")};
   }
 
   &:active {
@@ -635,14 +996,315 @@ const HeaderButton = styled.button`
   }
 `;
 
-const PreviewContent = styled.div`
+const CommentBadge = styled.div`
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: #1a73e8;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 10px;
+  min-width: 16px;
+  text-align: center;
+`;
+
+const ContentWrapper = styled.div`
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+`;
+
+const PreviewContent = styled.div<{ $withComments?: boolean }>`
   flex: 1;
   overflow: hidden;
   position: relative;
   background: #ffffff;
+  width: ${(p) => (p.$withComments ? "calc(100% - 400px)" : "100%")};
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   pre {
     color: black !important;
+  }
+`;
+
+const CommentsPanel = styled.div<{ $show?: boolean }>`
+  width: ${(p) => (p.$show ? "400px" : "0")};
+  border-left: ${(p) => (p.$show ? "1px solid #e8eaed" : "none")};
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: ${(p) => (p.$show ? 1 : 0)};
+`;
+
+const CommentsPanelHeader = styled.div`
+  padding: 20px;
+  border-bottom: 1px solid #e8eaed;
+  background: white;
+`;
+
+const CommentsPanelTitle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #202124;
+`;
+
+const CommentsList = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background: #f8f9fa;
+`;
+
+const EmptyComments = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 12px;
+`;
+
+const EmptyCommentsText = styled.div`
+  font-size: 15px;
+  font-weight: 500;
+  color: #5f6368;
+`;
+
+const EmptyCommentsSubtext = styled.div`
+  font-size: 13px;
+  color: #80868b;
+`;
+
+const CommentItem = styled.div`
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s;
+
+  &:hover {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  }
+`;
+
+const CommentHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+`;
+
+const CommentAvatar = styled.div`
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #e8f0fe;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1a73e8;
+  flex-shrink: 0;
+`;
+
+const CommentAuthor = styled.div`
+  font-size: 14px;
+  font-weight: 600;
+  color: #202124;
+`;
+
+const CommentText = styled.div`
+  font-size: 14px;
+  color: #202124;
+  margin-bottom: 8px;
+  line-height: 1.5;
+  word-wrap: break-word;
+`;
+
+const CommentTime = styled.div`
+  font-size: 12px;
+  color: #5f6368;
+`;
+
+const CommentInputContainer = styled.div`
+  padding: 20px;
+  border-top: 1px solid #e8eaed;
+  background: white;
+`;
+
+const CurrentUserBadge = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #e8f0fe;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #1a73e8;
+  margin-bottom: 12px;
+
+  strong {
+    font-weight: 600;
+  }
+`;
+
+const AnonymousBadge = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #5f6368;
+  margin-bottom: 12px;
+
+  strong {
+    font-weight: 600;
+  }
+`;
+
+const CommentTextArea = styled.textarea`
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  font-size: 14px;
+  resize: vertical;
+  font-family: inherit;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+  background: white;
+  color: #202124;
+  line-height: 1.5;
+  transition: all 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: #1a73e8;
+    box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+  }
+
+  &::placeholder {
+    color: #80868b;
+  }
+
+  &:disabled {
+    background: #f8f9fa;
+    cursor: not-allowed;
+  }
+`;
+
+const CommentButton = styled.button`
+  width: 100%;
+  padding: 12px;
+  background: #1a73e8;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover:not(:disabled) {
+    background: #1557b0;
+    box-shadow: 0 2px 4px rgba(26, 115, 232, 0.3);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const EditContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #ffffff;
+`;
+
+const EditToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #fff3e0;
+  border-bottom: 1px solid #ffe0b2;
+`;
+
+const EditInfo = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #f57c00;
+`;
+
+const EditActions = styled.div`
+  display: flex;
+  gap: 10px;
+`;
+
+const CancelEditButton = styled.button`
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #5f6368;
+
+  &:hover {
+    background: #f5f5f5;
+  }
+`;
+
+const SaveEditButton = styled.button`
+  padding: 8px 16px;
+  background: #1a73e8;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: #1557b0;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
+
+const EditTextArea = styled.textarea`
+  flex: 1;
+  padding: 20px;
+  border: none;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-size: 14px;
+  resize: none;
+  line-height: 1.6;
+
+  &:focus {
+    outline: none;
   }
 `;
 

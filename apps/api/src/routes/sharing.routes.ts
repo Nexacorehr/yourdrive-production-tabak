@@ -1,494 +1,791 @@
 import express from "express";
-import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
-import { Pool } from "pg";
-import crypto from "crypto";
+import { z } from "zod";
+import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { s3Client } from "./files.routes";
-import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import crypto from "crypto";
+import { uploadToS3, generateSignedUrl } from "../lib/helper";
 
 const sharingRoutes = express.Router();
+const prisma = new PrismaClient();
+const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+const addCommentSchema = z.object({
+  text: z.string().min(1).max(1000),
+  userName: z.string().min(1).max(100),
 });
 
-function generateShareToken(): string {
-  return crypto.randomBytes(16).toString("hex");
-}
+const createShareSchema = z.object({
+  fileId: z.number(),
+  shareType: z.string(),
+  permission: z.enum(["view", "comment", "edit", "download"]),
+  password: z.string().optional(),
+  expiresAt: z.string().optional(),
+  maxDownloads: z.number().nullable().optional(),
+});
 
-sharingRoutes.post("/create", authMiddleware, async (req: AuthRequest, res) => {
+const updateShareSchema = z.object({
+  isActive: z.boolean().optional(),
+  expiresAt: z.string().nullable().optional(),
+  maxDownloads: z.number().nullable().optional(),
+});
+
+// Get all shares for a specific file
+sharingRoutes.get("/file/:fileId", async (req, res) => {
   try {
-    if (!req.userId) {
-      return res
-        .status(401)
-        .json({ success: false, error: "Authentication required" });
-    }
+    const fileId = parseInt(req.params.fileId);
 
-    const {
-      fileId,
-      shareType = "link",
-      permission = "view",
-      password,
-      expiresIn,
-      maxDownloads,
-      recipients = [],
-    } = req.body;
-
-    // Verify file ownership
-    const fileResult = await pool.query(
-      `SELECT id, original_name, user_id FROM user_files WHERE id = $1`,
-      [fileId],
-    );
-
-    if (fileResult.rows.length === 0) {
-      return res.status(404).json({ success: false, error: "File not found" });
-    }
-
-    const file = fileResult.rows[0];
-
-    if (file.user_id !== req.userId) {
-      return res.status(403).json({ success: false, error: "Not authorized" });
-    }
-
-    const shareToken = generateShareToken();
-    const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
-    const expiresAt = expiresIn
-      ? new Date(Date.now() + expiresIn * 60 * 60 * 1000)
-      : null;
-
-    // Create share
-    const shareResult = await pool.query(
-      `INSERT INTO file_shares 
-        (file_id, owner_id, share_token, share_type, permission, password, expires_at, max_downloads)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING *`,
-      [
-        fileId,
-        req.userId,
-        shareToken,
-        shareType,
-        permission,
-        hashedPassword,
-        expiresAt,
-        maxDownloads,
-      ],
-    );
-
-    const share = shareResult.rows[0];
-
-    // Add recipients if provided
-    if (recipients.length > 0) {
-      const recipientPromises = recipients.map(async (recipient: any) => {
-        const recipientPermission = recipient.permission || permission;
-
-        if (recipient.type === "user" || recipient.type === "email") {
-          // Look up user by email
-          const userResult = await pool.query(
-            `SELECT id FROM "User" WHERE email = $1`,
-            [recipient.value],
-          );
-
-          if (userResult.rows.length > 0) {
-            // User exists on platform
-            await pool.query(
-              `INSERT INTO share_recipients 
-                (share_id, recipient_type, recipient_user_id, permission)
-               VALUES ($1, 'user', $2, $3)`,
-              [share.id, userResult.rows[0].id, recipientPermission],
-            );
-          } else {
-            // User doesn't exist, store as email recipient
-            await pool.query(
-              `INSERT INTO share_recipients 
-                (share_id, recipient_type, recipient_email, permission)
-               VALUES ($1, 'email', $2, $3)`,
-              [share.id, recipient.value, recipientPermission],
-            );
-          }
-        }
+    if (isNaN(fileId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid file ID",
       });
-
-      await Promise.all(recipientPromises);
-    } else {
-      // Anyone with link
-      await pool.query(
-        `INSERT INTO share_recipients 
-          (share_id, recipient_type, permission)
-         VALUES ($1, 'anyone', $2)`,
-        [share.id, permission],
-      );
     }
 
-    // Log activity
-    await pool.query(
-      `INSERT INTO share_activity (share_id, user_id, action, metadata)
-       VALUES ($1, $2, 'created', $3)`,
-      [share.id, req.userId, JSON.stringify({ fileName: file.original_name })],
-    );
+    const file = await prisma.userFile.findUnique({
+      where: { id: fileId },
+    });
 
-    const shareUrl = `${process.env.FRONTEND_URL}/shared/${shareToken}`;
+    if (!file) {
+      return res.status(404).json({
+        success: false,
+        error: "File not found",
+      });
+    }
+
+    const shares = await prisma.fileShare.findMany({
+      where: { fileId },
+      include: {
+        owner: {
+          select: {
+            firstName: true,
+            email: true,
+          },
+        },
+        _count: {
+          select: {
+            comments: true,
+            activities: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
 
     res.json({
       success: true,
+      shares: shares.map((share) => ({
+        id: share.id,
+        shareToken: share.shareToken,
+        shareType: share.shareType,
+        permission: share.permission,
+        hasPassword: !!share.password,
+        expiresAt: share.expiresAt?.toISOString() || null,
+        maxDownloads: share.maxDownloads,
+        downloadCount: share.downloadCount,
+        isActive: share.isActive,
+        createdAt: share.createdAt.toISOString(),
+        updatedAt: share.updatedAt.toISOString(),
+        ownerName: share.owner.firstName || share.owner.email,
+        commentCount: share._count.comments,
+        activityCount: share._count.activities,
+        url: `${frontendUrl}/shared/${share.shareToken}`,
+      })),
+    });
+  } catch (err) {
+    console.error("Error fetching shares:", err);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch shares",
+      details: err instanceof Error ? err.message : "Unknown error",
+    });
+  }
+});
+
+// Create a new share
+sharingRoutes.post("/create", async (req, res) => {
+  try {
+    const validated = createShareSchema.parse(req.body);
+
+    const file = await prisma.userFile.findUnique({
+      where: { id: validated.fileId },
+    });
+
+    if (!file) {
+      return res.status(404).json({
+        success: false,
+        error: "File not found",
+      });
+    }
+
+    if (file.deletedAt) {
+      return res.status(400).json({
+        success: false,
+        error: "Cannot share a deleted file",
+      });
+    }
+
+    const shareToken = crypto.randomBytes(32).toString("hex");
+
+    let hashedPassword: string | null = null;
+    if (validated.password && validated.password.trim().length > 0) {
+      hashedPassword = await bcrypt.hash(validated.password, 12);
+    }
+
+    let expiresAt: Date | null = null;
+    if (validated.expiresAt) {
+      expiresAt = new Date(validated.expiresAt);
+      if (expiresAt <= new Date()) {
+        return res.status(400).json({
+          success: false,
+          error: "Expiration date must be in the future",
+        });
+      }
+    }
+
+    const share = await prisma.fileShare.create({
+      data: {
+        fileId: validated.fileId,
+        ownerId: file.userId,
+        shareToken,
+        shareType: validated.shareType,
+        permission: validated.permission,
+        password: hashedPassword,
+        expiresAt,
+        maxDownloads: validated.maxDownloads,
+        isActive: true,
+      },
+      include: {
+        owner: {
+          select: {
+            firstName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    await prisma.shareActivity.create({
+      data: {
+        shareId: share.id,
+        userId: file.userId,
+        action: "created",
+        ipAddress: req.ip || "unknown",
+        userAgent: req.headers["user-agent"] || "unknown",
+        metadata: {
+          permission: validated.permission,
+          hasPassword: !!hashedPassword,
+          expiresAt: expiresAt?.toISOString() || null,
+        },
+      },
+    });
+
+    res.status(201).json({
+      success: true,
       share: {
         id: share.id,
-        token: shareToken,
-        url: shareUrl,
+        shareToken: share.shareToken,
+        shareType: share.shareType,
         permission: share.permission,
-        expiresAt: share.expires_at,
-        hasPassword: !!password,
+        hasPassword: !!share.password,
+        expiresAt: share.expiresAt?.toISOString() || null,
+        maxDownloads: share.maxDownloads,
+        downloadCount: share.downloadCount,
+        isActive: share.isActive,
+        createdAt: share.createdAt.toISOString(),
+        url: `${frontendUrl}/shared/${share.shareToken}`,
       },
     });
   } catch (err) {
     console.error("Error creating share:", err);
-    res.status(500).json({ success: false, error: "Failed to create share" });
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        error: "Validation error",
+        details: err.errors,
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: "Failed to create share",
+      details: err instanceof Error ? err.message : "Unknown error",
+    });
   }
 });
 
-// Get share details (public endpoint)
+// Update a share
+sharingRoutes.put("/:shareId", async (req, res) => {
+  try {
+    const { shareId } = req.params;
+    const validated = updateShareSchema.parse(req.body);
+
+    const existingShare = await prisma.fileShare.findUnique({
+      where: { id: shareId },
+    });
+
+    if (!existingShare) {
+      return res.status(404).json({
+        success: false,
+        error: "Share not found",
+      });
+    }
+
+    const updateData: any = {};
+
+    if (validated.isActive !== undefined) {
+      updateData.isActive = validated.isActive;
+    }
+
+    if (validated.expiresAt !== undefined) {
+      if (validated.expiresAt === null) {
+        updateData.expiresAt = null;
+      } else {
+        const newExpiresAt = new Date(validated.expiresAt);
+        if (newExpiresAt <= new Date()) {
+          return res.status(400).json({
+            success: false,
+            error: "Expiration date must be in the future",
+          });
+        }
+        updateData.expiresAt = newExpiresAt;
+      }
+    }
+
+    if (validated.maxDownloads !== undefined) {
+      updateData.maxDownloads = validated.maxDownloads;
+    }
+
+    const share = await prisma.fileShare.update({
+      where: { id: shareId },
+      data: updateData,
+    });
+
+    await prisma.shareActivity.create({
+      data: {
+        shareId: share.id,
+        userId: existingShare.ownerId,
+        action: "updated",
+        ipAddress: req.ip || "unknown",
+        userAgent: req.headers["user-agent"] || "unknown",
+        metadata: updateData,
+      },
+    });
+
+    res.json({
+      success: true,
+      share: {
+        id: share.id,
+        shareToken: share.shareToken,
+        isActive: share.isActive,
+        expiresAt: share.expiresAt?.toISOString() || null,
+        maxDownloads: share.maxDownloads,
+        updatedAt: share.updatedAt.toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error("Error updating share:", err);
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        error: "Validation error",
+        details: err.errors,
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: "Failed to update share",
+      details: err instanceof Error ? err.message : "Unknown error",
+    });
+  }
+});
+
+// Delete a share
+sharingRoutes.delete("/:shareId", async (req, res) => {
+  try {
+    const { shareId } = req.params;
+
+    const existingShare = await prisma.fileShare.findUnique({
+      where: { id: shareId },
+    });
+
+    if (!existingShare) {
+      return res.status(404).json({
+        success: false,
+        error: "Share not found",
+      });
+    }
+
+    await prisma.fileShare.delete({
+      where: { id: shareId },
+    });
+
+    res.json({
+      success: true,
+      message: "Share deleted successfully",
+    });
+  } catch (err) {
+    console.error("Error deleting share:", err);
+    res.status(500).json({
+      success: false,
+      error: "Failed to delete share",
+      details: err instanceof Error ? err.message : "Unknown error",
+    });
+  }
+});
+
+// Get public share info (no auth required)
 sharingRoutes.get("/public/:token", async (req, res) => {
   try {
     const { token } = req.params;
 
-    const shareResult = await pool.query(
-      `SELECT 
-        fs.*,
-        uf.original_name,
-        uf.size,
-        uf.mime_type,
-        u.name as owner_name,
-        u.email as owner_email
-       FROM file_shares fs
-       JOIN user_files uf ON fs.file_id = uf.id
-       JOIN "User" u ON fs.owner_id = u.id
-       WHERE fs.share_token = $1 AND fs.is_active = true`,
-      [token],
-    );
+    const share = await prisma.fileShare.findUnique({
+      where: { shareToken: token },
+      include: {
+        owner: {
+          select: {
+            firstName: true,
+            email: true,
+          },
+        },
+      },
+    });
 
-    if (shareResult.rows.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, error: "Share not found or expired" });
+    if (!share) {
+      return res.status(404).json({
+        success: false,
+        error: "Share not found",
+      });
     }
 
-    const share = shareResult.rows[0];
-
-    // Check if expired
-    if (share.expires_at && new Date(share.expires_at) < new Date()) {
-      await pool.query(
-        `UPDATE file_shares SET is_active = false WHERE id = $1`,
-        [share.id],
-      );
-      return res
-        .status(410)
-        .json({ success: false, error: "This share has expired" });
+    if (!share.isActive) {
+      return res.status(403).json({
+        success: false,
+        error: "This share is no longer active",
+      });
     }
 
-    // Check download limit
-    if (share.max_downloads && share.download_count >= share.max_downloads) {
-      return res
-        .status(403)
-        .json({ success: false, error: "Download limit reached" });
+    if (share.expiresAt && share.expiresAt < new Date()) {
+      await prisma.fileShare.update({
+        where: { id: share.id },
+        data: { isActive: false },
+      });
+      return res.status(403).json({
+        success: false,
+        error: "This share has expired",
+      });
+    }
+
+    if (share.maxDownloads && share.downloadCount >= share.maxDownloads) {
+      await prisma.fileShare.update({
+        where: { id: share.id },
+        data: { isActive: false },
+      });
+      return res.status(403).json({
+        success: false,
+        error: "Maximum download limit reached",
+      });
+    }
+
+    const file = await prisma.userFile.findUnique({
+      where: { id: share.fileId },
+    });
+
+    if (!file || file.deletedAt) {
+      return res.status(404).json({
+        success: false,
+        error: "File not found",
+      });
     }
 
     res.json({
       success: true,
       share: {
         id: share.id,
-        fileName: share.original_name,
-        fileSize: share.size,
-        mimeType: share.mime_type,
+        fileName: file.originalName,
+        fileSize: Number(file.size),
+        mimeType: file.mimeType,
         permission: share.permission,
-        ownerName: share.owner_name,
+        ownerName: share.owner.firstName || share.owner.email,
         hasPassword: !!share.password,
-        expiresAt: share.expires_at,
-        maxDownloads: share.max_downloads,
-        downloadCount: share.download_count,
+        expiresAt: share.expiresAt?.toISOString() || null,
+        maxDownloads: share.maxDownloads,
+        downloadCount: share.downloadCount,
       },
     });
   } catch (err) {
-    console.error("Error fetching share:", err);
-    res.status(500).json({ success: false, error: "Failed to fetch share" });
+    console.error("Error fetching share info:", err);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch share info",
+      details: err instanceof Error ? err.message : "Unknown error",
+    });
   }
 });
 
-// Access shared file (with password if needed)
+// Access a shared file (verify password if needed)
 sharingRoutes.post("/access/:token", async (req, res) => {
   try {
     const { token } = req.params;
     const { password } = req.body;
 
-    const shareResult = await pool.query(
-      `SELECT fs.*, uf.s3_key, uf.original_name
-       FROM file_shares fs
-       JOIN user_files uf ON fs.file_id = uf.id
-       WHERE fs.share_token = $1 AND fs.is_active = true`,
-      [token],
-    );
+    const share = await prisma.fileShare.findUnique({
+      where: { shareToken: token },
+    });
 
-    if (shareResult.rows.length === 0) {
-      return res.status(404).json({ success: false, error: "Share not found" });
+    if (!share) {
+      return res.status(404).json({
+        success: false,
+        error: "Share not found",
+      });
     }
 
-    const share = shareResult.rows[0];
-
-    // Check if expired
-    if (share.expires_at && new Date(share.expires_at) < new Date()) {
-      await pool.query(
-        `UPDATE file_shares SET is_active = false WHERE id = $1`,
-        [share.id],
-      );
-      return res
-        .status(410)
-        .json({ success: false, error: "This share has expired" });
+    if (!share.isActive) {
+      return res.status(403).json({
+        success: false,
+        error: "This share is no longer active",
+      });
     }
 
-    // Verify password if required
+    if (share.expiresAt && share.expiresAt < new Date()) {
+      await prisma.fileShare.update({
+        where: { id: share.id },
+        data: { isActive: false },
+      });
+      return res.status(403).json({
+        success: false,
+        error: "This share has expired",
+      });
+    }
+
+    if (share.maxDownloads && share.downloadCount >= share.maxDownloads) {
+      await prisma.fileShare.update({
+        where: { id: share.id },
+        data: { isActive: false },
+      });
+      return res.status(403).json({
+        success: false,
+        error: "Maximum download limit reached",
+      });
+    }
+
     if (share.password) {
       if (!password) {
-        return res
-          .status(401)
-          .json({ success: false, error: "Password required" });
+        return res.status(401).json({
+          success: false,
+          error: "Password required",
+        });
       }
 
       const isValid = await bcrypt.compare(password, share.password);
       if (!isValid) {
-        return res
-          .status(401)
-          .json({ success: false, error: "Invalid password" });
+        await prisma.shareActivity.create({
+          data: {
+            shareId: share.id,
+            action: "failed_password",
+            ipAddress: req.ip || "unknown",
+            userAgent: req.headers["user-agent"] || "unknown",
+          },
+        });
+        return res.status(401).json({
+          success: false,
+          error: "Invalid password",
+        });
       }
     }
 
-    // Generate signed URL for Backblaze B2
-    const command = new GetObjectCommand({
-      Bucket: process.env.B2_BUCKET_NAME,
-      Key: share.s3_key,
+    const file = await prisma.userFile.findUnique({
+      where: { id: share.fileId },
     });
 
-    const signedUrl = await getSignedUrl(s3Client, command, {
-      expiresIn: 3600,
-    });
+    if (!file || file.deletedAt) {
+      return res.status(404).json({
+        success: false,
+        error: "File not found",
+      });
+    }
 
-    // Log access
-    await pool.query(
-      `INSERT INTO share_activity (share_id, action, ip_address)
-       VALUES ($1, 'accessed', $2)`,
-      [share.id, req.ip],
-    );
+    const signedUrl = await generateSignedUrl(file.s3Key, 3600);
+
+    if (share.permission === "download") {
+      await prisma.fileShare.update({
+        where: { id: share.id },
+        data: { downloadCount: share.downloadCount + 1 },
+      });
+    }
+
+    await prisma.shareActivity.create({
+      data: {
+        shareId: share.id,
+        action: "accessed",
+        ipAddress: req.ip || "unknown",
+        userAgent: req.headers["user-agent"] || "unknown",
+      },
+    });
 
     res.json({
       success: true,
-      fileId: share.file_id,
-      permission: share.permission,
-      signedUrl: signedUrl,
-      fileName: share.original_name,
+      signedUrl,
     });
   } catch (err) {
-    console.error("Error accessing share:", err);
-    res.status(500).json({ success: false, error: "Failed to access share" });
+    console.error("Error accessing file:", err);
+    res.status(500).json({
+      success: false,
+      error: "Failed to access file",
+      details: err instanceof Error ? err.message : "Unknown error",
+    });
   }
 });
 
-// Get all shares for a file
-sharingRoutes.get(
-  "/file/:fileId",
-  authMiddleware,
-  async (req: AuthRequest, res) => {
-    try {
-      if (!req.userId) {
-        return res
-          .status(401)
-          .json({ success: false, error: "Authentication required" });
-      }
+// Get comments for a shared file
+sharingRoutes.get("/comments/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
 
-      const { fileId } = req.params;
+    const share = await prisma.fileShare.findUnique({
+      where: { shareToken: token },
+    });
 
-      // Verify ownership
-      const fileResult = await pool.query(
-        `SELECT user_id FROM user_files WHERE id = $1`,
-        [fileId],
-      );
-
-      if (fileResult.rows.length === 0) {
-        return res
-          .status(404)
-          .json({ success: false, error: "File not found" });
-      }
-
-      if (fileResult.rows[0].user_id !== req.userId) {
-        return res
-          .status(403)
-          .json({ success: false, error: "Not authorized" });
-      }
-
-      const sharesResult = await pool.query(
-        `SELECT 
-        fs.*,
-        COUNT(DISTINCT sr.id) as recipient_count,
-        COUNT(DISTINCT sa.id) FILTER (WHERE sa.action = 'accessed') as access_count
-       FROM file_shares fs
-       LEFT JOIN share_recipients sr ON fs.id = sr.share_id
-       LEFT JOIN share_activity sa ON fs.id = sa.share_id
-       WHERE fs.file_id = $1 AND fs.is_active = true
-       GROUP BY fs.id
-       ORDER BY fs.created_at DESC`,
-        [fileId],
-      );
-
-      const shares = sharesResult.rows.map((share) => ({
-        id: share.id,
-        token: share.share_token,
-        url: `${process.env.FRONTEND_URL}/shared/${share.share_token}`,
-        permission: share.permission,
-        shareType: share.share_type,
-        hasPassword: !!share.password,
-        expiresAt: share.expires_at,
-        maxDownloads: share.max_downloads,
-        downloadCount: share.download_count,
-        recipientCount: parseInt(share.recipient_count) || 0,
-        accessCount: parseInt(share.access_count) || 0,
-        createdAt: share.created_at,
-      }));
-
-      res.json({ success: true, shares });
-    } catch (err) {
-      console.error("Error fetching shares:", err);
-      res.status(500).json({ success: false, error: "Failed to fetch shares" });
+    if (!share) {
+      return res.status(404).json({
+        success: false,
+        error: "Share not found",
+      });
     }
-  },
-);
 
-// Revoke/delete a share
-sharingRoutes.delete(
-  "/:shareId",
-  authMiddleware,
-  async (req: AuthRequest, res) => {
-    try {
-      if (!req.userId) {
-        return res
-          .status(401)
-          .json({ success: false, error: "Authentication required" });
-      }
-
-      const { shareId } = req.params;
-
-      // Verify ownership
-      const shareResult = await pool.query(
-        `SELECT owner_id FROM file_shares WHERE id = $1`,
-        [shareId],
-      );
-
-      if (shareResult.rows.length === 0) {
-        return res
-          .status(404)
-          .json({ success: false, error: "Share not found" });
-      }
-
-      if (shareResult.rows[0].owner_id !== req.userId) {
-        return res
-          .status(403)
-          .json({ success: false, error: "Not authorized" });
-      }
-
-      await pool.query(
-        `UPDATE file_shares SET is_active = false, updated_at = NOW() WHERE id = $1`,
-        [shareId],
-      );
-
-      await pool.query(
-        `INSERT INTO share_activity (share_id, user_id, action)
-       VALUES ($1, $2, 'revoked')`,
-        [shareId, req.userId],
-      );
-
-      res.json({ success: true, message: "Share revoked successfully" });
-    } catch (err) {
-      console.error("Error revoking share:", err);
-      res.status(500).json({ success: false, error: "Failed to revoke share" });
+    if (!["comment", "edit"].includes(share.permission)) {
+      return res.status(403).json({
+        success: false,
+        error: "You don't have permission to view comments",
+      });
     }
-  },
-);
 
-// Update share settings
-sharingRoutes.patch(
-  "/:shareId",
-  authMiddleware,
-  async (req: AuthRequest, res) => {
-    try {
-      if (!req.userId) {
-        return res
-          .status(401)
-          .json({ success: false, error: "Authentication required" });
-      }
+    const comments = await prisma.shareComment.findMany({
+      where: { shareId: share.id },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        userName: true,
+        text: true,
+        createdAt: true,
+      },
+    });
 
-      const { shareId } = req.params;
-      const { permission, expiresIn, maxDownloads, password } = req.body;
+    res.json({
+      success: true,
+      comments: comments.map((c) => ({
+        id: c.id,
+        userName: c.userName,
+        text: c.text,
+        timestamp: c.createdAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    console.error("Error fetching comments:", err);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch comments",
+      details: err instanceof Error ? err.message : "Unknown error",
+    });
+  }
+});
 
-      // Verify ownership
-      const shareResult = await pool.query(
-        `SELECT owner_id FROM file_shares WHERE id = $1`,
-        [shareId],
-      );
+// Add a comment to a shared file
+sharingRoutes.post("/comments/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+    const validated = addCommentSchema.parse(req.body);
 
-      if (shareResult.rows.length === 0) {
-        return res
-          .status(404)
-          .json({ success: false, error: "Share not found" });
-      }
+    const share = await prisma.fileShare.findUnique({
+      where: { shareToken: token },
+    });
 
-      if (shareResult.rows[0].owner_id !== req.userId) {
-        return res
-          .status(403)
-          .json({ success: false, error: "Not authorized" });
-      }
-
-      const updates: string[] = [];
-      const values: any[] = [];
-      let paramCount = 1;
-
-      if (permission) {
-        updates.push(`permission = $${paramCount++}`);
-        values.push(permission);
-      }
-
-      if (expiresIn !== undefined) {
-        const expiresAt = expiresIn
-          ? new Date(Date.now() + expiresIn * 60 * 60 * 1000)
-          : null;
-        updates.push(`expires_at = $${paramCount++}`);
-        values.push(expiresAt);
-      }
-
-      if (maxDownloads !== undefined) {
-        updates.push(`max_downloads = $${paramCount++}`);
-        values.push(maxDownloads);
-      }
-
-      if (password !== undefined) {
-        const hashedPassword = password
-          ? await bcrypt.hash(password, 10)
-          : null;
-        updates.push(`password = $${paramCount++}`);
-        values.push(hashedPassword);
-      }
-
-      if (updates.length > 0) {
-        updates.push(`updated_at = NOW()`);
-        values.push(shareId);
-
-        await pool.query(
-          `UPDATE file_shares SET ${updates.join(", ")} WHERE id = $${paramCount}`,
-          values,
-        );
-      }
-
-      res.json({ success: true, message: "Share updated successfully" });
-    } catch (err) {
-      console.error("Error updating share:", err);
-      res.status(500).json({ success: false, error: "Failed to update share" });
+    if (!share) {
+      return res.status(404).json({
+        success: false,
+        error: "Share not found",
+      });
     }
-  },
-);
+
+    if (!share.isActive) {
+      return res.status(403).json({
+        success: false,
+        error: "This share is no longer active",
+      });
+    }
+
+    if (share.expiresAt && share.expiresAt < new Date()) {
+      return res.status(403).json({
+        success: false,
+        error: "This share has expired",
+      });
+    }
+
+    if (!["comment", "edit"].includes(share.permission)) {
+      return res.status(403).json({
+        success: false,
+        error: "You don't have permission to comment",
+      });
+    }
+
+    const comment = await prisma.shareComment.create({
+      data: {
+        shareId: share.id,
+        userName: validated.userName,
+        text: validated.text,
+      },
+      select: {
+        id: true,
+        userName: true,
+        text: true,
+        createdAt: true,
+      },
+    });
+
+    await prisma.shareActivity.create({
+      data: {
+        shareId: share.id,
+        action: "commented",
+        ipAddress: req.ip || "unknown",
+        userAgent: req.headers["user-agent"] || "unknown",
+        metadata: {
+          commentId: comment.id,
+          userName: validated.userName,
+        },
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      comment: {
+        id: comment.id,
+        userName: comment.userName,
+        text: comment.text,
+        timestamp: comment.createdAt.toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error("Error adding comment:", err);
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        error: "Validation error",
+        details: err.errors,
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: "Failed to add comment",
+      details: err instanceof Error ? err.message : "Unknown error",
+    });
+  }
+});
+
+// Edit shared file content (for text files with edit permission)
+sharingRoutes.post("/edit/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { content } = req.body;
+
+    if (typeof content !== "string") {
+      return res.status(400).json({
+        success: false,
+        error: "Content must be a string",
+      });
+    }
+
+    const share = await prisma.fileShare.findUnique({
+      where: { shareToken: token },
+    });
+
+    if (!share) {
+      return res.status(404).json({
+        success: false,
+        error: "Share not found",
+      });
+    }
+
+    if (share.permission !== "edit") {
+      return res.status(403).json({
+        success: false,
+        error: "You don't have permission to edit",
+      });
+    }
+
+    if (!share.isActive) {
+      return res.status(403).json({
+        success: false,
+        error: "This share is no longer active",
+      });
+    }
+
+    if (share.expiresAt && share.expiresAt < new Date()) {
+      return res.status(403).json({
+        success: false,
+        error: "This share has expired",
+      });
+    }
+
+    const file = await prisma.userFile.findUnique({
+      where: { id: share.fileId },
+    });
+
+    if (!file || file.deletedAt) {
+      return res.status(404).json({
+        success: false,
+        error: "File not found",
+      });
+    }
+
+    const mimeType = file.mimeType.toLowerCase();
+    const isTextFile =
+      mimeType.startsWith("text/") ||
+      mimeType === "application/json" ||
+      mimeType === "application/xml" ||
+      mimeType === "application/javascript";
+
+    if (!isTextFile) {
+      return res.status(400).json({
+        success: false,
+        error: "Only text files can be edited",
+      });
+    }
+
+    await uploadToS3(file.s3Key, content, file.mimeType);
+
+    const newSize = Buffer.byteLength(content, "utf-8");
+    await prisma.userFile.update({
+      where: { id: file.id },
+      data: {
+        size: BigInt(newSize),
+        updatedAt: new Date(),
+      },
+    });
+
+    await prisma.shareActivity.create({
+      data: {
+        shareId: share.id,
+        action: "edited",
+        ipAddress: req.ip || "unknown",
+        userAgent: req.headers["user-agent"] || "unknown",
+        metadata: {
+          previousSize: Number(file.size),
+          newSize,
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "File updated successfully",
+      fileSize: newSize,
+    });
+  } catch (err) {
+    console.error("Error editing file:", err);
+    res.status(500).json({
+      success: false,
+      error: "Failed to edit file",
+      details: err instanceof Error ? err.message : "Unknown error",
+    });
+  }
+});
 
 export default sharingRoutes;

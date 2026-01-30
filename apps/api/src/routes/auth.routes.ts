@@ -185,8 +185,43 @@ authRoutes.post("/logout", async (req: Request, res: Response) => {
   }
 });
 
+// Cookie-based /me endpoint (works with refresh token cookie)
+authRoutes.get("/me", async (req: Request, res: Response) => {
+  try {
+    // Try to get refresh token from cookie
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+      // Not authenticated, but don't throw error - just return unauthenticated state
+      return res.json({
+        success: true,
+        authenticated: false,
+        user: null,
+      });
+    }
+
+    // Verify refresh token and get user
+    const { userId } = await AuthService.verifyRefreshToken(refreshToken);
+    const user = await AuthService.getUserById(userId);
+
+    res.json({
+      success: true,
+      authenticated: true,
+      user,
+    });
+  } catch (error: any) {
+    // If token is invalid, return unauthenticated state instead of error
+    res.json({
+      success: true,
+      authenticated: false,
+      user: null,
+    });
+  }
+});
+
+// Bearer token-based /me endpoint (for protected routes in main app)
 authRoutes.get(
-  "/me",
+  "/me/protected",
   authMiddleware,
   async (req: AuthRequest, res: Response) => {
     try {
@@ -460,6 +495,7 @@ authRoutes.post(
 
       // Create session
       const { default: prisma } = await import("../lib/prisma");
+      const bcrypt = await import("bcryptjs");
       const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
       await prisma.session.create({
         data: {
