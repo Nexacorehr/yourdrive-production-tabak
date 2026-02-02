@@ -285,7 +285,6 @@ authRoutes.get(
         });
       }
 
-      // ✅ FIX: correct method + pass userId
       const device = await DeviceService.getDevice(deviceId, req.userId!);
 
       res.json({
@@ -293,7 +292,6 @@ authRoutes.get(
         device,
       });
     } catch (error: any) {
-      // ✅ NEVER leak 500s for auth/device mismatch
       if (error.message === "Device not found") {
         return res.status(404).json({
           success: false,
