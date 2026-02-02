@@ -179,7 +179,7 @@ const YourFiles: React.FC = () => {
 
       addUsage(totalSize);
 
-      await refreshStorage(accessToken);
+      await refreshStorage();
       eventBus.emit(FILES_REFRESH_EVENT);
 
       return result;

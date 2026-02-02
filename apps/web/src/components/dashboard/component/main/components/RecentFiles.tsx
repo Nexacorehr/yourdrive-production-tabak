@@ -203,7 +203,7 @@ const RecentFiles: React.FC = () => {
 
       // Refresh storage after successful upload
       try {
-        await refreshStorage(accessToken);
+        await refreshStorage();
       } catch (storageErr) {
         console.warn("Storage refresh failed after upload:", storageErr);
         // Don't fail the upload if storage refresh fails

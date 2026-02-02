@@ -25,7 +25,7 @@ const Sidebar = () => {
 
   useEffect(() => {
     if (accessToken) {
-      useStorageStore.getState().refreshStorage(accessToken);
+      useStorageStore.getState().refreshStorage();
       useAuthStore.getState().fetchCurrentDevice(accessToken);
     }
   }, [accessToken]);

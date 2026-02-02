@@ -285,23 +285,26 @@ authRoutes.get(
         });
       }
 
-      const device = await DeviceService.getDeviceById(deviceId);
-
-      if (!device || device.userId !== req.userId) {
-        return res.status(404).json({
-          success: false,
-          error: "Device not found",
-        });
-      }
+      // ✅ FIX: correct method + pass userId
+      const device = await DeviceService.getDevice(deviceId, req.userId!);
 
       res.json({
         success: true,
         device,
       });
     } catch (error: any) {
+      // ✅ NEVER leak 500s for auth/device mismatch
+      if (error.message === "Device not found") {
+        return res.status(404).json({
+          success: false,
+          error: "Device not found",
+        });
+      }
+
+      console.error("Current device error:", error);
       res.status(500).json({
         success: false,
-        error: error.message,
+        error: "Failed to resolve current device",
       });
     }
   },

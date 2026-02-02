@@ -78,6 +78,8 @@ const Devices: React.FC = () => {
   const [addToGroupModal, setAddToGroupModal] = useState<Device | null>(null);
   const [selectedIcon, setSelectedIcon] = useState("📱");
 
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+
   const iconOptions = [
     "📱",
     "💻",
@@ -97,7 +99,7 @@ const Devices: React.FC = () => {
   const fetchDevices = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("/api/devices", {
+      const res = await axios.get(`${API_URL}/devices`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setDevices(res.data.devices || []);
@@ -111,7 +113,7 @@ const Devices: React.FC = () => {
 
   const fetchGroups = async () => {
     try {
-      const res = await axios.get("/api/devices/groups", {
+      const res = await axios.get(`${API_URL}/devices/groups`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setGroups(res.data.groups || []);
@@ -170,7 +172,7 @@ const Devices: React.FC = () => {
   const handleForceLogout = async (device: Device) => {
     try {
       await axios.post(
-        `/api/devices/${device.id}/actions/logout`,
+        `${API_URL}/devices/${device.id}/actions/logout`,
         {},
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -185,7 +187,7 @@ const Devices: React.FC = () => {
   const handleLockDevice = async (device: Device, message: string) => {
     try {
       await axios.post(
-        `/api/devices/${device.id}/actions/lock`,
+        `${API_URL}/devices/${device.id}/actions/lock`,
         { message },
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -201,7 +203,7 @@ const Devices: React.FC = () => {
   const handleUnlockDevice = async (device: Device) => {
     try {
       await axios.post(
-        `/api/devices/${device.id}/actions/unlock`,
+        `${API_URL}/devices/${device.id}/actions/unlock`,
         {},
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -216,7 +218,7 @@ const Devices: React.FC = () => {
   const handleWipeDevice = async (device: Device) => {
     try {
       await axios.post(
-        `/api/devices/${device.id}/actions/wipe`,
+        `${API_URL}/devices/${device.id}/actions/wipe`,
         { confirmation: "WIPE" },
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -237,7 +239,7 @@ const Devices: React.FC = () => {
   ) => {
     try {
       await axios.post(
-        "/api/devices/groups",
+        `${API_URL}/devices/groups`,
         { name, icon, color },
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -252,7 +254,7 @@ const Devices: React.FC = () => {
   const handleDeleteGroup = async (groupId: number) => {
     if (!confirm("Delete this group? Devices won't be affected.")) return;
     try {
-      await axios.delete(`/api/devices/groups/${groupId}`, {
+      await axios.delete(`${API_URL}/devices/groups/${groupId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       toast.success("Group deleted");
@@ -265,7 +267,7 @@ const Devices: React.FC = () => {
   const handleAddToGroup = async (deviceId: string, groupId: number) => {
     try {
       await axios.post(
-        `/api/devices/groups/${groupId}/devices/${deviceId}`,
+        `${API_URL}/devices/groups/${groupId}/devices/${deviceId}`,
         {},
         { headers: { Authorization: `Bearer ${token}` } },
       );
@@ -762,7 +764,7 @@ const Container = styled.div`
 
 const Header = styled.div`
   display: flex;
-  justify-content: space-between;
+  gap: 12px;
   align-items: center;
   margin-bottom: 24px;
 `;
