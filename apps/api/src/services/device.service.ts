@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import { UAParser } from "ua-parser-js";
+import { randomUUID } from "crypto";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -9,7 +10,7 @@ export class DeviceService {
   static async trackDevice(
     userId: string,
     deviceInfo: { userAgent: string; ip: string },
-    customName?: string
+    customName?: string,
   ) {
     const parser = new UAParser(deviceInfo.userAgent);
     const result = parser.getResult();
@@ -20,12 +21,10 @@ export class DeviceService {
 
     let deviceName = customName;
     if (!deviceName) {
-      // Generate a more descriptive device name
-      const osName = os.split(" ")[0]; // e.g., "Windows", "macOS", "Linux"
+      const osName = os.split(" ")[0];
       const deviceTypeName =
-        deviceType.charAt(0).toUpperCase() + deviceType.slice(1); // Capitalize
+        deviceType.charAt(0).toUpperCase() + deviceType.slice(1);
 
-      // Format: "Type (OS)" - e.g., "Desktop (Windows)", "Mobile (Android)", "Tablet (iOS)"
       deviceName = `${deviceTypeName} (${osName})`;
     }
 
@@ -33,32 +32,37 @@ export class DeviceService {
       `SELECT id FROM user_devices 
        WHERE user_id = $1 AND user_agent = $2
        LIMIT 1`,
-      [userId, deviceInfo.userAgent]
+      [userId, deviceInfo.userAgent],
     );
 
     let deviceId: string;
 
     if (existingDevice.rows.length > 0) {
       deviceId = existingDevice.rows[0].id;
+
       await pool.query(
         `UPDATE user_devices 
          SET last_active = NOW(), ip_address = $1, is_current = true
          WHERE id = $2`,
-        [deviceInfo.ip, deviceId]
+        [deviceInfo.ip, deviceId],
       );
 
       await pool.query(
         `UPDATE user_devices 
          SET is_current = false
          WHERE user_id = $1 AND id != $2`,
-        [userId, deviceId]
+        [userId, deviceId],
       );
     } else {
-      const newDevice = await pool.query(
-        `INSERT INTO user_devices (user_id, device_name, device_type, browser, os, ip_address, user_agent, is_current)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, true)
-         RETURNING id`,
+      deviceId = randomUUID();
+
+      await pool.query(
+        `INSERT INTO user_devices 
+          (id, user_id, device_name, device_type, browser, os, ip_address, user_agent, is_current)
+         VALUES 
+          ($1, $2, $3, $4, $5, $6, $7, $8, true)`,
         [
+          deviceId,
           userId,
           deviceName,
           deviceType,
@@ -66,16 +70,14 @@ export class DeviceService {
           os,
           deviceInfo.ip,
           deviceInfo.userAgent,
-        ]
+        ],
       );
-
-      deviceId = newDevice.rows[0].id;
 
       await pool.query(
         `UPDATE user_devices 
          SET is_current = false
          WHERE user_id = $1 AND id != $2`,
-        [userId, deviceId]
+        [userId, deviceId],
       );
     }
 
@@ -83,7 +85,7 @@ export class DeviceService {
       `SELECT id, device_name, device_type, browser, os, last_active, created_at, is_current
        FROM user_devices
        WHERE id = $1`,
-      [deviceId]
+      [deviceId],
     );
 
     return device.rows[0];
@@ -94,7 +96,7 @@ export class DeviceService {
       `SELECT id, device_name, device_type, browser, os, last_active, created_at, is_current
        FROM user_devices
        WHERE id = $1 AND user_id = $2`,
-      [deviceId, userId]
+      [deviceId, userId],
     );
 
     if (result.rows.length === 0) {
@@ -110,7 +112,7 @@ export class DeviceService {
        FROM user_devices
        WHERE user_id = $1
        ORDER BY last_active DESC`,
-      [userId]
+      [userId],
     );
 
     return result.rows;
@@ -119,14 +121,14 @@ export class DeviceService {
   static async updateDeviceName(
     deviceId: string,
     userId: string,
-    name: string
+    name: string,
   ) {
     const result = await pool.query(
       `UPDATE user_devices
        SET device_name = $1
        WHERE id = $2 AND user_id = $3
        RETURNING id, device_name, device_type, browser, os, last_active, created_at, is_current`,
-      [name, deviceId, userId]
+      [name, deviceId, userId],
     );
 
     if (result.rows.length === 0) {
@@ -141,7 +143,7 @@ export class DeviceService {
       `DELETE FROM user_devices
        WHERE id = $1 AND user_id = $2
        RETURNING id`,
-      [deviceId, userId]
+      [deviceId, userId],
     );
 
     if (result.rows.length === 0) {

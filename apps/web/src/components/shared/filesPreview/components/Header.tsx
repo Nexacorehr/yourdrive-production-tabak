@@ -4,7 +4,6 @@ import {
   FileName,
   FileCounter,
   ActionBar,
-  NavButton,
   ActionButton,
   CloseButton,
   Divider,
@@ -43,15 +42,12 @@ export const Header = ({
   fileName,
   files,
   currentIndex,
-  onNavigate,
   onRename,
   handleShare,
   onClose,
   handleFavorite,
   isFavorited,
   handleDownload,
-  setShowInfo,
-  showInfo,
 }: HeaderProps) => {
   return (
     <StyledHeader>
@@ -65,26 +61,6 @@ export const Header = ({
       </LeftSection>
 
       <ActionBar>
-        {files.length > 1 && (
-          <>
-            <NavButton
-              onClick={() => onNavigate && onNavigate(currentIndex - 1)}
-              disabled={currentIndex === 0}
-              title="Previous file (Left arrow)"
-            >
-              ←
-            </NavButton>
-            <NavButton
-              onClick={() => onNavigate && onNavigate(currentIndex + 1)}
-              disabled={currentIndex === files.length - 1}
-              title="Next file (Right arrow)"
-            >
-              →
-            </NavButton>
-            <Divider />
-          </>
-        )}
-
         <ActionButton onClick={handleFavorite} title="Favorite">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path

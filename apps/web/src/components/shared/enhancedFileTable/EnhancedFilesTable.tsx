@@ -11,90 +11,165 @@ import {
   Info,
   MoreVertical,
   X,
+  RotateCcw,
+  Eye,
+  Zap,
 } from "lucide-react";
+import { useFileActions } from "./fileActions";
+
+import { ConversionModal } from "../popups/conversion/ConversionPopup";
+import { toast } from "react-hot-toast";
 
 interface EnhancedFilesTableProps {
-  files: FileItem[];
+  files: EnhancedFileItem[];
   loading?: boolean;
-  emptyMessage?: string;
-  emptySubtext?: string;
   onFilePreview?: (file: FileItem) => void;
+  onFileSelect?: (file: FileItem, selected: boolean) => void;
+  selectedFiles?: Set<string>;
   showOwner?: boolean;
   showLocation?: boolean;
+  isRecycleBin?: boolean;
+  onRestoreFile?: (fileId: string) => void;
+  onDeletePermanently?: (fileId: string) => void;
+  emptyMessage?: string;
+  emptySubtext?: string;
+  maxHeight?: number;
+  isShared?: boolean;
+  onFilesUpload?: (files: FileList) => Promise<void>;
+  checkStorageLimit?: (totalSize: number) => boolean;
+  showFolderStructure?: boolean;
+}
+
+export interface EnhancedFileItem extends FileItem {
+  onDelete?: () => void;
+  onDeletePermanently?: () => void;
+  onRestore?: () => void;
 }
 
 const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
   files,
   loading,
-  emptyMessage,
-  emptySubtext,
   onFilePreview,
+  onFileSelect,
+  selectedFiles: externalSelectedFiles,
   showOwner,
   showLocation,
+  isRecycleBin,
+  onRestoreFile,
+  onDeletePermanently,
+  emptyMessage,
+  emptySubtext,
+  maxHeight = 770,
+  isShared,
+  onFilesUpload,
+  checkStorageLimit,
+  showFolderStructure,
 }) => {
-  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [internalSelectedFiles, setInternalSelectedFiles] = useState<
+    Set<string>
+  >(new Set());
   const [hoveredFileId, setHoveredFileId] = useState<string | null>(null);
   const [quickActionsFile, setQuickActionsFile] = useState<string | null>(null);
+  const [conversionFile, setConversionFile] = useState<FileItem | null>(null);
+
+  const selectedFiles = externalSelectedFiles ?? internalSelectedFiles;
+  const setSelectedFiles = onFileSelect
+    ? (updater: Set<string> | ((prev: Set<string>) => Set<string>)) => {
+        const newSet =
+          typeof updater === "function" ? updater(selectedFiles) : updater;
+        const oldSet = selectedFiles;
+
+        newSet.forEach((id) => {
+          if (!oldSet.has(id)) {
+            const file = files.find((f) => f.id === id);
+            if (file) onFileSelect(file, true);
+          }
+        });
+
+        oldSet.forEach((id) => {
+          if (!newSet.has(id)) {
+            const file = files.find((f) => f.id === id);
+            if (file) onFileSelect(file, false);
+          }
+        });
+      }
+    : setInternalSelectedFiles;
+
+  const { performFileAction } = useFileActions();
 
   const handleFileClick = (file: FileItem) => {
-    // Single click - toggle selection
-    setSelectedFiles((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(file.id)) {
-        newSet.delete(file.id);
-      } else {
-        newSet.add(file.id);
-      }
-      return newSet;
-    });
-  };
-
-  const handleFileDoubleClick = (file: FileItem) => {
-    // Double click - open preview
-    if (onFilePreview) {
-      onFilePreview(file);
+    if (onFileSelect) {
+      const isSelected = selectedFiles.has(file.id);
+      onFileSelect(file, !isSelected);
+    } else {
+      setSelectedFiles((prev) => {
+        const newSet = new Set(prev);
+        if (newSet.has(file.id)) {
+          newSet.delete(file.id);
+        } else {
+          newSet.add(file.id);
+        }
+        return newSet;
+      });
     }
   };
 
+  const handleFileDoubleClick = (file: FileItem) => {
+    onFilePreview?.(file);
+  };
+
   const handleClearSelection = () => {
-    setSelectedFiles(new Set());
+    if (onFileSelect) {
+      selectedFiles.forEach((id) => {
+        const file = files.find((f) => f.id === id);
+        if (file) onFileSelect(file, false);
+      });
+    } else {
+      setSelectedFiles(new Set());
+    }
   };
 
   const handleSelectAll = () => {
-    setSelectedFiles(new Set(files.map((f) => f.id)));
+    if (onFileSelect) {
+      files.forEach((file) => onFileSelect(file, true));
+    } else {
+      setSelectedFiles(new Set(files.map((f) => f.id)));
+    }
   };
 
-  const handleDownload = () => {
-    console.log("Download files:", Array.from(selectedFiles));
+  const handleAction = (action: "delete" | "deletePermanently" | "restore") => {
+    if (action === "restore") {
+      selectedFiles.forEach((id) => onRestoreFile?.(id));
+    } else if (action === "deletePermanently") {
+      selectedFiles.forEach((id) => onDeletePermanently?.(id));
+    } else {
+      performFileAction(action, { fileIds: Array.from(selectedFiles) });
+    }
+    handleClearSelection();
   };
 
-  const handleShare = () => {
-    console.log("Share files:", Array.from(selectedFiles));
+  const handlePreviewSelected = () => {
+    if (selectedFiles.size >= 1) {
+      const fileId = Array.from(selectedFiles)[0];
+      const file = files.find((f) => f.id === fileId);
+      if (file) {
+        onFilePreview?.(file);
+      }
+    }
   };
 
-  const handleDelete = () => {
-    console.log("Delete files:", Array.from(selectedFiles));
-  };
-
-  const handleRename = () => {
-    console.log("Rename file:", Array.from(selectedFiles)[0]);
-  };
-
-  const handleGetLink = () => {
-    console.log("Get link for files:", Array.from(selectedFiles));
-  };
-
-  const handleStar = () => {
-    console.log("Star files:", Array.from(selectedFiles));
-  };
-
-  const handleViewDetails = () => {
-    console.log("View details for:", Array.from(selectedFiles)[0]);
-  };
-
-  const handleQuickAction = (fileId: string, action: string) => {
-    console.log(`Quick action: ${action} on file ${fileId}`);
-    setQuickActionsFile(null);
+  const handleConvert = () => {
+    if (selectedFiles.size === 1) {
+      const fileId = Array.from(selectedFiles)[0];
+      const file = files.find((f) => f.id === fileId);
+      if (file) {
+        setConversionFile(file);
+      } else {
+        toast.error("File not found for conversion");
+      }
+    } else {
+      toast.error("Please select a single file to convert");
+    }
   };
 
   return (
@@ -109,39 +184,85 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
           </LeftSection>
 
           <CenterSection>
-            <IconButton onClick={handleShare} title="Share">
+            {selectedFiles.size >= 1 && !isRecycleBin && (
+              <IconButton onClick={handlePreviewSelected} title="Preview">
+                <Eye size={18} />
+              </IconButton>
+            )}
+            <IconButton
+              onClick={() => console.log("Share:", selectedFiles)}
+              title="Share"
+            >
               <Share2 size={18} />
             </IconButton>
 
-            <IconButton onClick={handleDownload} title="Download">
+            <IconButton
+              onClick={() => {
+                handleConvert();
+              }}
+            >
+              <Zap size={16} />
+            </IconButton>
+            <IconButton
+              onClick={() => console.log("Download:", selectedFiles)}
+              title="Download"
+            >
               <Download size={18} />
             </IconButton>
-
             {selectedFiles.size === 1 && (
-              <IconButton onClick={handleRename} title="Rename">
+              <IconButton
+                onClick={() => console.log("Rename:", selectedFiles)}
+                title="Rename"
+              >
                 <Edit3 size={18} />
               </IconButton>
             )}
-
-            <IconButton onClick={handleGetLink} title="Get link">
+            <IconButton
+              onClick={() => console.log("Get link:", selectedFiles)}
+              title="Get link"
+            >
               <Link2 size={18} />
             </IconButton>
-
             {selectedFiles.size === 1 && (
-              <IconButton onClick={handleViewDetails} title="View details">
+              <IconButton
+                onClick={() => console.log("View details:", selectedFiles)}
+                title="View details"
+              >
                 <Info size={18} />
               </IconButton>
             )}
-
-            <IconButton onClick={handleStar} title="Star">
+            <IconButton
+              onClick={() => console.log("Star:", selectedFiles)}
+              title="Star"
+            >
               <Star size={18} />
             </IconButton>
-
             <VerticalDivider />
-
-            <IconButton onClick={handleDelete} $danger title="Delete">
-              <Trash2 size={18} />
-            </IconButton>
+            {isRecycleBin ? (
+              <>
+                <IconButton
+                  onClick={() => handleAction("restore")}
+                  title="Restore"
+                >
+                  <RotateCcw size={18} />
+                </IconButton>
+                <IconButton
+                  $danger
+                  onClick={() => handleAction("deletePermanently")}
+                  title="Delete Forever"
+                >
+                  <Trash2 size={18} />
+                </IconButton>
+              </>
+            ) : (
+              <IconButton
+                $danger
+                onClick={() => handleAction("delete")}
+                title="Delete"
+              >
+                <Trash2 size={18} />
+              </IconButton>
+            )}
           </CenterSection>
 
           <RightSection>
@@ -154,21 +275,25 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
         <FilesTable
           files={files}
           loading={loading}
-          emptyMessage={emptyMessage}
-          emptySubtext={emptySubtext}
           onFileClick={handleFileClick}
           onFileDoubleClick={handleFileDoubleClick}
+          onFileSelect={onFileSelect}
+          onFilePreview={onFilePreview}
           selectedFiles={selectedFiles}
           showOwner={showOwner}
           showLocation={showLocation}
+          emptyMessage={emptyMessage}
+          emptySubtext={emptySubtext}
+          maxHeight={maxHeight}
+          onFilesUpload={onFilesUpload}
+          checkStorageLimit={checkStorageLimit}
+          showFolderStructure={showFolderStructure}
           renderRowActions={(file) => (
             <QuickActionsWrapper
               onMouseEnter={() => setHoveredFileId(file.id)}
-              onMouseLeave={() => {
-                if (quickActionsFile !== file.id) {
-                  setHoveredFileId(null);
-                }
-              }}
+              onMouseLeave={() =>
+                hoveredFileId !== file.id && setHoveredFileId(null)
+              }
             >
               {(hoveredFileId === file.id || quickActionsFile === file.id) && (
                 <>
@@ -176,7 +301,7 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
                     onClick={(e) => {
                       e.stopPropagation();
                       setQuickActionsFile(
-                        quickActionsFile === file.id ? null : file.id
+                        quickActionsFile === file.id ? null : file.id,
                       );
                     }}
                     $active={quickActionsFile === file.id}
@@ -185,63 +310,74 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
                   </QuickActionsButton>
 
                   {quickActionsFile === file.id && (
-                    <QuickActionsMenu
-                      onClick={(e) => e.stopPropagation()}
-                      onMouseLeave={() => {
-                        setQuickActionsFile(null);
-                        setHoveredFileId(null);
-                      }}
-                    >
-                      <QuickAction
-                        onClick={() => {
-                          if (onFilePreview) {
-                            onFilePreview(file);
-                          }
-                          setQuickActionsFile(null);
-                        }}
-                      >
-                        <Info size={16} />
-                        Preview
-                      </QuickAction>
-                      <QuickActionDivider />
-                      <QuickAction
-                        onClick={() => handleQuickAction(file.id, "share")}
-                      >
-                        <Share2 size={16} />
-                        Share
-                      </QuickAction>
-                      <QuickAction
-                        onClick={() => handleQuickAction(file.id, "download")}
-                      >
-                        <Download size={16} />
-                        Download
-                      </QuickAction>
-                      <QuickAction
-                        onClick={() => handleQuickAction(file.id, "rename")}
-                      >
-                        <Edit3 size={16} />
-                        Rename
-                      </QuickAction>
-                      <QuickAction
-                        onClick={() => handleQuickAction(file.id, "link")}
-                      >
-                        <Link2 size={16} />
-                        Get link
-                      </QuickAction>
-                      <QuickAction
-                        onClick={() => handleQuickAction(file.id, "star")}
-                      >
-                        <Star size={16} />
-                        Add to starred
-                      </QuickAction>
-                      <QuickActionDivider />
-                      <QuickAction
-                        $danger
-                        onClick={() => handleQuickAction(file.id, "delete")}
-                      >
-                        <Trash2 size={16} />
-                        Delete
-                      </QuickAction>
+                    <QuickActionsMenu>
+                      {isRecycleBin ? (
+                        <>
+                          <QuickAction
+                            onClick={() => {
+                              console.log("Restoring file:", file.id);
+                              onRestoreFile?.(file.id);
+                              setQuickActionsFile(null);
+                            }}
+                          >
+                            <RotateCcw size={16} /> Restore
+                          </QuickAction>
+                          <QuickActionDivider />
+                          <QuickAction
+                            $danger
+                            onClick={() => {
+                              console.log(
+                                "Permanently deleting file:",
+                                file.id,
+                              );
+                              onDeletePermanently?.(file.id);
+                              setQuickActionsFile(null);
+                            }}
+                          >
+                            <Trash2 size={16} /> Delete forever
+                          </QuickAction>
+                        </>
+                      ) : (
+                        <>
+                          <QuickAction
+                            onClick={() => {
+                              onFilePreview?.(file);
+                              setQuickActionsFile(null);
+                            }}
+                          >
+                            <Eye size={16} /> Preview
+                          </QuickAction>
+                          <QuickActionDivider />
+                          {/* <QuickAction
+                            onClick={() => {
+                              setConversionFile(file);
+                              setQuickActionsFile(null);
+                            }}
+                            >
+                            <Zap size={16} /> Convert
+                            </QuickAction> */}
+
+                          <QuickAction
+                            onClick={() => {
+                              console.log("Share:", file.id);
+                              setQuickActionsFile(null);
+                            }}
+                          >
+                            <Share2 size={16} /> Share
+                          </QuickAction>
+                          <QuickAction
+                            $danger
+                            onClick={() => {
+                              performFileAction("delete", {
+                                fileIds: [file.id],
+                              });
+                              setQuickActionsFile(null);
+                            }}
+                          >
+                            <Trash2 size={16} /> Delete
+                          </QuickAction>
+                        </>
+                      )}
                     </QuickActionsMenu>
                   )}
                 </>
@@ -250,6 +386,15 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
           )}
         />
       </TableWrapper>
+
+      {conversionFile && (
+        <ConversionModal
+          fileId={conversionFile.id}
+          fileName={conversionFile.name}
+          mimeType={conversionFile.mimeType}
+          onClose={() => setConversionFile(null)}
+        />
+      )}
     </Container>
   );
 };
@@ -278,7 +423,9 @@ const SelectionBar = styled.div`
   padding: 12px 20px;
   background: #fff;
   border-radius: 16px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.06),
+    0 4px 12px rgba(0, 0, 0, 0.04);
   border: 1px solid #e8eaed;
 `;
 
@@ -307,7 +454,11 @@ const SelectionCount = styled.span`
   font-size: 14px;
   font-weight: 500;
   color: #202124;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
     sans-serif;
 `;
 
@@ -362,7 +513,11 @@ const IconButton = styled.button<{ $danger?: boolean; $active?: boolean }>`
     color: #fff;
     font-size: 12px;
     font-weight: 500;
-    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    font-family:
+      "Inter",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
       sans-serif;
     border-radius: 6px;
     white-space: nowrap;
@@ -408,7 +563,11 @@ const TextButton = styled.button`
   border-radius: 20px;
   font-size: 14px;
   font-weight: 500;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
     sans-serif;
   color: #1a73e8;
   cursor: pointer;
@@ -457,7 +616,8 @@ const QuickActionsMenu = styled.div`
   min-width: 200px;
   background: #fff;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(60, 64, 67, 0.15),
+  box-shadow:
+    0 2px 8px rgba(60, 64, 67, 0.15),
     0 6px 20px 4px rgba(60, 64, 67, 0.1);
   padding: 8px 0;
   z-index: 1000;

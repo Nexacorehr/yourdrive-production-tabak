@@ -2,9 +2,11 @@ import { SidebarWrapper } from "../../styles/sidebar";
 import UserInfo from "./UserInfo";
 import NavigationMenu from "./NavigationMenu";
 import UpgradePrompt from "./UpgradePrompt";
+
 import { useStorageStore } from "../../../../store/storageStore";
 import { useEffect } from "react";
 import { useAuthStore } from "../../../../store/authStore";
+import { useSidebarStore } from "../../../../store/sidebarStore";
 
 const Sidebar = () => {
   const usedFormatted = useStorageStore((s) => s.getUsedFormatted());
@@ -15,20 +17,23 @@ const Sidebar = () => {
   const currentDevice = useAuthStore((s) => s.currentDevice);
   const accessToken = useAuthStore((s) => s.accessToken);
 
+  const isOpen = useSidebarStore((s) => s.isOpen);
+
   const handleUpgrade = () => {
     console.log("Upgrade clicked");
   };
 
   useEffect(() => {
     if (accessToken) {
-      useStorageStore.getState().refreshStorage(accessToken);
+      useStorageStore.getState().refreshStorage();
       useAuthStore.getState().fetchCurrentDevice(accessToken);
     }
   }, [accessToken]);
 
   return (
-    <SidebarWrapper>
-      <UserInfo user={user} currentDevice={currentDevice} />
+    <SidebarWrapper $isOpen={isOpen}>
+      {/* <SidebarToggle /> */}
+      {user && <UserInfo user={user} currentDevice={currentDevice} />}
       <NavigationMenu />
       <UpgradePrompt
         used={usedFormatted}

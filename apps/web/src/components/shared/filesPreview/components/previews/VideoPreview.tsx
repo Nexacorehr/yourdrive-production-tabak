@@ -4,8 +4,8 @@ import styled from "styled-components";
 interface VideoPreviewProps {
   url: string;
   fileName: string;
-  fileType: string;
-  onClose: () => void;
+  fileType?: string;
+  onClose?: () => void;
   onEdit?: () => void;
   onDownload?: () => void;
   onShare?: () => void;
@@ -20,9 +20,7 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ url, fileName }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showControls, setShowControls] = useState(true);
-  const [isPiP, setIsPiP] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [subtitlesEnabled, setSubtitlesEnabled] = useState(false);
   const controlsTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const togglePlayPause = () => {
@@ -84,23 +82,6 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ url, fileName }) => {
       container.requestFullscreen();
     } else {
       document.exitFullscreen();
-    }
-  };
-
-  const togglePiP = async () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-        setIsPiP(false);
-      } else {
-        await video.requestPictureInPicture();
-        setIsPiP(true);
-      }
-    } catch (error) {
-      console.error("PiP error:", error);
     }
   };
 
@@ -261,18 +242,6 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ url, fileName }) => {
           </LeftControls>
 
           <RightControls>
-            <ControlButton
-              onClick={() => setSubtitlesEnabled(!subtitlesEnabled)}
-              title="Subtitles"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z"
-                  fill="currentColor"
-                />
-              </svg>
-            </ControlButton>
-
             <SettingsButton onClick={() => setShowSettings(!showSettings)}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                 <path
@@ -295,15 +264,6 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ url, fileName }) => {
                 </SettingsMenu>
               )}
             </SettingsButton>
-
-            <ControlButton onClick={togglePiP} title="Picture in Picture">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 1.98 2 1.98h18c1.1 0 2-.88 2-1.98V5c0-1.1-.9-2-2-2zm0 16.01H3V4.98h18v14.03z"
-                  fill="currentColor"
-                />
-              </svg>
-            </ControlButton>
 
             <ControlButton onClick={toggleFullscreen} title="Fullscreen (F)">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none">

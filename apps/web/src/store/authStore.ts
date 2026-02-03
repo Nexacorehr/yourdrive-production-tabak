@@ -1,160 +1,117 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import axios, { AxiosError } from "axios";
+import api from "../lib/axios";
 import { hardReload } from "../lib/hardReload";
-
-const API_URL = "http://localhost:3000/api";
 
 interface User {
   id: string;
   email: string;
-  name: string | null;
+  firstName: string | null;
   emailVerified: boolean;
   createdAt: string;
-  updatedAt: string;
 }
 
-interface Device {
+export interface Device {
   id: string;
   device_name: string;
+  device_nickname?: string;
   device_type: string;
+  device_color: string;
   browser: string;
   os: string;
+  ip_address?: string;
   last_active: string;
   created_at: string;
   is_current: boolean;
+  is_trusted: boolean;
+  sync_enabled: boolean;
+  notifications_enabled: boolean;
 }
 
-interface AuthState {
+interface AuthStore {
   user: User | null;
   accessToken: string | null;
   isAuthenticated: boolean;
+  isAuthReady: boolean;
   isLoading: boolean;
   error: string | null;
+
   currentDevice: Device | null;
   devices: Device[];
 
-  setUser: (user: User | null) => void;
-  setAccessToken: (token: string | null) => void;
-  setIsAuthenticated: (isAuth: boolean) => void;
-  setCurrentDevice: (device: Device | null) => void;
-  setDevices: (devices: Device[]) => void;
+  requires2FA: boolean;
+  tempToken: string | null;
 
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name?: string) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    firstName?: string,
+  ) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
   checkAuth: () => Promise<void>;
-  clearError: () => void;
 
-  fetchCurrentDevice: (accessToken: string) => Promise<void>;
-  fetchDevices: (accessToken: string) => Promise<void>;
+  fetchCurrentDevice: () => Promise<void>;
+  fetchDevices: () => Promise<void>;
 }
 
-interface LoginResponse {
-  success: boolean;
-  user: User;
-  accessToken: string;
-}
-
-interface RefreshResponse {
-  success: boolean;
-  accessToken: string;
-}
-
-interface MeResponse {
-  success: boolean;
-  user: User;
-}
-
-interface ErrorResponse {
-  success: false;
-  error: string;
-}
-
-function isAxiosError(error: unknown): error is AxiosError<ErrorResponse> {
-  return axios.isAxiosError(error);
-}
-
-function getErrorMessage(error: unknown): string {
-  if (isAxiosError(error)) {
-    return error.response?.data?.error || error.message || "An error occurred";
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return "An unknown error occurred";
-}
-
-export const useAuthStore = create<AuthState>()(
+export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
       user: null,
       accessToken: null,
-      currentDevice: null,
-      devices: [],
       isAuthenticated: false,
+      isAuthReady: false,
       isLoading: false,
       error: null,
 
-      setUser: (user) => set({ user }),
-      setAccessToken: (token) => set({ accessToken: token }),
-      setIsAuthenticated: (isAuth) => set({ isAuthenticated: isAuth }),
-      setCurrentDevice: (device) => set({ currentDevice: device }),
-      setDevices: (devices) => set({ devices }),
+      currentDevice: null,
+      devices: [],
 
-      login: async (email: string, password: string): Promise<void> => {
+      requires2FA: false,
+      tempToken: null,
+
+      // ----------------------
+      // Auth
+      // ----------------------
+      login: async (email, password) => {
         set({ isLoading: true, error: null });
-        try {
-          const response = await axios.post<LoginResponse>(
-            `${API_URL}/auth/login`,
-            { email, password },
-            { withCredentials: true }
-          );
 
+        const res = await api.post("/auth/login", { email, password });
+
+        if (res.data.requires2FA) {
           set({
-            user: response.data.user,
-            accessToken: response.data.accessToken,
-            isAuthenticated: true,
+            requires2FA: true,
+            tempToken: res.data.tempToken,
             isLoading: false,
           });
-        } catch (error: unknown) {
-          const errorMessage = getErrorMessage(error);
-          set({ error: errorMessage, isLoading: false });
-          throw new Error(errorMessage);
+          return;
         }
+
+        set({
+          user: res.data.user,
+          accessToken: res.data.accessToken,
+          isAuthenticated: true,
+          isLoading: false,
+          requires2FA: false,
+          tempToken: null,
+        });
+
+        await get().fetchDevices();
       },
 
-      register: async (
-        email: string,
-        password: string,
-        name?: string
-      ): Promise<void> => {
+      register: async (email, password, firstName) => {
         set({ isLoading: true, error: null });
-        try {
-          await axios.post(
-            `${API_URL}/auth/register`,
-            { email, password, name },
-            { withCredentials: true }
-          );
-
-          await get().login(email, password);
-        } catch (error: unknown) {
-          const errorMessage = getErrorMessage(error);
-          set({ error: errorMessage, isLoading: false });
-          throw new Error(errorMessage);
-        }
+        await api.post("/auth/register", { email, password, firstName });
+        await get().login(email, password);
       },
 
-      logout: async (): Promise<void> => {
+      logout: async () => {
         try {
-          await axios.post(
-            `${API_URL}/auth/logout`,
-            {},
-            { withCredentials: true }
-          );
-        } catch (error: unknown) {
-          console.error("Logout error:", getErrorMessage(error));
+          await api.post("/auth/logout");
+        } catch {
+          // ignore
         } finally {
           set({
             user: null,
@@ -162,107 +119,78 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: false,
             currentDevice: null,
             devices: [],
+            requires2FA: false,
+            tempToken: null,
             error: null,
+            isAuthReady: true,
           });
-
           hardReload();
         }
       },
 
-      refreshToken: async (): Promise<void> => {
-        try {
-          const response = await axios.post<RefreshResponse>(
-            `${API_URL}/auth/refresh`,
-            {},
-            { withCredentials: true }
-          );
-
-          set({ accessToken: response.data.accessToken });
-        } catch (error: unknown) {
-          await get().logout();
-          throw new Error(getErrorMessage(error));
-        }
+      refreshToken: async () => {
+        const res = await api.post("/auth/refresh");
+        set({ accessToken: res.data.accessToken });
       },
 
-      checkAuth: async (): Promise<void> => {
-        const token = get().accessToken;
-        if (!token) {
-          set({ isAuthenticated: false, user: null });
-          return;
-        }
-
+      checkAuth: async () => {
         try {
-          const response = await axios.get<MeResponse>(`${API_URL}/auth/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-            withCredentials: true,
-          });
+          await get().refreshToken();
+          const res = await api.get("/auth/me");
 
           set({
-            user: response.data.user,
+            user: res.data.user,
             isAuthenticated: true,
+            isAuthReady: true,
           });
-        } catch (error: unknown) {
-          console.error("Auth check error:", getErrorMessage(error));
-          try {
-            await get().refreshToken();
-            await get().checkAuth();
-          } catch (refreshError: unknown) {
-            console.error(
-              "Token refresh error:",
-              getErrorMessage(refreshError)
-            );
-            await get().logout();
-          }
+
+          await get().fetchDevices();
+        } catch {
+          set({
+            user: null,
+            accessToken: null,
+            isAuthenticated: false,
+            isAuthReady: true,
+          });
         }
       },
 
-      fetchCurrentDevice: async (accessToken: string) => {
+      // ----------------------
+      // Devices
+      // ----------------------
+      fetchCurrentDevice: async () => {
         try {
-          const response = await fetch(`${API_URL}/auth/device/current`, {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-            credentials: "include",
-          });
-
-          const data = await response.json();
-          if (data.success) {
-            set({ currentDevice: data.device });
+          const res = await api.get("/auth/device/current");
+          if (res.data?.device) {
+            set({ currentDevice: res.data.device });
           }
-        } catch (error) {
-          console.error("Failed to fetch current device:", error);
+        } catch {
+          // DO NOT retry, DO NOT logout
         }
       },
 
-      fetchDevices: async (accessToken: string) => {
+      fetchDevices: async () => {
         try {
-          const response = await fetch(`${API_URL}/auth/devices`, {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-            credentials: "include",
-          });
+          const res = await api.get("/devices");
+          if (res.data?.devices) {
+            set({ devices: res.data.devices });
 
-          const data = await response.json();
-          if (data.success) {
-            set({ devices: data.devices });
+            const current = res.data.devices.find((d: Device) => d.is_current);
+            if (current) set({ currentDevice: current });
           }
-        } catch (error) {
-          console.error("Failed to fetch devices:", error);
+        } catch {
+          // silent fail
         }
-      },
-
-      clearError: () => {
-        set({ error: null });
       },
     }),
     {
       name: "auth-storage",
-      partialize: (state): Partial<AuthState> => ({
+      partialize: (state) => ({
         user: state.user,
-        accessToken: state.accessToken,
         isAuthenticated: state.isAuthenticated,
+        requires2FA: state.requires2FA,
+        tempToken: state.tempToken,
       }),
-    }
-  )
+    },
+  ),
 );

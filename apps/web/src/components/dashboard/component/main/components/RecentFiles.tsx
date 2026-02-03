@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 import { useAuthStore } from "../../../../../store/authStore";
+import { useStorageStore } from "../../../../../store/storageStore";
 import FilesTable, {
   type FileItem,
 } from "../../../../shared/files_table/FilesTable";
@@ -9,6 +10,7 @@ import FilePreview from "../../../../shared/filesPreview/FilesPreview";
 
 import { FILES_REFRESH_EVENT } from "../../../../../events/fileEvents";
 import { useEvent } from "../../../../../events/useEvent";
+import { eventBus } from "../../../../../events/eventBus";
 
 interface ApiFile {
   id: string;
@@ -19,6 +21,17 @@ interface ApiFile {
   mime_type: string;
   created_at: string;
 }
+
+// Consistent API base URL
+const API_BASE_URL = "http://localhost:3000";
+
+const formatBytes = (bytes: number): string => {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / Math.pow(k, i)).toFixed(i >= 2 ? 1 : 0)} ${sizes[i]}`;
+};
 
 const getEmptyMessage = (hasActiveFilters: boolean): string => {
   if (hasActiveFilters) {
@@ -58,21 +71,37 @@ const formatDate = (dateString: string): string => {
 const RecentFiles: React.FC = () => {
   const accessToken = useAuthStore((s) => s.accessToken);
   const user = useAuthStore((s) => s.user);
+  const addUsage = useStorageStore((s) => s.addUsage);
+  const refreshStorage = useStorageStore((s) => s.refreshStorage);
 
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [previewIndex, setPreviewIndex] = useState<number>(-1);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
-  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
 
   const { filteredFiles, hasActiveFilters, activeFilterCount } =
     useFileSearch(files);
 
+  const navigableFiles =
+    selectedFiles.size > 0
+      ? filteredFiles.filter((f) => selectedFiles.has(f.id))
+      : filteredFiles;
+
+  const previewFile = previewIndex >= 0 ? navigableFiles[previewIndex] : null;
+
   const handleFilePreview = (file: FileItem) => {
-    setPreviewFile(file);
+    const index = navigableFiles.findIndex((f) => f.id === file.id);
+    setPreviewIndex(index);
+  };
+
+  const handleNavigate = (newIndex: number) => {
+    if (newIndex >= 0 && newIndex < navigableFiles.length) {
+      setPreviewIndex(newIndex);
+    }
   };
 
   const handleClosePreview = () => {
-    setPreviewFile(null);
+    setPreviewIndex(-1);
   };
 
   const handleFileSelect = (file: FileItem, selected: boolean) => {
@@ -93,21 +122,132 @@ const RecentFiles: React.FC = () => {
       file.name,
       "at",
       event.clientX,
-      event.clientY
+      event.clientY,
     );
-    // TODO: Implement context menu
   };
 
-  const fetchRecentFiles = async () => {
+  const checkStorageLimit = (totalSize: number): boolean => {
+    const { totalBytes, usedBytes } = useStorageStore.getState();
+    const availableBytes = totalBytes - usedBytes;
+
+    if (totalSize > availableBytes) {
+      alert(
+        `Not enough storage space. You need ${formatBytes(
+          totalSize,
+        )} but only have ${formatBytes(availableBytes)} available.`,
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const handleFilesUpload = async (fileList: FileList): Promise<void> => {
+    if (!fileList.length) return;
+
+    // Check if we have a valid access token
+    if (!accessToken) {
+      alert("You must be logged in to upload files.");
+      return;
+    }
+
+    const totalSize = Array.from(fileList).reduce(
+      (sum, file) => sum + file.size,
+      0,
+    );
+
+    if (!checkStorageLimit(totalSize)) {
+      return;
+    }
+
+    const formData = new FormData();
+    const folderPaths: Record<string, string> = {};
+
+    // Check if files have folder structure
+    const hasStructure = Array.from(fileList).some(
+      (file) => (file as any).webkitRelativePath,
+    );
+
+    Array.from(fileList).forEach((file, index) => {
+      const relativePath = (file as any).webkitRelativePath || "";
+
+      if (hasStructure && relativePath) {
+        const folderPath =
+          relativePath.substring(0, relativePath.lastIndexOf("/")) || "";
+        folderPaths[index] = folderPath;
+      }
+
+      formData.append("files", file);
+    });
+
+    if (hasStructure) {
+      formData.append("folderPaths", JSON.stringify(folderPaths));
+    }
+
     try {
-      setLoading(true);
-      const response = await fetch("/api/files?limit=10&sort=recent", {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+      const response = await fetch(`${API_BASE_URL}/api/files/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: formData,
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Session expired. Please log in again.");
+        }
+        throw new Error(`Upload failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      addUsage(totalSize);
+
+      // Refresh storage after successful upload
+      try {
+        await refreshStorage();
+      } catch (storageErr) {
+        console.warn("Storage refresh failed after upload:", storageErr);
+        // Don't fail the upload if storage refresh fails
+      }
+
+      eventBus.emit(FILES_REFRESH_EVENT);
+
+      return result;
+    } catch (err) {
+      console.error("Upload error:", err);
+      if (err instanceof Error) {
+        alert(err.message);
+      } else {
+        alert("Upload failed. Please try again.");
+      }
+      throw err;
+    }
+  };
+
+  const fetchRecentFiles = async () => {
+    // Don't fetch if no access token
+    if (!accessToken) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `${API_BASE_URL}/api/files?limit=10&sort=recent`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          console.error("Unauthorized: Access token may be expired");
+          // Don't show an alert for 401, just log it
+          setFiles([]);
+          return;
+        }
         throw new Error("Failed to fetch files");
       }
 
@@ -124,17 +264,19 @@ const RecentFiles: React.FC = () => {
             lastInteractionType: "uploaded" as const,
             location: file.folder_path || "Your Files",
             owner: {
-              name: user?.name || user?.email || "You",
+              name: user?.firstName || user?.email || "You",
               isYou: true,
             },
             size: file.size,
             url: file.s3_key,
-          })
+          }),
         );
         setFiles(transformedFiles);
       }
     } catch (err) {
       console.error("Error fetching recent files:", err);
+      // Don't alert the user for fetch errors, just log them
+      setFiles([]);
     } finally {
       setLoading(false);
     }
@@ -143,11 +285,16 @@ const RecentFiles: React.FC = () => {
   useEffect(() => {
     if (accessToken) {
       fetchRecentFiles();
+    } else {
+      setLoading(false);
+      setFiles([]);
     }
   }, [accessToken, user]);
 
   useEvent(FILES_REFRESH_EVENT, () => {
-    fetchRecentFiles();
+    if (accessToken) {
+      fetchRecentFiles();
+    }
   });
 
   return (
@@ -172,6 +319,11 @@ const RecentFiles: React.FC = () => {
         selectedFiles={selectedFiles}
         showOwner={true}
         showLocation={true}
+        singleClickMode="preview"
+        maxHeight={650}
+        onFilesUpload={handleFilesUpload}
+        checkStorageLimit={checkStorageLimit}
+        showFolderStructure={false}
       />
       {previewFile && (
         <FilePreview
@@ -179,6 +331,9 @@ const RecentFiles: React.FC = () => {
           fileName={previewFile.name}
           mimeType={previewFile.mimeType}
           onClose={handleClosePreview}
+          allFiles={navigableFiles}
+          currentIndex={previewIndex}
+          onNavigate={handleNavigate}
         />
       )}
     </Container>

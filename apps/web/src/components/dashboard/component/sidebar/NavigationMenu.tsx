@@ -22,13 +22,13 @@ const NavigationMenu = () => {
       Icon: SharedWithYouIcon,
     },
     { label: "Recycle Bin", link: ROUTES.RECYCLE_BIN, Icon: RecycleBinIcon },
-    { label: "Devices", link: ROUTES.DEVICES, Icon: DevicesIcon },
     {
       label: "Recently Edited",
       link: ROUTES.RECENTLY_EDITED,
       Icon: RecentlyEditedIcon,
     },
     { label: "Favorited", link: ROUTES.FAVORITED, Icon: StarIcon },
+    { label: "Devices", link: ROUTES.DEVICES, Icon: DevicesIcon },
   ];
 
   const currentPath =

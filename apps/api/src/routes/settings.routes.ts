@@ -3,8 +3,10 @@ import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { SettingsService } from "../services/settings.service";
 import multer from "multer";
 import { z } from "zod";
+import { PrismaClient } from "@prisma/client";
 
 const settingsRoutes = express.Router();
+const prisma = new PrismaClient();
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -146,7 +148,7 @@ settingsRoutes.patch(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 settingsRoutes.patch(
@@ -183,7 +185,7 @@ settingsRoutes.patch(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 settingsRoutes.patch(
@@ -220,7 +222,7 @@ settingsRoutes.patch(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 settingsRoutes.patch(
@@ -257,7 +259,7 @@ settingsRoutes.patch(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 settingsRoutes.patch(
@@ -294,7 +296,7 @@ settingsRoutes.patch(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 settingsRoutes.patch(
@@ -331,7 +333,7 @@ settingsRoutes.patch(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 settingsRoutes.patch(
@@ -368,7 +370,7 @@ settingsRoutes.patch(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 settingsRoutes.patch(
@@ -405,7 +407,7 @@ settingsRoutes.patch(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 // Update password
@@ -425,7 +427,7 @@ settingsRoutes.patch(
       await SettingsService.updatePassword(
         req.userId,
         validated.currentPassword,
-        validated.newPassword
+        validated.newPassword,
       );
 
       res.json({
@@ -447,7 +449,7 @@ settingsRoutes.patch(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 // Upload avatar
@@ -473,7 +475,7 @@ settingsRoutes.post(
 
       const avatarUrl = await SettingsService.uploadAvatar(
         req.userId,
-        req.file
+        req.file,
       );
 
       res.json({
@@ -489,7 +491,7 @@ settingsRoutes.post(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 settingsRoutes.delete(
@@ -518,7 +520,7 @@ settingsRoutes.delete(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 settingsRoutes.get(
@@ -547,7 +549,7 @@ settingsRoutes.get(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 // Sign out from specific session
@@ -578,7 +580,7 @@ settingsRoutes.delete(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 // Sign out from all sessions except current
@@ -608,7 +610,7 @@ settingsRoutes.delete(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 // Get linked accounts
@@ -638,7 +640,7 @@ settingsRoutes.get(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 // Unlink account
@@ -669,7 +671,7 @@ settingsRoutes.delete(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 // Clear cache
@@ -699,7 +701,7 @@ settingsRoutes.delete(
         details: err instanceof Error ? err.message : "Unknown error",
       });
     }
-  }
+  },
 );
 
 export default settingsRoutes;

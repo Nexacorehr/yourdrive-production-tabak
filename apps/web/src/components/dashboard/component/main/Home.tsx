@@ -12,14 +12,14 @@ interface HomeProps {
 
 const Home: React.FC<HomeProps> = () => {
   const hasUserUploadedFolder = useStorageStore(
-    (state) => state.hasUserUploadedFolder
+    (state) => state.hasUserUploadedFolder,
   );
 
   return (
     <MainContainer>
       <QuickSearch />
       {hasUserUploadedFolder && <SuggestedFolders />}
-      <RecentFiles />
+      <RecentFiles singleClickMode="preview" />
     </MainContainer>
   );
 };

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import styled from "styled-components";
 import { Download, AlertCircle, Loader2, ExternalLink } from "lucide-react";
-import { getLanguageFromExtension } from "../../utils/FileTypeDetector";
 
 interface CodeEditorProps {
   url: string;
@@ -12,59 +11,27 @@ interface CodeEditorProps {
 
 const Container = styled.div`
   width: 100%;
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  background: #1e1e1e;
-`;
-
-const Button = styled.button<{ $primary?: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  border: none;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  transition: all 0.2s;
-
-  ${(props) =>
-    props.$primary
-      ? `
-    color: white;
-    background: #0e639c;
-    
-    &:hover {
-      background: #1177bb;
-    }
-  `
-      : `
-    color: #cccccc;
-    background: #3e3e42;
-    
-    &:hover {
-      background: #505052;
-    }
-  `}
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+  background: #e9eef6;
 `;
 
 const EditorContainer = styled.div`
   flex: 1;
   overflow: hidden;
   position: relative;
+  margin: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: #1e1e1e;
 `;
 
 const TextArea = styled.textarea`
   width: 100%;
   height: 100%;
   padding: 1.5rem;
+  padding-left: 4.5rem;
   background: #1e1e1e;
   color: #d4d4d4;
   font-family: "Consolas", "Monaco", "Courier New", monospace;
@@ -78,61 +45,6 @@ const TextArea = styled.textarea`
   &::selection {
     background: #264f78;
   }
-`;
-
-const LoadingContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  gap: 0.75rem;
-`;
-
-const ErrorContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  gap: 1rem;
-  color: #f48771;
-  padding: 2rem;
-  text-align: center;
-`;
-
-const IconWrapper = styled.div<{ $spinning?: boolean }>`
-  width: 2rem;
-  height: 2rem;
-  color: ${(props) => (props.$spinning ? "#0e639c" : "currentColor")};
-
-  ${(props) =>
-    props.$spinning &&
-    `
-    svg {
-      animation: spin 1s linear infinite;
-    }
-    
-    @keyframes spin {
-      from {
-        transform: rotate(0deg);
-      }
-      to {
-        transform: rotate(360deg);
-      }
-    }
-  `}
-
-  svg {
-    width: 100%;
-    height: 100%;
-  }
-`;
-
-const Text = styled.p<{ $size?: string }>`
-  font-size: ${(props) => props.$size || "0.875rem"};
-  color: #cccccc;
-  margin: 0;
 `;
 
 const LineNumbers = styled.div`
@@ -159,23 +71,121 @@ const LineNumber = styled.div`
   line-height: 1.6;
 `;
 
+const CenteredContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #e9eef6;
+  gap: 1rem;
+`;
+
+const IconWrapper = styled.div<{ $color?: string }>`
+  width: 3rem;
+  height: 3rem;
+  color: ${(props) => props.$color || "#5f6368"};
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  &.spinning svg {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+`;
+
+const Title = styled.p`
+  font-size: 1.125rem;
+  font-weight: 500;
+  margin: 0;
+  color: #202124;
+`;
+
+const Subtitle = styled.p`
+  font-size: 0.875rem;
+  color: #5f6368;
+  margin: 0.5rem 0;
+  text-align: center;
+  max-width: 400px;
+`;
+
+const ButtonGroup = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+`;
+
+const Button = styled.button<{ $primary?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  ${(props) =>
+    props.$primary
+      ? `
+    color: white;
+    background: #1a73e8;
+    
+    &:hover {
+      background: #1557b0;
+      box-shadow: 0 2px 8px rgba(26, 115, 232, 0.3);
+    }
+  `
+      : `
+    color: #202124;
+    background: white;
+    border: 1px solid #dadce0;
+    
+    &:hover {
+      background: #f8f9fa;
+    }
+  `}
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
 const CorsWarning = styled.div`
-  background: #3e3e42;
-  border: 1px solid #858585;
-  border-radius: 0.25rem;
+  background: white;
+  border: 1px solid #dadce0;
+  border-radius: 0.5rem;
   padding: 1rem;
   max-width: 500px;
-  margin-top: 1rem;
+  margin-top: 0.5rem;
 `;
 
 const WarningTitle = styled.div`
-  color: #cccccc;
+  color: #202124;
   font-weight: 600;
   margin-bottom: 0.5rem;
 `;
 
 const WarningText = styled.div`
-  color: #cccccc;
+  color: #5f6368;
   font-size: 0.875rem;
   line-height: 1.5;
 `;
@@ -191,8 +201,6 @@ export default function CodeEditor({
   const [error, setError] = useState<string | null>(null);
   const [isCorsError, setIsCorsError] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
-
-  const language = getLanguageFromExtension(fileName);
 
   useEffect(() => {
     loadFile();
@@ -211,18 +219,21 @@ export default function CodeEditor({
 
       if (!response.ok) {
         throw new Error(
-          `Failed to load file: ${response.status} ${response.statusText}`
+          `Failed to load file: ${response.status} ${response.statusText}`,
         );
       }
 
-      const text = await response.text();
+      // Proper UTF-8 decoding to support special characters like č, ć, ž, š, đ
+      const arrayBuffer = await response.arrayBuffer();
+      const decoder = new TextDecoder("utf-8");
+      const text = decoder.decode(arrayBuffer);
+
       setContent(text);
       setLoading(false);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to load file";
 
-      // Check if it's a CORS error
       if (
         errorMessage.includes("CORS") ||
         errorMessage.includes("NetworkError") ||
@@ -281,12 +292,12 @@ export default function CodeEditor({
   if (loading) {
     return (
       <Container>
-        <LoadingContainer>
-          <IconWrapper $spinning>
+        <CenteredContainer>
+          <IconWrapper className="spinning">
             <Loader2 />
           </IconWrapper>
-          <Text>Loading file...</Text>
-        </LoadingContainer>
+          <Subtitle>Loading file...</Subtitle>
+        </CenteredContainer>
       </Container>
     );
   }
@@ -294,12 +305,12 @@ export default function CodeEditor({
   if (error) {
     return (
       <Container>
-        <ErrorContainer>
-          <IconWrapper>
+        <CenteredContainer>
+          <IconWrapper $color="#d93025">
             <AlertCircle />
           </IconWrapper>
-          <Text $size="1.125rem">Unable to preview file</Text>
-          <Text>{error}</Text>
+          <Title>Unable to preview file</Title>
+          <Subtitle>{error}</Subtitle>
 
           {isCorsError && (
             <CorsWarning>
@@ -312,7 +323,7 @@ export default function CodeEditor({
             </CorsWarning>
           )}
 
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+          <ButtonGroup>
             <Button $primary onClick={handleOpenInNewTab}>
               <ExternalLink size={16} />
               Open in new tab
@@ -323,8 +334,8 @@ export default function CodeEditor({
                 Download file
               </Button>
             )}
-          </div>
-        </ErrorContainer>
+          </ButtonGroup>
+        </CenteredContainer>
       </Container>
     );
   }
@@ -343,7 +354,6 @@ export default function CodeEditor({
           onKeyDown={handleKeyDown}
           readOnly={!onEdit}
           spellCheck={false}
-          style={{ paddingLeft: "4.5rem" }}
         />
       </EditorContainer>
     </Container>
