@@ -44,7 +44,7 @@ const FileSharingEditing: React.FC = () => {
               Send files of any size with a simple link. Edit documents, spreadsheets, 
               and presentations in real-time with your team.
             </HeroSubtitle>
-            <LandingButton variant="primary" size="lg" purp="register" width={"20%"}>Try it now</LandingButton>
+            <LandingButton variant="primary" size="lg" purp="register">Try it now</LandingButton>
           </HeroContent>
         </HeroSection>
 

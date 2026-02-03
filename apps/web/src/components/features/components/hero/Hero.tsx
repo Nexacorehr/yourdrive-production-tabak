@@ -22,7 +22,7 @@ const Hero: React.FC = () => {
           focus on what matters — creating.
         </HeroSubtitle>
         
-        <LandingButton variant="primary" size="lg" purp="register" width={"20%"}>Get Started</LandingButton>
+        <LandingButton variant="primary" size="lg" purp="register">Get Started</LandingButton>
       </HeroContainer>
     </HeroSection>
   );

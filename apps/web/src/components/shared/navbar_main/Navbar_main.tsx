@@ -37,12 +37,21 @@ const Navbar_main: React.FC<NavbarMainProps> = () => {
   useEffect(() => {
     if (isMobileMenuOpen) {
       document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      document.body.style.top = '0';
     } else {
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+      document.body.style.top = '';
     }
 
     return () => {
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+      document.body.style.top = '';
     };
   }, [isMobileMenuOpen]);
 
@@ -77,16 +86,16 @@ const Navbar_main: React.FC<NavbarMainProps> = () => {
         <NContRight>
           {!isLoggedIn() ? (
             <>
-              <LandingButton variant="primary" size="sm" purp="register">
+              <LandingButton variant="primary" size="md" purp="register">
                 Register
               </LandingButton>
-              <LandingButton variant="secondary" size="sm" purp="login">
+              <LandingButton variant="secondary" size="md" purp="login">
                 Login
               </LandingButton>
             </>
           ) : (
             <>
-              <LandingButton variant="secondary" size="sm" purp="dashboard">
+              <LandingButton variant="secondary" size="md" purp="dashboard">
                 Dashboard
               </LandingButton>
             </>
@@ -119,16 +128,16 @@ const Navbar_main: React.FC<NavbarMainProps> = () => {
         <MobileButtonsContainer>
           {!isLoggedIn() ? (
             <>
-              <LandingButton variant="primary" size="md" purp="register">
+              <LandingButton variant="primary" size="lg" purp="register">
                 Register
               </LandingButton>
-              <LandingButton variant="secondary" size="md" purp="login">
+              <LandingButton variant="secondary" size="lg" purp="login">
                 Login
               </LandingButton>
             </>
           ) : (
             <>
-              <LandingButton variant="secondary" size="md" purp="dashboard">
+              <LandingButton variant="secondary" size="lg" purp="dashboard">
                 Dashboard
               </LandingButton>
             </>

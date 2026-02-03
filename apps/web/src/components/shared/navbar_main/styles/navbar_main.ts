@@ -9,7 +9,9 @@ export const NavbarContainer = styled.div`
   z-index: 1000;
 
   @media (max-width: 968px) {
-    height: 64px;
+    position: fixed;
+    top: 0;
+    left: 0;
     justify-content: space-between;
   }
 `;
@@ -191,7 +193,7 @@ export const Overlay = styled.div`
     position: fixed;
     top: 64px;
     left: 0;
-    width: 100%;
+    width: 100vw;
     height: calc(100vh - 64px);
     background-color: rgba(0, 0, 0, 0.5);
     z-index: 998;
@@ -260,12 +262,15 @@ export const MobileNavLink = styled.div`
 export const MobileButtonsContainer = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   padding: 24px;
   margin-top: auto;
   border-top: 1px solid #f0f0f0;
 
   button {
     width: 100%;
+    min-height: 50px !important;
+    font-size: 16px !important;
+    padding: 12px 24px !important;
   }
 `;

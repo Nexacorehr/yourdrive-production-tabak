@@ -45,7 +45,7 @@ const SecureStorage: React.FC = () => {
               Bank-level encryption, zero-knowledge architecture, and compliance with 
               global security standards. Your data is protected at every level.
             </HeroSubtitle>
-            <LandingButton variant="primary" size="lg" purp="register" width={"35%"}>Explore security features</LandingButton>
+            <LandingButton variant="primary" size="lg" purp="register">Explore security features</LandingButton>
           </HeroContent>
         </HeroSection>
 

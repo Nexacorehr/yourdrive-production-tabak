@@ -43,7 +43,7 @@ const PersonalStorage: React.FC = () => {
               Store your documents, photos, videos, and files securely in one place. 
               Access them from anywhere, anytime, on any device.
             </HeroSubtitle>
-            <LandingButton variant="primary" size="lg" purp="register" width={"20%"}>Start for free</LandingButton>
+            <LandingButton variant="primary" size="lg" purp="register">Start for free</LandingButton>
           </HeroContent>
         </HeroSection>
 
@@ -117,9 +117,6 @@ const PersonalStorage: React.FC = () => {
             always safe, even if something happens to your device.
           </SectionDescription>
 
-          <ImagePlaceholder style={{ height: '300px', margin: '40px auto' }}>
-            🔄 Automatic Backup Visualization
-          </ImagePlaceholder>
         </ContentSection>
 
         <ContentSection>

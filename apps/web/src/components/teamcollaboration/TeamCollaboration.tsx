@@ -44,7 +44,7 @@ const TeamCollaboration: React.FC = () => {
               Work together in real-time, share files instantly, and keep everyone 
               on the same page. Built for teams that move fast.
             </HeroSubtitle>
-            <LandingButton variant="primary" size="lg" purp="register" width={"27%"}>Start collaborating</LandingButton>
+            <LandingButton variant="primary" size="lg" purp="register">Start collaborating</LandingButton>
           </HeroContent>
         </HeroSection>
 
