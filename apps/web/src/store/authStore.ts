@@ -49,8 +49,12 @@ interface AuthStore {
   currentDevice: Device | null;
   devices: Device[];
 
+  
+
   requires2FA: boolean;
   tempToken: string | null;
+
+  refreshUser: () => Promise<void>;  
 
   setUser: (user: User | null) => void;
   setAuthenticated: (value: boolean) => void;
@@ -84,6 +88,18 @@ export const useAuthStore = create<AuthStore>()(
 
       requires2FA: false,
       tempToken: null,
+
+      refreshUser: async () => {
+      try {
+        const res = await api.get("/auth/me");
+        set({ 
+          user: res.data.user,
+          isAuthenticated: true 
+        });
+      } catch (error) {
+        console.error("Failed to refresh user:", error);
+      }
+    },
 
       // Helper setters
       setUser: (user) => set({ user }),
