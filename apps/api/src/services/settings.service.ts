@@ -1,6 +1,9 @@
 import { Pool } from "pg";
 import { prisma } from "../lib/prisma";
 import bcrypt from "bcrypt";
+
+import { StorageService } from "./storage.service";
+
 import {
   S3Client,
   PutObjectCommand,
@@ -27,21 +30,23 @@ const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || "12");
 
 export class SettingsService {
   static async initializeSettings(userId: string, email: string) {
-    const result = await pool.query(
-      `INSERT INTO user_settings (user_id, profile)
-       VALUES ($1, $2)
-       ON CONFLICT (user_id) DO NOTHING
-       RETURNING *`,
-      [
-        userId,
-        JSON.stringify({ email, firstName: "", lastName: "", avatarUrl: null }),
-      ]
-    );
-    return result.rows[0];
-  }
+  const result = await pool.query(
+    `INSERT INTO user_settings (user_id, profile, updated_at)
+     VALUES ($1, $2, CURRENT_TIMESTAMP)
+     ON CONFLICT (user_id) DO NOTHING
+     RETURNING *`,
+    [
+      userId,
+      JSON.stringify({ email, firstName: "", lastName: "", avatarUrl: null }),
+    ]
+  );
+  return result.rows[0];
+}
 
   static async getSettings(userId: string) {
     await this.ensureSettingsExist(userId);
+
+    
 
     const result = await pool.query(
       `SELECT * FROM user_settings WHERE user_id = $1`,
@@ -56,7 +61,7 @@ export class SettingsService {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true, name: true },
+      select: { email: true, firstName: true },
     });
 
     const usageResult = await pool.query(
@@ -66,17 +71,20 @@ export class SettingsService {
       [userId]
     );
 
-    const usedStorage = parseInt(usageResult.rows[0].used_storage, 10);
-    const totalStorage = 15 * 1024 * 1024 * 1024;
-
     const profile = settings.profile || {};
-    const [firstName, lastName] = (user?.name || "").split(" ");
+    const firstName = user?.firstName || profile.firstName || "";
+    const lastName = profile.lastName || "";
+
+    const storageInfo = await StorageService.getStorageInfo(userId);
+
+    const totalStorage = parseInt(storageInfo.limit, 10);
+    const usedStorage = parseInt(storageInfo.used, 10);
 
     return {
       profile: {
         email: user?.email || profile.email || "",
-        firstName: firstName || profile.firstName || "",
-        lastName: lastName || profile.lastName || "",
+        firstName: firstName,
+        lastName: lastName,
         avatarUrl: profile.avatarUrl || null,
         avatarInitials: this.getInitials(firstName, lastName),
       },
@@ -87,6 +95,10 @@ export class SettingsService {
         ...(settings.storage || {}),
         totalStorage,
         usedStorage,
+        autoSync: settings.storage?.autoSync ?? true,
+        fileVersioning: settings.storage?.fileVersioning ?? true,
+        maxVersionsToKeep: settings.storage?.maxVersionsToKeep ?? 10,
+        cacheSize: 0, // Calculate if needed
       },
       sharing: settings.sharing || {},
       preferences: settings.preferences || {},
@@ -106,19 +118,10 @@ export class SettingsService {
       });
     }
 
-    if (data.firstName || data.lastName) {
-      const currentSettings = await pool.query(
-        `SELECT profile FROM user_settings WHERE user_id = $1`,
-        [userId]
-      );
-      const currentProfile = currentSettings.rows[0]?.profile || {};
-
-      const firstName = data.firstName || currentProfile.firstName || "";
-      const lastName = data.lastName || currentProfile.lastName || "";
-
+    if (data.firstName) {
       await prisma.user.update({
         where: { id: userId },
-        data: { name: `${firstName} ${lastName}`.trim() },
+        data: { firstName: data.firstName },
       });
     }
 

@@ -34,7 +34,9 @@ import PersonalStorage from "../components/personalstorage/PersonalStorage";
 import FileSharingEditing from "../components/filesharingediting/FileSharingEditing";
 import SecureStorage from "../components/securestorage/SecureStorage";
 import TeamCollaboration from "../components/teamcollaboration/TeamCollaboration";
+import { VerifyEmail } from "../components/auth/VerifyEmail";
 import FileEditor from "../components/shared/fileEditor/FileEditor";
+import { GlobalReset } from "../components/landing/styles/landing";
 
 export const ROUTES = {
   HOME: "/",
@@ -50,6 +52,7 @@ export const ROUTES = {
   PRIVACY: "/privacy",
   PERSONAL_STORAGE: "/personal",
   FILE_SHARING_EDITING: "/file-editing",
+  VERIFY_EMAIL: "/verify-email",
   SECURE_STORAGE: "/secure",
   TEAM_COLLABORATION: "/team",
   YOUR_FILES: "/dashboard/your-files",
@@ -64,7 +67,12 @@ export const ROUTES = {
 } as const;
 
 function RootComponent() {
-  return <Outlet />;
+  return (
+    <>
+      <GlobalReset />
+      <Outlet />
+    </>
+  );
 }
 
 function redirectIfAuthenticated(): void {
@@ -127,6 +135,12 @@ const aboutUsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/aboutus",
   component: AboutUs,
+});
+
+const verifyEmailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/verify-email",
+  component: VerifyEmail,
 });
 
 const personalStorageRoute = createRoute({
@@ -257,6 +271,7 @@ const routeTree = rootRoute.addChildren([
   personalStorageRoute,
   fileSharingEditingRoute,
   secureStorageRoute,
+  verifyEmailRoute,
   teamCollaborationRoute,
   featuresRoute,
   helpCenterRoute,

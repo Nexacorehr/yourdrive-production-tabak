@@ -8,6 +8,7 @@ const Dashboard = () => {
   const location = useLocation();
 
   return (
+    <>
     <Container>
       <Navbar />
       <Application>
@@ -16,6 +17,7 @@ const Dashboard = () => {
         </AnimatePresence>
       </Application>
     </Container>
+    </>
   );
 };
 

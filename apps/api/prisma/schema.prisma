@@ -8,35 +8,38 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(uuid())
-  firstName     String?   @map("first_name")
-  email         String    @unique
-  password      String
-  emailVerified Boolean   @default(false) @map("emailVerified")
-  loginAttempts Int       @default(0) @map("loginAttempts")
-  lockUntil     DateTime? @map("lockUntil")
-  createdAt     DateTime  @default(now()) @map("createdAt")
-  updatedAt     DateTime  @updatedAt @map("updatedAt")
+  id                       String    @id @default(uuid())
+  firstName                String?   @map("first_name")
+  email                    String    @unique
+  password                 String
+  emailVerified            Boolean   @default(false) @map("emailVerified")
+  emailVerificationToken   String?   @map("email_verification_token")
+  emailVerificationExpires DateTime? @map("email_verification_expires")
+  loginAttempts            Int       @default(0) @map("loginAttempts")
+  lockUntil                DateTime? @map("lockUntil")
+  createdAt                DateTime  @default(now()) @map("createdAt")
+  updatedAt                DateTime  @updatedAt @map("updatedAt")
+  totpSecret               String?   @map("totp_secret")
+  totpEnabled              Boolean   @default(false) @map("totp_enabled")
+  passwordResetToken       String?   @map("password_reset_token")
+  passwordResetExpires     DateTime? @map("password_reset_expires")
+  passwordResetCodeHash    String?   @map("password_reset_code_hash")
 
-  sessions        Session[]
-  userDevices     UserDevice[]
-  userFiles       UserFile[]
-  userSettings    UserSettings?
-  shareActivities ShareActivity[]
-  fileShares      FileShare[]
-  favoritedFiles  FavoritedFile[]
-  recycleBinItems RecycleBin[]
+  sessions                 Session[]
+  userDevices              UserDevice[]
+  userFiles                UserFile[]
+  userSettings             UserSettings?
+  shareActivities          ShareActivity[]
+  fileShares               FileShare[]
+  favoritedFiles           FavoritedFile[]
+  recycleBinItems          RecycleBin[]
+  webauthnCredentials      WebAuthnCredential[]
+  socialAccounts           SocialAccount[]
+  recoveryCodes            TotpRecoveryCode[]
 
-  totpSecret  String? @map("totp_secret")
-  totpEnabled Boolean @default(false) @map("totp_enabled")
-
-  webauthnCredentials WebAuthnCredential[]
-  socialAccounts      SocialAccount[]
-  recoveryCodes       TotpRecoveryCode[]
-
+  @@index([emailVerificationToken])
   @@map("User")
 }
-
 model Session {
   id           String   @id @default(uuid())
   userId       String   @map("userId")
@@ -44,8 +47,7 @@ model Session {
   deviceInfo   Json?
   expiresAt    DateTime @map("expiresAt")
   createdAt    DateTime @default(now()) @map("createdAt")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("Session")
@@ -75,8 +77,7 @@ model UserDevice {
   lockedAt             DateTime? @map("locked_at")
   wipedAt              DateTime? @map("wiped_at")
   forceLogout          Boolean   @default(false) @map("force_logout")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([lastActive])
@@ -84,25 +85,25 @@ model UserDevice {
 }
 
 model UserFile {
-  id                Int          @id @default(autoincrement())
-  userId            String       @map("user_id")
-  userEmail         String       @map("user_email")
-  originalName      String       @map("original_name")
-  s3Key             String       @map("s3_key")
-  folderPath        String       @default("") @map("folder_path")
-  size              BigInt
-  fileHash          String?      @map("file_hash")
-  mimeType          String       @map("mime_type")
-  isFolder          Boolean      @default(false) @map("is_folder")
-  isLocked          Boolean      @default(false) @map("is_locked")
-  createdAt         DateTime     @default(now()) @map("created_at")
-  updatedAt         DateTime     @updatedAt @map("updated_at")
-  deletedAt         DateTime?    @map("deleted_at")
-  recycleBinEntries RecycleBin[]
+id                Int             @id @default(autoincrement())
+userId            String          @map("user_id")
+userEmail         String          @map("user_email")
+originalName      String          @map("original_name")
+s3Key             String          @map("s3_key")
+folderPath        String          @default("") @map("folder_path")
+size              BigInt
+fileHash          String?         @map("file_hash")
+mimeType          String          @map("mime_type")
+isFolder          Boolean         @default(false) @map("is_folder")
+isLocked          Boolean         @default(false) @map("is_locked")
+createdAt         DateTime        @default(now()) @map("created_at")
+updatedAt         DateTime        @updatedAt @map("updated_at")
+deletedAt         DateTime?       @map("deleted_at")
+recycleBinEntries RecycleBin[]
 
-  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  shares    FileShare[]
-  favorites FavoritedFile[]
+user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+shares            FileShare[]
+favorites         FavoritedFile[]
 
   @@unique([userId, folderPath, originalName])
   @@index([userId])
@@ -132,18 +133,17 @@ model FavoritedFile {
 model UserSettings {
   id          Int      @id @default(autoincrement())
   userId      String   @unique @map("user_id")
-  profile     Json?    @default("{}")
-  security    Json?    @default("{}")
-  appearance  Json?    @default("{}")
-  language    Json?    @default("{}")
-  storage     Json?    @default("{}")
-  sharing     Json?    @default("{}")
-  preferences Json?    @default("{}")
-  privacy     Json?    @default("{}")
+  profile     Json     @default("{\"email\": \"\", \"avatarUrl\": null, \"firstName\": \"\"}")
+  security    Json     @default("{\"twoFactorEnabled\": false, \"offlineModeEnabled\": false, \"clientSideEncryption\": false}")
+  appearance  Json     @default("{\"theme\": \"system\", \"fileView\": \"grid\", \"thumbnailQuality\": \"medium\"}")
+  language    Json     @default("{\"timezone\": \"UTC\", \"dateFormat\": \"MM/DD/YYYY\", \"timeFormat\": \"12-hour\", \"displayLanguage\": \"en\"}")
+  storage     Json     @default("{\"autoSync\": true, \"fileVersioning\": true, \"maxVersionsToKeep\": 10}")
+  sharing     Json     @default("{\"allowDownload\": true, \"notifyOnShare\": true, \"allowPublicSharing\": true, \"linkExpirationDays\": null, \"defaultLinkPermission\": \"view\", \"requirePasswordForLinks\": false}")
+  preferences Json     @default("{\"weeklyDigest\": false, \"notifyOnShare\": true, \"notifyOnUpload\": true, \"notifyOnComment\": true, \"emailNotifications\": true, \"desktopNotifications\": false}")
+  privacy     Json     @default("{\"shareUsageData\": false, \"showOnlineStatus\": true, \"indexFilesForSearch\": true, \"allowActivityTracking\": true}")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_settings")
 }
@@ -157,8 +157,7 @@ model WebAuthnCredential {
   deviceName   String?   @map("device_name")
   createdAt    DateTime  @default(now()) @map("created_at")
   lastUsed     DateTime? @map("last_used")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("webauthn_credentials")
 }
@@ -174,8 +173,7 @@ model SocialAccount {
   profileData    Json     @map("profile_data")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerUserId])
   @@map("social_accounts")
@@ -188,59 +186,55 @@ model TotpRecoveryCode {
   used      Boolean   @default(false)
   usedAt    DateTime? @map("used_at")
   createdAt DateTime  @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("totp_recovery_codes")
 }
 
 model FileShare {
-  id            String    @id @default(uuid())
-  fileId        Int       @map("file_id")
-  ownerId       String    @map("owner_id")
-  shareToken    String    @unique @map("share_token")
-  shareType     String    @map("share_type")
+  id            String          @id @default(uuid())
+  fileId        Int             @map("file_id")
+  ownerId       String          @map("owner_id")
+  shareToken    String          @unique @map("share_token")
+  shareType     String          @map("share_type")
   permission    String
   password      String?
-  expiresAt     DateTime? @map("expires_at")
-  maxDownloads  Int?      @map("max_downloads")
-  downloadCount Int       @default(0) @map("download_count")
-  isActive      Boolean   @default(true) @map("is_active")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-
-  file       UserFile        @relation(fields: [fileId], references: [id], onDelete: Cascade)
-  owner      User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  comments   ShareComment[]
-  activities ShareActivity[]
+  expiresAt     DateTime?       @map("expires_at")
+  maxDownloads  Int?            @map("max_downloads")
+  downloadCount Int             @default(0) @map("download_count")
+  isActive      Boolean         @default(true) @map("is_active")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  file          UserFile        @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  owner         User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  activities    ShareActivity[]
+  comments      ShareComment[]
 
   @@map("file_shares")
 }
 
 model ShareComment {
-  id        String   @id @default(uuid())
-  shareId   String   @map("share_id")
-  userName  String   @map("user_name")
+  id        String    @id @default(uuid())
+  shareId   String    @map("share_id")
+  userName  String    @map("user_name")
   text      String
-  createdAt DateTime @default(now()) @map("created_at")
-
-  share FileShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now()) @map("created_at")
+  share     FileShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
 
   @@map("share_comments")
 }
 
 model ShareActivity {
-  id        Int      @id @default(autoincrement())
-  shareId   String   @map("share_id")
-  userId    String?  @map("user_id")
+  id        Int       @id @default(autoincrement())
+  shareId   String    @map("share_id")
+  userId    String?   @map("user_id")
   action    String
-  ipAddress String?  @map("ip_address")
-  userAgent String?  @map("user_agent")
+  ipAddress String?   @map("ip_address")
+  userAgent String?   @map("user_agent")
   metadata  Json?
-  createdAt DateTime @default(now()) @map("created_at")
-
-  share FileShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
-  user  User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime  @default(now()) @map("created_at")
+  share     FileShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id])
 
   @@map("share_activity")
 }

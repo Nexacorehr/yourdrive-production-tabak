@@ -1,4 +1,5 @@
 import "./index.css";
+import React from "react";
 import ReactDOM from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { router } from "./router/router";
@@ -15,6 +16,16 @@ console.log("App starting, toast system:", {
   callbacks: toast["callbacks"] || "none",
 });
 
+function App() {
+  return (
+    <>
+      <RouterProvider router={router} context={{ auth }} />
+    </>
+  );
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <RouterProvider router={router} context={{ auth }} />,
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
 );

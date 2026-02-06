@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { settingsService } from "../../settings/service/settingsService";
 import type { UserSettings } from "../../settings/types/UserSettings";
 
+import { useAuthStore } from "../../../store/authStore";
+
 interface UseSettingsReturn {
   settings: UserSettings | null;
   loading: boolean;
@@ -51,13 +53,19 @@ export const useSettings = (): UseSettingsReturn => {
 
   const updateProfile = async (data: Partial<UserSettings["profile"]>) => {
     try {
-      setError(null);
-      await settingsService.updateProfile(data);
-      await loadSettings();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update profile");
-      throw err;
-    }
+    setError(null);
+    await settingsService.updateProfile(data);
+    
+    await loadSettings();
+    
+    // Refresh user in auth store
+    const authStore = useAuthStore.getState();
+    await authStore.refreshUser();
+    
+  } catch (err) {
+    setError(err instanceof Error ? err.message : "Failed to update profile");
+    throw err;
+  }
   };
 
   const updateSecurity = async (data: Partial<UserSettings["security"]>) => {
