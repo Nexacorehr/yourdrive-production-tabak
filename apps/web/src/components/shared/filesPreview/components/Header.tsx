@@ -36,18 +36,21 @@ export interface HeaderProps {
   handleDownload?: () => void;
   setShowInfo: (show: boolean) => void;
   showInfo?: boolean;
+  onEdit?: () => void;
+  canEdit?: boolean;
 }
 
 export const Header = ({
+  fileId,
   fileName,
   files,
   currentIndex,
   onRename,
   handleShare,
   onClose,
-  handleFavorite,
-  isFavorited,
   handleDownload,
+  onEdit,
+  canEdit,
 }: HeaderProps) => {
   return (
     <StyledHeader>
@@ -61,23 +64,6 @@ export const Header = ({
       </LeftSection>
 
       <ActionBar>
-        <ActionButton onClick={handleFavorite} title="Favorite">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path
-              d={
-                isFavorited
-                  ? "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
-                  : "M12 17.5l-5.878 3.09 1.123-6.545L2.489 9.41l6.572-.955L12 2.5l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545L12 17.5z"
-              }
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill={isFavorited ? "currentColor" : "none"}
-            />
-          </svg>
-        </ActionButton>
-
         {onRename && (
           <ActionButton onClick={onRename} title="Rename">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -115,9 +101,11 @@ export const Header = ({
           <ShareIcon height={20} width={20} color="currentColor" />
         </ActionButton>
 
-        <ActionButton onClick={handleDownload} title="Edit">
-          <EditIcon height={20} width={20} color="currentColor" />
-        </ActionButton>
+        {fileId && onEdit && canEdit && (
+          <ActionButton onClick={onEdit} title="Edit">
+            <EditIcon height={20} width={20} color="currentColor" />
+          </ActionButton>
+        )}
 
         <Divider />
 

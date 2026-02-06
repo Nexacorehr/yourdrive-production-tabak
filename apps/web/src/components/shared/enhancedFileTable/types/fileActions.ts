@@ -27,6 +27,7 @@ export type FileActionId =
   | "download"
   | "share"
   | "getLink"
+  | "edit"
   | "rename"
   | "duplicate"
   //  | "move"

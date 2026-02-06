@@ -7,6 +7,7 @@ import SharePopup from "../popups/share/SharePopup";
 import { useFilePreview } from "./hooks/useFilePreview.ts";
 import { usePopupStore } from "../popups/popup.store";
 import { useAuthStore } from "../../../store/authStore";
+import { useRouter } from "@tanstack/react-router";
 
 // Import the new FilePreview system
 import FilePreview from "./components/Preview";
@@ -65,6 +66,7 @@ const FilesPreview: React.FC<FilePreviewProps> = ({
   const [isFavorited, setIsFavorited] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const accessToken = useAuthStore((s) => s.accessToken);
+  const router = useRouter();
 
   const toggleSharingPopup = usePopupStore((state) => state.toggleSharingPopup);
   const isSharingPopupOpen = usePopupStore((state) => state.isSharingPopupOpen);
@@ -189,6 +191,16 @@ const FilesPreview: React.FC<FilePreviewProps> = ({
     }
   };
 
+  const handleEdit = () => {
+    if (!fileId) return;
+    router.navigate({
+      to: "/edit/$fileId",
+      params: { fileId: fileId.toString() },
+    });
+  };
+
+  const canEdit = previewCategory === "text" || previewCategory === "code";
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isSharingPopupOpen && e.key !== "Escape") {
@@ -307,6 +319,7 @@ const FilesPreview: React.FC<FilePreviewProps> = ({
       <Overlay onClick={handleBackdropClick}>
         <Container>
           <Header
+            fileId={fileId}
             fileName={fileName}
             files={headerFiles}
             currentIndex={currentIndex}
@@ -318,6 +331,8 @@ const FilesPreview: React.FC<FilePreviewProps> = ({
             handleDownload={handleDownload}
             setShowInfo={setShowInfo}
             showInfo={showInfo}
+            onEdit={handleEdit}
+            canEdit={canEdit}
           />
 
           <ContentWrapper $isTransitioning={isTransitioning}>
@@ -344,6 +359,7 @@ const FilesPreview: React.FC<FilePreviewProps> = ({
     <Overlay onClick={handleBackdropClick}>
       <Container>
         <Header
+          fileId={fileId}
           fileName={fileName}
           files={headerFiles}
           currentIndex={currentIndex}
@@ -355,6 +371,8 @@ const FilesPreview: React.FC<FilePreviewProps> = ({
           handleDownload={handleDownload}
           setShowInfo={setShowInfo}
           showInfo={showInfo}
+          onEdit={handleEdit}
+          canEdit={canEdit}
         />
 
         <ContentWrapper $isTransitioning={isTransitioning}>

@@ -4,12 +4,10 @@ import {
   Share2,
   Link,
   Copy,
-  Move,
   Archive,
   FileArchive,
   Lock,
   Unlock,
-  Image,
   Type,
   FileText,
   Star,
@@ -17,6 +15,7 @@ import {
   RotateCcw,
   Info,
   X,
+  Edit3,
 } from "lucide-react";
 
 import type {
@@ -63,6 +62,52 @@ const registry: Record<FileActionId, FileActionDefinition> = {
     icon: Share2,
     shortcut: "Alt+K S",
     available: (ctx: ActionContext) => !ctx.isRecycleBin,
+  },
+
+  edit: {
+    id: "edit",
+    label: "Edit",
+    icon: Edit3,
+    shortcut: "Alt+K E",
+    available: (ctx: ActionContext) => {
+      if (ctx.selectionCount !== 1) return false;
+      const file = ctx.selectedFiles[0];
+      if (file.isFolder) return false;
+      const mime = (file.mimeType || "").toLowerCase();
+      const ext = (file.extension || "").toLowerCase();
+      const textExt = [
+        "txt",
+        "md",
+        "json",
+        "xml",
+        "csv",
+        "log",
+        "js",
+        "jsx",
+        "ts",
+        "tsx",
+        "py",
+        "java",
+        "c",
+        "cpp",
+        "h",
+        "css",
+        "html",
+        "yml",
+        "yaml",
+        "sh",
+        "bat",
+        "ps1",
+      ];
+
+      const isTextMime =
+        mime.startsWith("text/") ||
+        mime === "application/json" ||
+        mime === "application/xml" ||
+        mime === "application/javascript";
+
+      return isTextMime || textExt.includes(ext);
+    },
   },
 
   getLink: {
@@ -242,8 +287,8 @@ const registry: Record<FileActionId, FileActionDefinition> = {
 };
 
 const CONTEXT_MENU_GROUPS: readonly (readonly FileActionId[])[] = [
-  ["preview", "details"],
-  ["rename", "duplicate", "move"],
+  ["preview", "edit", "details"],
+  ["rename", "duplicate"],
   ["share", "getLink"],
   ["compress", "extract", "optimize", "watermark", "generatePdf"],
   ["lock", "unlock", "star", "unstar"],
@@ -253,7 +298,7 @@ const CONTEXT_MENU_GROUPS: readonly (readonly FileActionId[])[] = [
 const SELECTION_BAR_PRIORITY: readonly FileActionId[] = [
   "download",
   "share",
-  "move",
+  "edit",
   "compress",
   "star",
   "unstar",

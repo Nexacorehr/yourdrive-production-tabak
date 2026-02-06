@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useMemo } from "react";
 import styled, { keyframes } from "styled-components";
 import { MoreVertical, X, Keyboard, Star } from "lucide-react";
+import { useRouter } from "@tanstack/react-router";
 
 import FilesTable, { type FileItem } from "../files_table/FilesTable";
 import { FileContextMenu } from "./FileContextMenu";
@@ -16,7 +17,6 @@ import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import type {
   EnhancedFileItem,
   FileActionId,
-  ActionListItem,
   FileActionDefinition,
 } from "./types/fileActions";
 import SharePopup from "../popups/share/SharePopup";
@@ -104,6 +104,7 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
   }>({ isOpen: false, file: null });
 
   const tableRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   const selectedFileObjects = useMemo(
     () => files.filter((f) => selectedFiles.has(f.id)),
@@ -206,11 +207,19 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
           if (targetFiles[0])
             onFilePreview?.(targetFiles[0] as unknown as FileItem);
           return;
+        case "edit":
+          if (targetFiles[0]) {
+            router.navigate({
+              to: "/edit/$fileId",
+              params: { fileId: targetFiles[0].id },
+            });
+          }
+          return;
       }
 
       await executeAction(actionId, filesAsFileItems);
     },
-    [executeAction, selectedFileObjects, onFilePreview, toggleSharingPopup],
+    [executeAction, selectedFileObjects, onFilePreview, toggleSharingPopup, router],
   );
 
   const handleRename = useCallback(

@@ -999,6 +999,105 @@ filesRoutes.get(
   },
 );
 
+// Edit textual file content (authenticated, text-based files only)
+filesRoutes.post(
+  "/edit/:fileId",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.userId) {
+        return res.status(401).json({
+          success: false,
+          error: "Authentication required",
+        });
+      }
+
+      const { fileId } = req.params;
+      const { content } = req.body as { content?: string };
+
+      if (typeof content !== "string") {
+        return res.status(400).json({
+          success: false,
+          error: "Content must be a string",
+        });
+      }
+
+      const fileResult = await pool.query(
+        `SELECT id, original_name, s3_key, mime_type, size
+         FROM user_files
+         WHERE id = $1 AND user_id = $2`,
+        [fileId, req.userId],
+      );
+
+      if (fileResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "File not found",
+        });
+      }
+
+      const file = fileResult.rows[0] as {
+        id: number;
+        original_name: string;
+        s3_key: string;
+        mime_type: string | null;
+        size: string;
+      };
+
+      const mimeType = (file.mime_type || "").toLowerCase();
+      const isTextFile =
+        mimeType.startsWith("text/") ||
+        mimeType === "application/json" ||
+        mimeType === "application/xml" ||
+        mimeType === "application/javascript";
+
+      if (!isTextFile) {
+        return res.status(400).json({
+          success: false,
+          error: "Only text-based files can be edited",
+        });
+      }
+
+      const effectiveMime =
+        file.mime_type ||
+        inferMimeTypeFromName(file.original_name) ||
+        "text/plain; charset=utf-8";
+
+      // Write updated content back to the same B2/S3 object key
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: file.s3_key,
+          Body: Buffer.from(content, "utf-8"),
+          ContentType: effectiveMime,
+        }),
+      );
+
+      const newSize = Buffer.byteLength(content, "utf-8");
+
+      await pool.query(
+        `UPDATE user_files
+         SET size = $1, updated_at = NOW()
+         WHERE id = $2 AND user_id = $3`,
+        [String(newSize), file.id, req.userId],
+      );
+
+      return res.json({
+        success: true,
+        message: "File updated successfully",
+        fileSize: newSize,
+      });
+    } catch (err) {
+      console.error("Error editing file:", err);
+      return res.status(500).json({
+        success: false,
+        error: "Failed to edit file",
+        details: err instanceof Error ? err.message : "Unknown error",
+      });
+    }
+  },
+);
+
 // Get folder contents
 filesRoutes.get(
   "/folder-contents",

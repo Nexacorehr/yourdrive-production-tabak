@@ -25,7 +25,7 @@ import RecentlyEdited from "../components/dashboard/component/recentlyEdited/Rec
 import Favorited from "../components/dashboard/component/favorited/Favorited";
 import Home from "../components/dashboard/component/main/Home";
 import Settings from "../components/settings/Settings";
-import SharedViewer from "../components/shared/sharedViewer/sharedViewer";
+import SharedViewer from "../components/shared/sharedViewer/SharedViewer";
 import Features from "../components/features/Features";
 import TermsOfService from "../components/termsofservice/TermsOfService";
 import PrivacyPolicy from "../components/privacypolicy/PrivacyPolicy";
@@ -34,6 +34,7 @@ import PersonalStorage from "../components/personalstorage/PersonalStorage";
 import FileSharingEditing from "../components/filesharingediting/FileSharingEditing";
 import SecureStorage from "../components/securestorage/SecureStorage";
 import TeamCollaboration from "../components/teamcollaboration/TeamCollaboration";
+import FileEditor from "../components/shared/fileEditor/FileEditor";
 
 export const ROUTES = {
   HOME: "/",
@@ -59,6 +60,7 @@ export const ROUTES = {
   FAVORITED: "/dashboard/favorited",
   SETTINGS: "/dashboard/settings",
   SHARED_FILE: "/shared/$token",
+  EDIT_FILE: "/edit/$fileId",
 } as const;
 
 function RootComponent() {
@@ -236,6 +238,13 @@ const sharedFileRoute = createRoute({
   component: SharedViewer,
 });
 
+const editFileRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/edit/$fileId",
+  component: FileEditor,
+  beforeLoad: requireAuthentication,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -252,6 +261,7 @@ const routeTree = rootRoute.addChildren([
   featuresRoute,
   helpCenterRoute,
   sharedFileRoute,
+  editFileRoute,
   dashboardRoute.addChildren([
     dashboardIndexRoute,
     yourFilesRoute,
