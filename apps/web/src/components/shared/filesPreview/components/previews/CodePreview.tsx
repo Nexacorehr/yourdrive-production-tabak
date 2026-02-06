@@ -1,361 +1,769 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect, useRef } from "react";
 import styled from "styled-components";
-import { Download, AlertCircle, Loader2, ExternalLink } from "lucide-react";
+import { Download, Search, Copy, Code, Hash, Type } from "lucide-react";
+import Prism from "prismjs";
+import "prismjs/themes/prism.css";
+// Required by several Prism languages (php, etc.) to avoid tokenizePlaceholders crash
+import "prismjs/components/prism-markup-templating";
+import "prismjs/components/prism-javascript";
+import "prismjs/components/prism-typescript";
+import "prismjs/components/prism-jsx";
+import "prismjs/components/prism-tsx";
+import "prismjs/components/prism-python";
+import "prismjs/components/prism-java";
+import "prismjs/components/prism-c";
+import "prismjs/components/prism-cpp";
+import "prismjs/components/prism-csharp";
+import "prismjs/components/prism-go";
+import "prismjs/components/prism-rust";
+import "prismjs/components/prism-php";
+import "prismjs/components/prism-ruby";
+import "prismjs/components/prism-swift";
+import "prismjs/components/prism-kotlin";
+import "prismjs/components/prism-sql";
+import "prismjs/components/prism-bash";
+import "prismjs/components/prism-json";
+import "prismjs/components/prism-yaml";
+import "prismjs/components/prism-markdown";
+import "prismjs/components/prism-css";
+import "prismjs/components/prism-scss";
+import "prismjs/components/prism-markup";
 
-interface CodeEditorProps {
+interface CodePreviewProps {
   url: string;
   fileName: string;
-  onEdit?: (content: string) => void;
+  mimeType?: string;
   onDownload?: () => void;
+  onError?: (error: string) => void;
+  headers?: Record<string, string>;
 }
 
-const Container = styled.div`
+const languageMap: Record<string, string> = {
+  js: "javascript",
+  jsx: "jsx",
+  ts: "typescript",
+  tsx: "tsx",
+  py: "python",
+  java: "java",
+  c: "c",
+  cpp: "cpp",
+  cs: "csharp",
+  go: "go",
+  rs: "rust",
+  php: "php",
+  rb: "ruby",
+  swift: "swift",
+  kt: "kotlin",
+  sql: "sql",
+  sh: "bash",
+  bash: "bash",
+  json: "json",
+  yaml: "yaml",
+  yml: "yaml",
+  md: "markdown",
+  html: "markup",
+  htm: "markup",
+  css: "css",
+  scss: "scss",
+  sass: "scss",
+  xml: "markup",
+};
+
+const CodePreview: React.FC<CodePreviewProps> = ({
+  url,
+  fileName,
+  onDownload,
+  onError,
+  headers,
+}) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [content, setContent] = useState<string>("");
+  const [language, setLanguage] = useState<string>("plaintext");
+  const [showLineNumbers, setShowLineNumbers] = useState(true);
+  const [wordWrap, setWordWrap] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<number[]>([]);
+  const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
+  const [fontSize, setFontSize] = useState(14);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const codeRef = useRef<HTMLDivElement>(null);
+  const preRef = useRef<HTMLPreElement>(null);
+
+  useEffect(() => {
+    if (!searchTerm) {
+      setSearchResults([]);
+      setCurrentSearchIndex(0);
+      return;
+    }
+
+    const lines = content.split("\n");
+    const results: number[] = [];
+
+    lines.forEach((line, index) => {
+      if (line.toLowerCase().includes(searchTerm.toLowerCase())) {
+        results.push(index);
+      }
+    });
+
+    setSearchResults(results);
+    setCurrentSearchIndex(results.length > 0 ? 0 : -1);
+  }, [searchTerm, content]);
+
+  const loadFile = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const response = await fetch(url, { headers });
+      if (!response.ok) {
+        throw new Error(`Failed to load file: ${response.status}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const decoder = new TextDecoder("utf-8");
+      const text = decoder.decode(arrayBuffer);
+
+      setContent(text);
+
+      // Detect language from file extension
+      const extension = fileName.toLowerCase().split(".").pop() || "";
+      const detectedLanguage = languageMap[extension] || "plaintext";
+      setLanguage(detectedLanguage);
+
+      setLoading(false);
+    } catch {
+      setError("Failed to load code file");
+      onError?.("Failed to load code file");
+      setLoading(false);
+    }
+  }, [fileName, headers, onError, url]);
+
+  useEffect(() => {
+    loadFile();
+  }, [loadFile]);
+
+  useEffect(() => {
+    if (content && language !== "plaintext") {
+      try {
+        Prism.highlightAll();
+      } catch (e) {
+        // If Prism crashes on a language definition, fail gracefully
+        console.error("Prism highlight failed:", e);
+      }
+    }
+  }, [content, language, theme]);
+
+  const handleSearchNext = () => {
+    if (searchResults.length === 0) return;
+
+    const nextIndex = (currentSearchIndex + 1) % searchResults.length;
+    setCurrentSearchIndex(nextIndex);
+    scrollToLine(searchResults[nextIndex]);
+  };
+
+  const handleSearchPrev = () => {
+    if (searchResults.length === 0) return;
+
+    const prevIndex =
+      (currentSearchIndex - 1 + searchResults.length) % searchResults.length;
+    setCurrentSearchIndex(prevIndex);
+    scrollToLine(searchResults[prevIndex]);
+  };
+
+  const scrollToLine = (lineNumber: number) => {
+    const lineHeight = fontSize * 1.5;
+    const scrollTop = lineNumber * lineHeight;
+
+    if (preRef.current) {
+      preRef.current.scrollTop = scrollTop - 100;
+    }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(content);
+  };
+
+  const handleSearchKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && e.shiftKey) {
+      handleSearchPrev();
+    } else if (e.key === "Enter") {
+      handleSearchNext();
+    }
+  };
+
+  const handleFontSizeChange = (delta: number) => {
+    setFontSize((prev) => Math.max(8, Math.min(24, prev + delta)));
+  };
+
+  const stats = {
+    lines: content.split("\n").length,
+    characters: content.length,
+  };
+
+  if (loading) {
+    return (
+      <LoadingContainer>
+        <Spinner />
+        <p>Loading code file...</p>
+      </LoadingContainer>
+    );
+  }
+
+  if (error) {
+    return (
+      <ErrorContainer>
+        <ErrorIcon>⚠️</ErrorIcon>
+        <h3>Unable to load code file</h3>
+        <p>{error}</p>
+        <ButtonGroup>
+          <Button onClick={() => window.open(url, "_blank")}>
+            Open in new tab
+          </Button>
+          {onDownload && (
+            <Button $primary onClick={onDownload}>
+              <Download size={16} />
+              Download File
+            </Button>
+          )}
+        </ButtonGroup>
+      </ErrorContainer>
+    );
+  }
+
+  return (
+    <Container $theme={theme}>
+      <Toolbar $theme={theme}>
+        <LeftControls>
+          <LanguageSelector $theme={theme}>
+            <Code size={16} />
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+            >
+              <option value="plaintext">Plain Text</option>
+              <option value="javascript">JavaScript</option>
+              <option value="typescript">TypeScript</option>
+              <option value="python">Python</option>
+              <option value="java">Java</option>
+              <option value="c">C</option>
+              <option value="cpp">C++</option>
+              <option value="csharp">C#</option>
+              <option value="go">Go</option>
+              <option value="rust">Rust</option>
+              <option value="php">PHP</option>
+              <option value="ruby">Ruby</option>
+              <option value="swift">Swift</option>
+              <option value="kotlin">Kotlin</option>
+              <option value="sql">SQL</option>
+              <option value="bash">Bash</option>
+              <option value="json">JSON</option>
+              <option value="yaml">YAML</option>
+              <option value="markdown">Markdown</option>
+              <option value="markup">HTML/XML</option>
+              <option value="css">CSS</option>
+              <option value="scss">SCSS</option>
+            </select>
+          </LanguageSelector>
+
+          <FontSizeControls>
+            <FontSizeButton $theme={theme} onClick={() => handleFontSizeChange(-1)}>
+              -
+            </FontSizeButton>
+            <FontSizeDisplay $theme={theme}>{fontSize}px</FontSizeDisplay>
+            <FontSizeButton $theme={theme} onClick={() => handleFontSizeChange(1)}>
+              +
+            </FontSizeButton>
+          </FontSizeControls>
+
+          <ThemeToggle
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            {theme === "dark" ? "🌙" : "☀️"}
+          </ThemeToggle>
+        </LeftControls>
+
+        <SearchBox $theme={theme}>
+          <Search size={16} />
+          <SearchInput
+            $theme={theme}
+            type="text"
+            placeholder="Search in code..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={handleSearchKeyPress}
+          />
+          {searchTerm && (
+            <SearchResults $theme={theme}>
+              {searchResults.length > 0 ? (
+                <>
+                  {currentSearchIndex + 1} of {searchResults.length}
+                  <SearchNavButton onClick={handleSearchPrev}>
+                    ↑
+                  </SearchNavButton>
+                  <SearchNavButton onClick={handleSearchNext}>
+                    ↓
+                  </SearchNavButton>
+                </>
+              ) : (
+                "No matches"
+              )}
+            </SearchResults>
+          )}
+        </SearchBox>
+
+        <RightControls>
+          <ToolbarButton
+            $theme={theme}
+            $active={showLineNumbers}
+            onClick={() => setShowLineNumbers(!showLineNumbers)}
+          >
+            <Hash size={16} />
+          </ToolbarButton>
+
+          <ToolbarButton
+            $theme={theme}
+            $active={wordWrap}
+            onClick={() => setWordWrap(!wordWrap)}
+          >
+            <Type size={16} />
+          </ToolbarButton>
+
+          <ToolbarButton $theme={theme} onClick={handleCopy}>
+            <Copy size={16} />
+          </ToolbarButton>
+
+          {onDownload && (
+            <ToolbarButton $theme={theme} $primary onClick={onDownload}>
+              <Download size={16} />
+            </ToolbarButton>
+          )}
+        </RightControls>
+      </Toolbar>
+
+      <CodeContainer $theme={theme}>
+        {showLineNumbers && (
+          <LineNumbers $theme={theme} $fontSize={fontSize}>
+            {content.split("\n").map((_, index) => (
+              <LineNumber
+                key={index + 1}
+                $theme={theme}
+                $highlighted={searchResults.includes(index)}
+                $current={searchResults[currentSearchIndex] === index}
+              >
+                {index + 1}
+              </LineNumber>
+            ))}
+          </LineNumbers>
+        )}
+
+        <CodeWrapper
+          ref={codeRef}
+          $hasLineNumbers={showLineNumbers}
+          $fontSize={fontSize}
+          $wordWrap={wordWrap}
+        >
+          <pre
+            ref={preRef}
+            style={{
+              fontSize: `${fontSize}px`,
+              whiteSpace: wordWrap ? "pre-wrap" : "pre",
+              overflowWrap: wordWrap ? "break-word" : "normal",
+            }}
+          >
+            <code className={`language-${language}`}>{content}</code>
+          </pre>
+        </CodeWrapper>
+      </CodeContainer>
+
+      <StatusBar $theme={theme}>
+        <Stats>
+          <StatItem>{stats.lines} lines</StatItem>
+          <StatItem>
+            <span>•</span>
+            {stats.characters} characters
+          </StatItem>
+          <StatItem>
+            <span>•</span>
+            {language}
+          </StatItem>
+        </Stats>
+
+        <FileInfo>{fileName} • UTF-8</FileInfo>
+      </StatusBar>
+    </Container>
+  );
+};
+
+const Container = styled.div<{ $theme: "light" | "dark" }>`
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #e9eef6;
+  background: ${({ $theme }) => ($theme === "dark" ? "#1e1e1e" : "#ffffff")};
 `;
 
-const EditorContainer = styled.div`
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-  margin: 1rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  background: #1e1e1e;
-`;
-
-const TextArea = styled.textarea`
-  width: 100%;
-  height: 100%;
-  padding: 1.5rem;
-  padding-left: 4.5rem;
-  background: #1e1e1e;
-  color: #d4d4d4;
-  font-family: "Consolas", "Monaco", "Courier New", monospace;
-  font-size: 14px;
-  line-height: 1.6;
-  border: none;
-  outline: none;
-  resize: none;
-  tab-size: 2;
-
-  &::selection {
-    background: #264f78;
-  }
-`;
-
-const LineNumbers = styled.div`
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3.5rem;
-  background: #1e1e1e;
-  padding: 1.5rem 0;
-  overflow: hidden;
-  user-select: none;
-  pointer-events: none;
-  border-right: 1px solid #3e3e42;
-`;
-
-const LineNumber = styled.div`
-  height: 1.6em;
-  padding-right: 0.5rem;
-  text-align: right;
-  color: #858585;
-  font-family: "Consolas", "Monaco", "Courier New", monospace;
-  font-size: 14px;
-  line-height: 1.6;
-`;
-
-const CenteredContainer = styled.div`
+const LoadingContainer = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
-  background: #e9eef6;
-  gap: 1rem;
+  gap: 16px;
+  background: #1e1e1e;
+  color: white;
 `;
 
-const IconWrapper = styled.div<{ $color?: string }>`
-  width: 3rem;
-  height: 3rem;
-  color: ${(props) => props.$color || "#5f6368"};
-
-  svg {
-    width: 100%;
-    height: 100%;
-  }
-
-  &.spinning svg {
-    animation: spin 1s linear infinite;
-  }
+const Spinner = styled.div`
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #1a73e8;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 
   @keyframes spin {
-    from {
+    0% {
       transform: rotate(0deg);
     }
-    to {
+    100% {
       transform: rotate(360deg);
     }
   }
 `;
 
-const Title = styled.p`
-  font-size: 1.125rem;
-  font-weight: 500;
-  margin: 0;
-  color: #202124;
+const ErrorContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+  gap: 16px;
+  background: white;
 `;
 
-const Subtitle = styled.p`
-  font-size: 0.875rem;
-  color: #5f6368;
-  margin: 0.5rem 0;
-  text-align: center;
-  max-width: 400px;
+const ErrorIcon = styled.div`
+  font-size: 48px;
+  margin-bottom: 8px;
 `;
 
 const ButtonGroup = styled.div`
   display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: 12px;
+  margin-top: 16px;
 `;
 
 const Button = styled.button<{ $primary?: boolean }>`
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  font-size: 0.875rem;
-  font-weight: 500;
+  gap: 8px;
+  padding: 10px 20px;
   border: none;
-  border-radius: 0.5rem;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
 
-  ${(props) =>
-    props.$primary
+  ${({ $primary }) =>
+    $primary
       ? `
-    color: white;
     background: #1a73e8;
+    color: white;
     
     &:hover {
-      background: #1557b0;
-      box-shadow: 0 2px 8px rgba(26, 115, 232, 0.3);
+      background: #0d62d9;
     }
   `
       : `
-    color: #202124;
     background: white;
+    color: #202124;
     border: 1px solid #dadce0;
     
     &:hover {
       background: #f8f9fa;
     }
   `}
+`;
 
-  &:active {
-    transform: scale(0.98);
-  }
+const Toolbar = styled.div<{ $theme: "light" | "dark" }>`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: ${({ $theme }) => ($theme === "dark" ? "#2d2d30" : "#f8f9fa")};
+  border-bottom: 1px solid
+    ${({ $theme }) => ($theme === "dark" ? "#3e3e42" : "#dadce0")};
+  gap: 12px;
+`;
 
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+const LeftControls = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+`;
+
+const LanguageSelector = styled.div<{ $theme: "light" | "dark" }>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  select {
+    background: ${({ $theme }) => ($theme === "dark" ? "#2d2d30" : "white")};
+    border: 1px solid ${({ $theme }) => ($theme === "dark" ? "#3e3e42" : "#dadce0")};
+    color: ${({ $theme }) => ($theme === "dark" ? "#cccccc" : "#202124")};
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+
+    &:focus {
+      outline: none;
+    }
   }
 `;
 
-const CorsWarning = styled.div`
-  background: white;
-  border: 1px solid #dadce0;
-  border-radius: 0.5rem;
-  padding: 1rem;
-  max-width: 500px;
-  margin-top: 0.5rem;
+const FontSizeControls = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
 `;
 
-const WarningTitle = styled.div`
-  color: #202124;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
+const FontSizeButton = styled.button<{ $theme: "light" | "dark" }>`
+  width: 24px;
+  height: 24px;
+  background: ${({ $theme }) => ($theme === "dark" ? "#3e3e42" : "white")};
+  border: none;
+  color: ${({ $theme }) => ($theme === "dark" ? "#cccccc" : "#202124")};
+  border: 1px solid ${({ $theme }) => ($theme === "dark" ? "#3e3e42" : "#dadce0")};
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: ${({ $theme }) => ($theme === "dark" ? "#4a4a4f" : "#f8f9fa")};
+  }
 `;
 
-const WarningText = styled.div`
-  color: #5f6368;
-  font-size: 0.875rem;
-  line-height: 1.5;
+const FontSizeDisplay = styled.span<{ $theme: "light" | "dark" }>`
+  font-size: 12px;
+  color: ${({ $theme }) => ($theme === "dark" ? "#cccccc" : "#5f6368")};
+  min-width: 40px;
+  text-align: center;
 `;
 
-export default function CodeEditor({
-  url,
-  fileName,
-  onEdit,
-  onDownload,
-}: CodeEditorProps) {
-  const [content, setContent] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isCorsError, setIsCorsError] = useState(false);
-  const [isDirty, setIsDirty] = useState(false);
+const ThemeToggle = styled.button`
+  background: none;
+  border: none;
+  color: #cccccc;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
 
-  useEffect(() => {
-    loadFile();
-  }, [url]);
+  &:hover {
+    opacity: 0.8;
+  }
+`;
 
-  const loadFile = async () => {
-    setLoading(true);
-    setError(null);
-    setIsCorsError(false);
+const SearchBox = styled.div<{ $theme: "light" | "dark" }>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: ${({ $theme }) => ($theme === "dark" ? "#3e3e42" : "white")};
+  border: 1px solid
+    ${({ $theme }) => ($theme === "dark" ? "#4a4a4f" : "#dadce0")};
+  border-radius: 4px;
+  flex: 1;
+  max-width: 400px;
+`;
 
-    try {
-      const response = await fetch(url, {
-        mode: "cors",
-        credentials: "omit",
-      });
+const SearchInput = styled.input<{ $theme: "light" | "dark" }>`
+  border: none;
+  outline: none;
+  flex: 1;
+  font-size: 12px;
+  background: transparent;
+  color: ${({ $theme }) => ($theme === "dark" ? "#cccccc" : "#202124")};
 
-      if (!response.ok) {
-        throw new Error(
-          `Failed to load file: ${response.status} ${response.statusText}`,
-        );
-      }
+  &::placeholder {
+    color: #9aa0a6;
+  }
+`;
 
-      // Proper UTF-8 decoding to support special characters like č, ć, ž, š, đ
-      const arrayBuffer = await response.arrayBuffer();
-      const decoder = new TextDecoder("utf-8");
-      const text = decoder.decode(arrayBuffer);
+const SearchResults = styled.div<{ $theme: "light" | "dark" }>`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: ${({ $theme }) => ($theme === "dark" ? "#9aa0a6" : "#5f6368")};
+  white-space: nowrap;
+`;
 
-      setContent(text);
-      setLoading(false);
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to load file";
+const SearchNavButton = styled.button`
+  background: none;
+  border: none;
+  color: #9aa0a6;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 4px;
 
-      if (
-        errorMessage.includes("CORS") ||
-        errorMessage.includes("NetworkError") ||
-        (err instanceof TypeError && err.message.includes("Failed to fetch"))
-      ) {
-        setIsCorsError(true);
-        setError("Unable to load file due to CORS restrictions");
-      } else {
-        setError(errorMessage);
-      }
+  &:hover {
+    color: #cccccc;
+  }
+`;
 
-      setLoading(false);
-    }
-  };
+const RightControls = styled.div`
+  display: flex;
+  gap: 4px;
+`;
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newContent = e.target.value;
-    setContent(newContent);
-    setIsDirty(true);
-    onEdit?.(newContent);
-  };
+const ToolbarButton = styled.button<{
+  $theme: "light" | "dark";
+  $active?: boolean;
+  $primary?: boolean;
+}>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid
+    ${({ $theme, $active, $primary }) =>
+      $primary
+        ? "#1a73e8"
+        : $active
+          ? "#1a73e8"
+          : $theme === "dark"
+            ? "#3e3e42"
+            : "#dadce0"};
+  background: ${({ $theme, $active, $primary }) =>
+    $primary
+      ? "#1a73e8"
+      : $active
+        ? $theme === "dark"
+          ? "#1a73e8"
+          : "#e8f0fe"
+        : "transparent"};
+  color: ${({ $theme, $active, $primary }) =>
+    $primary
+      ? "white"
+      : $active
+        ? $theme === "dark"
+          ? "white"
+          : "#1a73e8"
+        : $theme === "dark"
+          ? "#cccccc"
+          : "#202124"};
+  border-radius: 4px;
+  cursor: pointer;
 
-  const handleSave = () => {
-    if (onEdit && isDirty) {
-      onEdit(content);
-      setIsDirty(false);
-    }
-  };
+  &:hover {
+    background: ${({ $theme, $active, $primary }) =>
+      $primary
+        ? "#0d62d9"
+        : $active
+          ? $theme === "dark"
+            ? "#0d62d9"
+            : "#d2e3fc"
+          : $theme === "dark"
+            ? "#3e3e42"
+            : "#f8f9fa"};
+  }
+`;
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const target = e.target as HTMLTextAreaElement;
-      const start = target.selectionStart;
-      const end = target.selectionEnd;
-      const newContent =
-        content.substring(0, start) + "  " + content.substring(end);
-      setContent(newContent);
-      setTimeout(() => {
-        target.selectionStart = target.selectionEnd = start + 2;
-      }, 0);
-    }
+const CodeContainer = styled.div<{ $theme: "light" | "dark" }>`
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  background: ${({ $theme }) => ($theme === "dark" ? "#1e1e1e" : "#ffffff")};
+`;
 
-    if ((e.metaKey || e.ctrlKey) && e.key === "s") {
-      e.preventDefault();
-      handleSave();
-    }
-  };
+const LineNumbers = styled.div<{ $theme: "light" | "dark"; $fontSize: number }>`
+  background: ${({ $theme }) => ($theme === "dark" ? "#1e1e1e" : "#f8f9fa")};
+  border-right: 1px solid
+    ${({ $theme }) => ($theme === "dark" ? "#2d2d30" : "#dadce0")};
+  padding: 8px 4px 8px 12px;
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-size: ${({ $fontSize }) => $fontSize}px;
+  line-height: ${({ $fontSize }) => $fontSize * 1.5}px;
+  color: ${({ $theme }) => ($theme === "dark" ? "#858585" : "#5f6368")};
+  text-align: right;
+  overflow-y: auto;
+  user-select: none;
+`;
 
-  const handleOpenInNewTab = () => {
-    window.open(url, "_blank");
-  };
+const LineNumber = styled.div<{
+  $theme: "light" | "dark";
+  $highlighted: boolean;
+  $current: boolean;
+}>`
+  padding: 0 4px;
+  background: ${({ $highlighted, $current, $theme }) => {
+    if ($current) return "#1a73e8";
+    if ($highlighted) return $theme === "dark" ? "#2a2d2e" : "#fef7e0";
+    return "transparent";
+  }};
+  color: ${({ $current }) => ($current ? "white" : "inherit")};
+  border-radius: 2px;
+  margin-bottom: 1px;
+`;
 
-  const lineCount = content.split("\n").length;
+const CodeWrapper = styled.div<{
+  $hasLineNumbers: boolean;
+  $fontSize: number;
+  $wordWrap: boolean;
+}>`
+  flex: 1;
+  overflow: auto;
+  position: relative;
 
-  if (loading) {
-    return (
-      <Container>
-        <CenteredContainer>
-          <IconWrapper className="spinning">
-            <Loader2 />
-          </IconWrapper>
-          <Subtitle>Loading file...</Subtitle>
-        </CenteredContainer>
-      </Container>
-    );
+  pre {
+    margin: 0;
+    padding: 8px 12px;
+    overflow: visible;
+    background: transparent !important;
   }
 
-  if (error) {
-    return (
-      <Container>
-        <CenteredContainer>
-          <IconWrapper $color="#d93025">
-            <AlertCircle />
-          </IconWrapper>
-          <Title>Unable to preview file</Title>
-          <Subtitle>{error}</Subtitle>
-
-          {isCorsError && (
-            <CorsWarning>
-              <WarningTitle>CORS Restriction</WarningTitle>
-              <WarningText>
-                The file storage service doesn't allow direct preview in the
-                browser. You can download the file to view it locally or open it
-                in a new tab.
-              </WarningText>
-            </CorsWarning>
-          )}
-
-          <ButtonGroup>
-            <Button $primary onClick={handleOpenInNewTab}>
-              <ExternalLink size={16} />
-              Open in new tab
-            </Button>
-            {onDownload && (
-              <Button onClick={onDownload}>
-                <Download size={16} />
-                Download file
-              </Button>
-            )}
-          </ButtonGroup>
-        </CenteredContainer>
-      </Container>
-    );
+  code {
+    font-family: "Consolas", "Monaco", "Courier New", monospace;
+    line-height: ${({ $fontSize }) => $fontSize * 1.5}px;
+    tab-size: 2;
   }
+`;
 
-  return (
-    <Container>
-      <EditorContainer>
-        <LineNumbers>
-          {Array.from({ length: lineCount }, (_, i) => (
-            <LineNumber key={i + 1}>{i + 1}</LineNumber>
-          ))}
-        </LineNumbers>
-        <TextArea
-          value={content}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          readOnly={!onEdit}
-          spellCheck={false}
-        />
-      </EditorContainer>
-    </Container>
-  );
-}
+const StatusBar = styled.div<{ $theme: "light" | "dark" }>`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 12px;
+  background: ${({ $theme }) => ($theme === "dark" ? "#007acc" : "#f8f9fa")};
+  border-top: 1px solid
+    ${({ $theme }) => ($theme === "dark" ? "#3e3e42" : "#dadce0")};
+  font-size: 11px;
+  color: ${({ $theme }) => ($theme === "dark" ? "#ffffff" : "#5f6368")};
+  min-height: 22px;
+`;
+
+const Stats = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+`;
+
+const StatItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+`;
+
+const FileInfo = styled.div`
+  font-style: italic;
+  opacity: 0.8;
+`;
+
+export default CodePreview;

@@ -1,67 +1,127 @@
 import React, { useState, useRef, useEffect } from "react";
 import styled from "styled-components";
+import {
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Download,
+  RotateCcw,
+  SkipBack,
+  SkipForward,
+} from "lucide-react";
 
 interface AudioPreviewProps {
   url: string;
   fileName: string;
-  fileType?: string;
-  onClose?: () => void;
-  onEdit?: () => void;
+  mimeType?: string;
   onDownload?: () => void;
-  onShare?: () => void;
+  onError?: (error: string) => void;
+  maxSize?: number;
+  headers?: Record<string, string>;
 }
 
-const AudioPreview: React.FC<AudioPreviewProps> = ({ url, fileName }) => {
+const AudioPreview: React.FC<AudioPreviewProps> = ({
+  url,
+  fileName,
+  onDownload,
+  onError,
+  maxSize = 50 * 1024 * 1024,
+  headers,
+}) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [isLooping, setIsLooping] = useState(false);
-  const animationFrameRef = useRef<number | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const dataArrayRef = useRef<Uint8Array | null>(null);
+  const [visualizerEnabled, setVisualizerEnabled] = useState(true);
 
-  const drawWaveform = () => {
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleLoadedData = () => {
+      setLoading(false);
+      setDuration(audio.duration);
+      if (visualizerEnabled) {
+        initVisualizer();
+      }
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleEnded = () => setIsPlaying(false);
+
+    const handleError = () => {
+      setError("Failed to load audio. The format may not be supported.");
+      onError?.("Failed to load audio");
+      setLoading(false);
+    };
+
+    audio.addEventListener("loadeddata", handleLoadedData);
+    audio.addEventListener("timeupdate", handleTimeUpdate);
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("pause", handlePause);
+    audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("error", handleError);
+
+    return () => {
+      audio.removeEventListener("loadeddata", handleLoadedData);
+      audio.removeEventListener("timeupdate", handleTimeUpdate);
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("pause", handlePause);
+      audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("error", handleError);
+    };
+  }, [onError, visualizerEnabled]);
+
+  const initVisualizer = () => {
+    if (!audioRef.current || !canvasRef.current) return;
+
+    const audioContext = new (
+      window.AudioContext || (window as any).webkitAudioContext
+    )();
+    const analyser = audioContext.createAnalyser();
+    const source = audioContext.createMediaElementSource(audioRef.current);
+
+    source.connect(analyser);
+    analyser.connect(audioContext.destination);
+
+    analyser.fftSize = 256;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
     const canvas = canvasRef.current;
-    const analyser = analyserRef.current;
-    const dataArray = dataArrayRef.current;
-
-    if (!canvas || !analyser || !dataArray) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const canvasCtx = canvas.getContext("2d");
+    if (!canvasCtx) return;
 
     const draw = () => {
-      animationFrameRef.current = requestAnimationFrame(draw);
+      if (!isPlaying) return;
 
+      requestAnimationFrame(draw);
       analyser.getByteFrequencyData(dataArray);
 
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      canvasCtx.fillStyle = "rgb(0, 0, 0)";
+      canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
 
-      const barWidth = (canvas.width / dataArray.length) * 2.5;
+      const barWidth = (canvas.width / bufferLength) * 2.5;
       let barHeight;
       let x = 0;
 
-      for (let i = 0; i < dataArray.length; i++) {
-        barHeight = (dataArray[i] / 255) * canvas.height * 0.8;
+      for (let i = 0; i < bufferLength; i++) {
+        barHeight = dataArray[i] / 2;
 
-        const gradient = ctx.createLinearGradient(
-          0,
-          canvas.height - barHeight,
-          0,
-          canvas.height,
-        );
-        gradient.addColorStop(0, "#1a73e8");
-        gradient.addColorStop(1, "#4285f4");
-
-        ctx.fillStyle = gradient;
-        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+        canvasCtx.fillStyle = `rgb(${barHeight + 100}, 50, 150)`;
+        canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
 
         x += barWidth + 1;
       }
@@ -70,276 +130,174 @@ const AudioPreview: React.FC<AudioPreviewProps> = ({ url, fileName }) => {
     draw();
   };
 
-  const togglePlayPause = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
+  const togglePlay = () => {
+    if (!audioRef.current) return;
 
-    if (audio.paused) {
-      audio.play();
+    if (isPlaying) {
+      audioRef.current.pause();
     } else {
-      audio.pause();
+      audioRef.current.play();
     }
   };
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const time = parseFloat(e.target.value);
-    audio.currentTime = time;
-    setCurrentTime(time);
+  const handleSeek = (value: number) => {
+    if (!audioRef.current) return;
+    audioRef.current.currentTime = value;
+    setCurrentTime(value);
   };
 
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const newVolume = parseFloat(e.target.value);
-    audio.volume = newVolume;
-    setVolume(newVolume);
-    if (newVolume === 0) {
-      setIsMuted(true);
-    } else if (isMuted) {
-      setIsMuted(false);
-    }
+  const handleVolumeChange = (value: number) => {
+    if (!audioRef.current) return;
+    audioRef.current.volume = value;
+    setVolume(value);
+    setIsMuted(value === 0);
   };
 
   const toggleMute = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    audio.muted = !audio.muted;
+    if (!audioRef.current) return;
+    audioRef.current.muted = !isMuted;
     setIsMuted(!isMuted);
   };
 
-  const changePlaybackRate = (rate: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    audio.playbackRate = rate;
-    setPlaybackRate(rate);
-  };
-
-  const toggleLoop = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    audio.loop = !audio.loop;
-    setIsLooping(!isLooping);
+  const changePlaybackRate = () => {
+    if (!audioRef.current) return;
+    const rates = [0.5, 0.75, 1, 1.25, 1.5, 2];
+    const currentIndex = rates.indexOf(playbackRate);
+    const nextIndex = (currentIndex + 1) % rates.length;
+    const newRate = rates[nextIndex];
+    audioRef.current.playbackRate = newRate;
+    setPlaybackRate(newRate);
   };
 
   const skipBackward = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = Math.max(0, audio.currentTime - 10);
+    if (!audioRef.current) return;
+    audioRef.current.currentTime = Math.max(0, currentTime - 10);
   };
 
   const skipForward = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.currentTime = Math.min(duration, audio.currentTime + 10);
+    if (!audioRef.current) return;
+    audioRef.current.currentTime = Math.min(duration, currentTime + 10);
   };
 
   const formatTime = (seconds: number): string => {
-    if (isNaN(seconds)) return "0:00";
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+  if (loading) {
+    return (
+      <LoadingContainer>
+        <Spinner />
+        <p>Loading audio...</p>
+      </LoadingContainer>
+    );
+  }
 
-    const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
-    const handleDurationChange = () => setDuration(audio.duration);
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
-    const handleVolumeChange = () => {
-      setVolume(audio.volume);
-      setIsMuted(audio.muted);
-    };
-
-    audio.addEventListener("timeupdate", handleTimeUpdate);
-    audio.addEventListener("durationchange", handleDurationChange);
-    audio.addEventListener("play", handlePlay);
-    audio.addEventListener("pause", handlePause);
-    audio.addEventListener("volumechange", handleVolumeChange);
-
-    return () => {
-      audio.removeEventListener("timeupdate", handleTimeUpdate);
-      audio.removeEventListener("durationchange", handleDurationChange);
-      audio.removeEventListener("play", handlePlay);
-      audio.removeEventListener("pause", handlePause);
-      audio.removeEventListener("volumechange", handleVolumeChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    const initAudioContext = async () => {
-      const audio = audioRef.current;
-      const canvas = canvasRef.current;
-      if (!audio || !canvas) return;
-
-      try {
-        const AudioContext =
-          window.AudioContext || (window as any).webkitAudioContext;
-        const audioContext = new AudioContext();
-        const analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-
-        const source = audioContext.createMediaElementSource(audio);
-        source.connect(analyser);
-        analyser.connect(audioContext.destination);
-
-        audioContextRef.current = audioContext;
-        analyserRef.current = analyser;
-        dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
-
-        drawWaveform();
-      } catch (error) {
-        console.error("Audio context error:", error);
-      }
-    };
-
-    initAudioContext();
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
-    };
-  }, []);
+  if (error) {
+    return (
+      <ErrorContainer>
+        <ErrorIcon>⚠️</ErrorIcon>
+        <h3>Unable to play audio</h3>
+        <p>{error}</p>
+        <ButtonGroup>
+          <Button onClick={() => window.open(url, "_blank")}>
+            Open in new tab
+          </Button>
+          {onDownload && (
+            <Button $primary onClick={onDownload}>
+              <Download size={16} />
+              Download Audio
+            </Button>
+          )}
+        </ButtonGroup>
+      </ErrorContainer>
+    );
+  }
 
   return (
     <Container>
-      <audio ref={audioRef} src={url} crossOrigin="anonymous" />
+      <Audio ref={audioRef} src={url} preload="metadata" />
 
-      <WaveformContainer>
-        <WaveformCanvas ref={canvasRef} width={800} height={200} />
-      </WaveformContainer>
+      <VisualizerContainer>
+        <VisualizerCanvas
+          ref={canvasRef}
+          width={800}
+          height={200}
+          $visible={visualizerEnabled}
+        />
 
-      <ControlsSection>
-        <ProgressContainer>
-          <ProgressBar
-            type="range"
-            min="0"
-            max={duration || 0}
-            value={currentTime}
-            onChange={handleSeek}
-            step="0.1"
-          />
-          <TimeRow>
-            <TimeDisplay>{formatTime(currentTime)}</TimeDisplay>
-            <TimeDisplay>{formatTime(duration)}</TimeDisplay>
-          </TimeRow>
-        </ProgressContainer>
+        {!visualizerEnabled && (
+          <Placeholder>
+            <MusicIcon>🎵</MusicIcon>
+            <FileName>{fileName}</FileName>
+          </Placeholder>
+        )}
+      </VisualizerContainer>
 
-        <MainControls>
-          <SecondaryButton onClick={skipBackward} title="Skip back 10s">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M11.99 5V1l-5 5 5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6h-2c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8zm-1.1 11h-.85v-3.26l-1.01.31v-.69l1.77-.63h.09V16zm4.28-1.76c0 .32-.03.6-.1.82s-.17.42-.29.57-.28.26-.45.33-.37.1-.59.1-.41-.03-.59-.1-.33-.18-.46-.33-.23-.34-.3-.57-.11-.5-.11-.82v-.74c0-.32.03-.6.1-.82s.17-.42.29-.57.28-.26.45-.33.37-.1.59-.1.41.03.59.1.33.18.46.33.23.34.3.57.11.5.11.82v.74zm-.85-.86c0-.19-.01-.35-.04-.48s-.07-.23-.12-.31-.11-.14-.19-.17-.16-.05-.25-.05-.18.02-.25.05-.14.09-.19.17-.09.18-.12.31-.04.29-.04.48v.97c0 .19.01.35.04.48s.07.24.12.32.11.14.19.17.16.05.25.05.18-.02.25-.05.14-.09.19-.17.09-.19.11-.32.04-.29.04-.48v-.97z"
-                fill="currentColor"
-              />
-            </svg>
-          </SecondaryButton>
+      <Controls>
+        <PlaybackInfo>
+          <CurrentTime>{formatTime(currentTime)}</CurrentTime>
+          <FileInfo>{fileName}</FileInfo>
+          <Duration>{formatTime(duration)}</Duration>
+        </PlaybackInfo>
 
-          <PlayButton onClick={togglePlayPause}>
-            {isPlaying ? (
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" fill="currentColor" />
-              </svg>
-            ) : (
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-                <path d="M8 5v14l11-7z" fill="currentColor" />
-              </svg>
+        <SeekBar
+          type="range"
+          min="0"
+          max={duration}
+          value={currentTime}
+          onChange={(e) => handleSeek(parseFloat(e.target.value))}
+        />
+
+        <ControlButtons>
+          <ButtonGroup>
+            <ControlButton onClick={skipBackward}>
+              <SkipBack size={20} />
+            </ControlButton>
+
+            <PlayButton onClick={togglePlay}>
+              {isPlaying ? <Pause size={24} /> : <Play size={24} />}
+            </PlayButton>
+
+            <ControlButton onClick={skipForward}>
+              <SkipForward size={20} />
+            </ControlButton>
+          </ButtonGroup>
+
+          <ButtonGroup>
+            <ControlButton onClick={toggleMute}>
+              {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+            </ControlButton>
+
+            <VolumeSlider
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              value={isMuted ? 0 : volume}
+              onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+            />
+
+            <PlaybackRateButton onClick={changePlaybackRate}>
+              {playbackRate}x
+            </PlaybackRateButton>
+
+            <ToggleButton
+              onClick={() => setVisualizerEnabled(!visualizerEnabled)}
+              $active={visualizerEnabled}
+            >
+              Visualizer
+            </ToggleButton>
+
+            {onDownload && (
+              <ControlButton onClick={onDownload}>
+                <Download size={20} />
+              </ControlButton>
             )}
-          </PlayButton>
-
-          <SecondaryButton onClick={skipForward} title="Skip forward 10s">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M15.55 5.55L11 1v3.07C7.06 4.56 4 7.92 4 12s3.05 7.44 7 7.93v-2.02c-2.84-.48-5-2.94-5-5.91s2.16-5.43 5-5.91V10l4.55-4.45zM19.93 11c-.17-1.39-.72-2.73-1.62-3.89l-1.42 1.42c.54.75.88 1.6 1.02 2.47h2.02zM13 17.9v2.02c1.39-.17 2.74-.71 3.9-1.61l-1.44-1.44c-.75.54-1.59.89-2.46 1.03zm3.89-2.42l1.42 1.41c.9-1.16 1.45-2.5 1.62-3.89h-2.02c-.14.87-.48 1.72-1.02 2.48z"
-                fill="currentColor"
-              />
-            </svg>
-          </SecondaryButton>
-        </MainControls>
-
-        <BottomControls>
-          <LeftGroup>
-            <VolumeContainer>
-              <IconButton onClick={toggleMute}>
-                {isMuted || volume === 0 ? (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                ) : (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                )}
-              </IconButton>
-              <VolumeSlider
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={isMuted ? 0 : volume}
-                onChange={handleVolumeChange}
-              />
-            </VolumeContainer>
-
-            <SpeedControl>
-              <SpeedButton
-                onClick={() => changePlaybackRate(0.5)}
-                $active={playbackRate === 0.5}
-              >
-                0.5x
-              </SpeedButton>
-              <SpeedButton
-                onClick={() => changePlaybackRate(1)}
-                $active={playbackRate === 1}
-              >
-                1x
-              </SpeedButton>
-              <SpeedButton
-                onClick={() => changePlaybackRate(1.5)}
-                $active={playbackRate === 1.5}
-              >
-                1.5x
-              </SpeedButton>
-              <SpeedButton
-                onClick={() => changePlaybackRate(2)}
-                $active={playbackRate === 2}
-              >
-                2x
-              </SpeedButton>
-            </SpeedControl>
-          </LeftGroup>
-
-          <RightGroup>
-            <IconButton onClick={toggleLoop} title="Loop" $active={isLooping}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"
-                  fill="currentColor"
-                />
-              </svg>
-            </IconButton>
-          </RightGroup>
-        </BottomControls>
-      </ControlsSection>
+          </ButtonGroup>
+        </ControlButtons>
+      </Controls>
     </Container>
   );
 };
@@ -349,225 +307,301 @@ const Container = styled.div`
   height: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: #e9eef6;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 40px;
 `;
 
-const WaveformContainer = styled.div`
-  position: relative;
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  margin-bottom: 32px;
+const LoadingContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+  color: white;
 `;
 
-const WaveformCanvas = styled.canvas`
-  display: block;
+const Spinner = styled.div`
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+`;
+
+const ErrorContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+  gap: 16px;
+  background: white;
   border-radius: 8px;
 `;
 
-const ControlsSection = styled.div`
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  width: 100%;
-  max-width: 800px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+const ErrorIcon = styled.div`
+  font-size: 48px;
+  margin-bottom: 8px;
 `;
 
-const ProgressContainer = styled.div`
-  margin-bottom: 24px;
+const ButtonGroup = styled.div`
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
 `;
 
-const ProgressBar = styled.input`
-  width: 100%;
-  height: 6px;
-  background: #e0e0e0;
-  border-radius: 3px;
-  outline: none;
+const Button = styled.button<{ $primary?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  appearance: none;
+  transition: all 0.2s;
+
+  ${({ $primary }) =>
+    $primary
+      ? `
+    background: #1a73e8;
+    color: white;
+    
+    &:hover {
+      background: #0d62d9;
+    }
+  `
+      : `
+    background: white;
+    color: #202124;
+    border: 1px solid #dadce0;
+    
+    &:hover {
+      background: #f8f9fa;
+    }
+  `}
+`;
+
+const Audio = styled.audio`
+  display: none;
+`;
+
+const VisualizerContainer = styled.div`
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  margin-bottom: 30px;
+  overflow: hidden;
+  position: relative;
+`;
+
+const VisualizerCanvas = styled.canvas<{ $visible: boolean }>`
+  width: 100%;
+  height: 100%;
+  display: ${({ $visible }) => ($visible ? "block" : "none")};
+`;
+
+const Placeholder = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: white;
+`;
+
+const MusicIcon = styled.div`
+  font-size: 64px;
+  opacity: 0.8;
+`;
+
+const FileName = styled.div`
+  font-size: 18px;
+  font-weight: 500;
+  opacity: 0.9;
+  text-align: center;
+  max-width: 400px;
+  word-break: break-word;
+`;
+
+const Controls = styled.div`
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+`;
+
+const PlaybackInfo = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+  font-size: 14px;
+`;
+
+const CurrentTime = styled.div`
+  min-width: 50px;
+`;
+
+const FileInfo = styled.div`
+  flex: 1;
+  text-align: center;
+  font-weight: 500;
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 20px;
+`;
+
+const Duration = styled.div`
+  min-width: 50px;
+  text-align: right;
+`;
+
+const SeekBar = styled.input`
+  width: 100%;
+  height: 4px;
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  cursor: pointer;
 
   &::-webkit-slider-thumb {
-    appearance: none;
+    -webkit-appearance: none;
     width: 16px;
     height: 16px;
-    background: #1a73e8;
     border-radius: 50%;
+    background: white;
     cursor: pointer;
   }
 
   &::-moz-range-thumb {
     width: 16px;
     height: 16px;
-    background: #1a73e8;
     border-radius: 50%;
+    background: white;
     cursor: pointer;
     border: none;
   }
 `;
 
-const TimeRow = styled.div`
+const ControlButtons = styled.div`
   display: flex;
   justify-content: space-between;
-  margin-top: 8px;
-`;
-
-const TimeDisplay = styled.span`
-  color: #5f6368;
-  font-size: 12px;
-  font-family: monospace;
-`;
-
-const MainControls = styled.div`
-  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
-  margin-bottom: 20px;
 `;
 
 const PlayButton = styled.button`
-  width: 64px;
-  height: 64px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
-  background: #1a73e8;
+  background: white;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #764ba2;
+  transition: all 0.2s;
+
+  &:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+`;
+
+const ControlButton = styled.button`
+  background: none;
+  border: none;
   color: white;
-  border: none;
   cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.3);
 
   &:hover {
-    background: #1557b0;
-    transform: scale(1.05);
-  }
-
-  &:active {
-    transform: scale(0.95);
-  }
-`;
-
-const SecondaryButton = styled.button`
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: transparent;
-  color: #5f6368;
-  border: 1px solid #e0e0e0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-
-  &:hover {
-    background: #f8f9fa;
-    color: #202124;
-  }
-`;
-
-const BottomControls = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-`;
-
-const LeftGroup = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 24px;
-`;
-
-const RightGroup = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`;
-
-const VolumeContainer = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`;
-
-const IconButton = styled.button<{ $active?: boolean }>`
-  background: ${(props) => (props.$active ? "#e8f0fe" : "transparent")};
-  border: none;
-  color: ${(props) => (props.$active ? "#1a73e8" : "#5f6368")};
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-
-  &:hover {
-    background: #f8f9fa;
-    color: #1a73e8;
+    background: rgba(255, 255, 255, 0.1);
   }
 `;
 
 const VolumeSlider = styled.input`
-  width: 100px;
+  width: 80px;
   height: 4px;
-  background: #e0e0e0;
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.3);
   border-radius: 2px;
-  outline: none;
   cursor: pointer;
-  appearance: none;
 
   &::-webkit-slider-thumb {
-    appearance: none;
+    -webkit-appearance: none;
     width: 12px;
     height: 12px;
-    background: #1a73e8;
     border-radius: 50%;
+    background: white;
     cursor: pointer;
   }
 
   &::-moz-range-thumb {
     width: 12px;
     height: 12px;
-    background: #1a73e8;
     border-radius: 50%;
+    background: white;
     cursor: pointer;
     border: none;
   }
 `;
 
-const SpeedControl = styled.div`
-  display: flex;
-  gap: 4px;
-  background: #f1f3f4;
-  padding: 4px;
-  border-radius: 20px;
-`;
-
-const SpeedButton = styled.button<{ $active: boolean }>`
-  background: ${(props) => (props.$active ? "white" : "transparent")};
+const PlaybackRateButton = styled.button`
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
   border: none;
-  color: ${(props) => (props.$active ? "#1a73e8" : "#5f6368")};
   padding: 6px 12px;
-  border-radius: 16px;
-  cursor: pointer;
+  border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
-  transition: all 0.2s;
-  box-shadow: ${(props) =>
-    props.$active ? "0 1px 3px rgba(0,0,0,0.1)" : "none"};
+  cursor: pointer;
 
   &:hover {
-    background: white;
-    color: #1a73e8;
+    background: rgba(255, 255, 255, 0.3);
+  }
+`;
+
+const ToggleButton = styled.button<{ $active: boolean }>`
+  background: ${({ $active }) =>
+    $active ? "white" : "rgba(255, 255, 255, 0.2)"};
+  color: ${({ $active }) => ($active ? "#764ba2" : "white")};
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ $active }) =>
+      $active ? "rgba(255, 255, 255, 0.9)" : "rgba(255, 255, 255, 0.3)"};
   }
 `;
 

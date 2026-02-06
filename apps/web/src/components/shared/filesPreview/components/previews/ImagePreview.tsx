@@ -9,12 +9,12 @@ export interface ImagePreviewProps {
     fileType?: string;
     mimeType?: string;
   }>;
-  currentIndex: number;
-  onNavigate: (index: number) => void;
+  currentIndex?: number;
+  onNavigate?: (index: number) => void;
   url: string;
   fileName: string;
-  fileType: string;
-  onClose: () => void;
+  fileType?: string;
+  onClose?: () => void;
   onEdit?: () => void;
   onDownload?: () => void;
   onShare?: () => void;
@@ -35,10 +35,14 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showMetadata, setShowMetadata] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [metadata, setMetadata] = useState<any>(null);
+  const [metadata, setMetadata] = useState<{
+    width: number;
+    height: number;
+    aspectRatio: string;
+  } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
-  const slideshowInterval = useRef<NodeJS.Timeout | null>(null);
+  const slideshowInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleZoomIn = () => {
     setZoom((prev) => Math.min(prev + 0.25, 5));
@@ -150,7 +154,16 @@ const ImagePreview: React.FC<ImagePreviewProps> = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [zoom, showMetadata, isPlaying]);
+  }, [
+    zoom,
+    showMetadata,
+    isPlaying,
+    handleZoomIn,
+    handleZoomOut,
+    handleRotate,
+    toggleFullscreen,
+    toggleSlideshow,
+  ]);
 
   useEffect(() => {
     return () => {

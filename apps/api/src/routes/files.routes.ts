@@ -26,6 +26,7 @@ import fs from "fs";
 import path from "path";
 import { promisify } from "util";
 import { FileActionsHandlers } from "./fileActionsHandlers";
+import { Readable } from "stream";
 
 const filesRoutes = express.Router();
 
@@ -52,6 +53,71 @@ export const s3Client = new S3Client({
 });
 
 const BUCKET_NAME = process.env.B2_BUCKET_NAME;
+
+function toAsciiFilenameFallback(filename: string) {
+  // Best-effort ASCII fallback for Content-Disposition
+  return filename
+    .replace(/[^\x20-\x7E]/g, "_")
+    .replace(/["\\]/g, "_")
+    .slice(0, 180);
+}
+
+function buildContentDisposition(
+  disposition: "inline" | "attachment",
+  filename: string,
+) {
+  const fallback = toAsciiFilenameFallback(filename) || "download";
+  const encoded = encodeURIComponent(filename);
+  return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
+function inferMimeTypeFromName(fileName: string): string | undefined {
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  if (!ext) return undefined;
+
+  // Minimal mapping for common previewable types
+  switch (ext) {
+    case "pdf":
+      return "application/pdf";
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "gif":
+      return "image/gif";
+    case "webp":
+      return "image/webp";
+    case "svg":
+      return "image/svg+xml";
+    case "txt":
+      return "text/plain; charset=utf-8";
+    case "md":
+      return "text/markdown; charset=utf-8";
+    case "json":
+      return "application/json; charset=utf-8";
+    case "csv":
+      return "text/csv; charset=utf-8";
+    case "mp4":
+      return "video/mp4";
+    case "webm":
+      return "video/webm";
+    case "mp3":
+      return "audio/mpeg";
+    case "wav":
+      return "audio/wav";
+    case "ogg":
+      return "audio/ogg";
+    case "docx":
+      return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    case "xlsx":
+      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    case "pptx":
+      return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    default:
+      return undefined;
+  }
+}
 
 (async () => {
   try {
@@ -655,6 +721,14 @@ filesRoutes.get(
       const command = new GetObjectCommand({
         Bucket: BUCKET_NAME,
         Key: file.s3_key,
+        ResponseContentDisposition: buildContentDisposition(
+          "attachment",
+          file.original_name,
+        ),
+        ResponseContentType:
+          file.mime_type ||
+          inferMimeTypeFromName(file.original_name) ||
+          "application/octet-stream",
       });
 
       const signedUrl = await getSignedUrl(s3Client, command, {
@@ -700,6 +774,164 @@ filesRoutes.get(
   },
 );
 
+// Authenticated, same-origin file stream (for fetch-based previews)
+filesRoutes.head(
+  "/blob/:fileId",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.userId) {
+        return res.status(401).json({
+          success: false,
+          error: "Authentication required",
+        });
+      }
+
+      const { fileId } = req.params;
+      const fileResult = await pool.query(
+        `SELECT id, original_name, s3_key, mime_type, size
+         FROM user_files
+         WHERE id = $1 AND user_id = $2`,
+        [fileId, req.userId],
+      );
+
+      if (fileResult.rows.length === 0) {
+        return res.status(404).json({ success: false, error: "File not found" });
+      }
+
+      const file = fileResult.rows[0];
+
+      // Prefer DB values; fall back to inferred
+      const contentType =
+        file.mime_type ||
+        inferMimeTypeFromName(file.original_name) ||
+        "application/octet-stream";
+
+      res.setHeader("Content-Type", contentType);
+      if (file.size) res.setHeader("Content-Length", String(file.size));
+      res.setHeader(
+        "Content-Disposition",
+        buildContentDisposition("inline", file.original_name),
+      );
+      res.setHeader("Accept-Ranges", "bytes");
+      res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+
+      return res.status(200).end();
+    } catch (err) {
+      console.error("Error in HEAD /blob:", err);
+      return res.status(500).end();
+    }
+  },
+);
+
+filesRoutes.get(
+  "/blob/:fileId",
+  authMiddleware,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      if (!req.userId) {
+        return res.status(401).json({
+          success: false,
+          error: "Authentication required",
+        });
+      }
+
+      const { fileId } = req.params;
+      const fileResult = await pool.query(
+        `SELECT id, original_name, s3_key, mime_type, size
+         FROM user_files
+         WHERE id = $1 AND user_id = $2`,
+        [fileId, req.userId],
+      );
+
+      if (fileResult.rows.length === 0) {
+        return res.status(404).json({ success: false, error: "File not found" });
+      }
+
+      const file = fileResult.rows[0];
+      const contentType =
+        file.mime_type ||
+        inferMimeTypeFromName(file.original_name) ||
+        "application/octet-stream";
+
+      // Optional Range support (single range)
+      const range = req.headers.range;
+      let start: number | undefined;
+      let end: number | undefined;
+      let statusCode = 200;
+
+      if (typeof range === "string") {
+        const match = range.match(/bytes=(\d*)-(\d*)/i);
+        if (match) {
+          start = match[1] ? Number(match[1]) : undefined;
+          end = match[2] ? Number(match[2]) : undefined;
+          if (
+            (start !== undefined && Number.isNaN(start)) ||
+            (end !== undefined && Number.isNaN(end))
+          ) {
+            start = undefined;
+            end = undefined;
+          } else {
+            statusCode = 206;
+          }
+        }
+      }
+
+      const totalSize = file.size ? Number(file.size) : undefined;
+      const resolvedStart = start ?? 0;
+      const resolvedEnd =
+        end ?? (totalSize !== undefined ? totalSize - 1 : undefined);
+
+      const command = new GetObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: file.s3_key,
+        ...(statusCode === 206 && resolvedEnd !== undefined
+          ? { Range: `bytes=${resolvedStart}-${resolvedEnd}` }
+          : {}),
+      });
+
+      const s3Resp = await s3Client.send(command);
+
+      res.status(statusCode);
+      res.setHeader("Content-Type", s3Resp.ContentType || contentType);
+      res.setHeader(
+        "Content-Disposition",
+        buildContentDisposition("inline", file.original_name),
+      );
+      res.setHeader("Accept-Ranges", "bytes");
+      res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+
+      const contentLength =
+        s3Resp.ContentLength ?? (totalSize !== undefined ? totalSize : undefined);
+
+      if (statusCode === 206 && totalSize !== undefined) {
+        const crEnd = resolvedEnd ?? totalSize - 1;
+        res.setHeader("Content-Range", `bytes ${resolvedStart}-${crEnd}/${totalSize}`);
+        res.setHeader("Content-Length", String(crEnd - resolvedStart + 1));
+      } else if (contentLength !== undefined) {
+        res.setHeader("Content-Length", String(contentLength));
+      }
+
+      const body = s3Resp.Body;
+      if (body instanceof Readable) {
+        body.pipe(res);
+        return;
+      }
+
+      return res.status(500).json({
+        success: false,
+        error: "Invalid file stream",
+      });
+    } catch (err) {
+      console.error("Error streaming file /blob:", err);
+      return res.status(500).json({
+        success: false,
+        error: "Failed to stream file",
+      });
+    }
+  },
+);
+
 // Get file content (signed URL)
 filesRoutes.get(
   "/content/:fileId",
@@ -735,6 +967,15 @@ filesRoutes.get(
       const command = new GetObjectCommand({
         Bucket: BUCKET_NAME,
         Key: file.s3_key,
+        // Force inline + correct content-type for reliable browser previews
+        ResponseContentDisposition: buildContentDisposition(
+          "inline",
+          file.original_name,
+        ),
+        ResponseContentType:
+          file.mime_type ||
+          inferMimeTypeFromName(file.original_name) ||
+          "application/octet-stream",
       });
 
       const signedUrl = await getSignedUrl(s3Client, command, {
@@ -922,6 +1163,13 @@ filesRoutes.post(
     const { fileId } = req.params;
     const userId = req.userId;
 
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Authentication required",
+      });
+    }
+
     const fileActions = new FileActionsHandlers(pool);
     return await fileActions.handleDelete([fileId], userId, req, res);
   },
@@ -933,6 +1181,13 @@ filesRoutes.post(
   async (req: AuthRequest, res) => {
     const { fileId } = req.params;
     const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Authentication required",
+      });
+    }
 
     const fileActions = new FileActionsHandlers(pool);
     return await fileActions.handleRestore([fileId], userId, req, res);
@@ -946,6 +1201,13 @@ filesRoutes.post(
   async (req: AuthRequest, res) => {
     const { fileId } = req.params;
     const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Authentication required",
+      });
+    }
 
     const fileActions = new FileActionsHandlers(pool);
     return await fileActions.handleDeletePermanently(

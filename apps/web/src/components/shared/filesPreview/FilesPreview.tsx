@@ -1,22 +1,15 @@
 import React, { useState, useEffect } from "react";
-import styled, { keyframes } from "styled-components";
-import {
-  Overlay,
-  Container,
-  ContentWrapper,
-} from "./styles/filePreview.styles";
-
+import styled from "styled-components";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Header } from "./components/Header";
-import PreviewRenderer from "./components/Preview";
 import { InfoSidebar } from "./components/InfoSidebar";
 import SharePopup from "../popups/share/SharePopup";
-
-import { useFileLoader } from "../hooks/useFileLoader";
+import { useFilePreview } from "./hooks/useFilePreview.ts";
 import { usePopupStore } from "../popups/popup.store";
 import { useAuthStore } from "../../../store/authStore";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { toast } from "../../../services/toast.service";
+// Import the new FilePreview system
+import FilePreview from "./components/Preview";
 
 export interface FilePreviewProps {
   fileId?: string;
@@ -41,49 +34,32 @@ export interface FilePreviewProps {
   currentIndex?: number;
   onNavigate?: (index: number) => void;
   ownerName?: string;
-  files?: Array<{
-    url?: string;
-    fileId?: string;
-    fileName: string;
-    fileType?: string;
-    mimeType?: string;
-  }>;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   comments?: Array<{ user: string; text: string; timestamp: string }>;
   activityLog?: Array<{ action: string; user: string; timestamp: string }>;
   relatedFiles?: Array<{ name: string; url: string }>;
   tags?: string[];
   viewers?: Array<{ name: string; avatar?: string }>;
-  onToast?: (options: {
-    type: "success" | "error" | "info" | "warning";
-    message: string;
-  }) => void;
+  options?: {
+    generateThumbnail?: boolean;
+    extractMetadata?: boolean;
+    maxSize?: number;
+  };
 }
 
-const FilePreview: React.FC<FilePreviewProps> = ({
+const FilesPreview: React.FC<FilePreviewProps> = ({
   fileId,
   url: propUrl,
   fileName,
   mimeType,
-  fileType,
   onClose,
-  onEdit,
   onDownload,
-  onRename,
-  onDelete,
-  onFavorite,
+  onShare,
   allFiles = [],
-  currentIndex = -1,
+  currentIndex = 0,
   onNavigate,
-  ownerName,
-  files = [],
-  metadata,
-  comments = [],
-  activityLog = [],
-  relatedFiles = [],
-  tags = [],
-  viewers = [],
-  onToast, // Keep this prop for backward compatibility
+  options = {},
+  ...props
 }) => {
   const [showInfo, setShowInfo] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
@@ -93,60 +69,79 @@ const FilePreview: React.FC<FilePreviewProps> = ({
   const toggleSharingPopup = usePopupStore((state) => state.toggleSharingPopup);
   const isSharingPopupOpen = usePopupStore((state) => state.isSharingPopupOpen);
 
+  const {
+    previewUrl,
+    previewCategory,
+    isLoading,
+    error,
+    metadata,
+    refreshPreview,
+  } = useFilePreview({
+    fileId,
+    url: propUrl,
+    fileName,
+    mimeType,
+    options,
+  });
+
   const hasNavigation = allFiles.length > 1 && currentIndex >= 0 && onNavigate;
   const hasPrevious = hasNavigation && currentIndex > 0;
   const hasNext = hasNavigation && currentIndex < allFiles.length - 1;
 
-  const { fileUrl, detectedType, loading, error } = useFileLoader({
-    fileId,
-    propUrl,
-    fileName,
-    mimeType,
-    fileType,
-  });
+  const headerFiles = allFiles.map((f) => ({
+    url: f.url,
+    fileId: f.id,
+    fileName: f.name,
+    fileType: f.type,
+    mimeType: f.mimeType,
+  }));
 
-  // Helper function to show toast - supports both prop and global toast
-  const showToast = (options: {
-    type: "success" | "error" | "info" | "warning";
-    message: string;
-  }) => {
-    if (onToast) {
-      // Use prop if provided
-      onToast(options);
-    } else {
-      // Use global toast service
-      switch (options.type) {
-        case "success":
-          toast.success(options.message);
-          break;
-        case "error":
-          toast.error(options.message);
-          break;
-        case "info":
-          toast.info(options.message);
-          break;
-        case "warning":
-          toast.warning(options.message);
-          break;
-      }
-    }
-  };
-
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (onDownload) {
       onDownload();
-    } else if (fileUrl) {
+      return;
+    }
+
+    // Always prefer a proper download URL from the API when we have an ID.
+    // (Some preview URLs are authenticated endpoints that won't download via <a>.)
+    if (fileId) {
+      try {
+        const response = await fetch(`/api/files/download/${fileId}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const data = await response.json().catch(() => null);
+        const downloadUrl =
+          data?.file?.downloadUrl || data?.downloadUrl || data?.signedUrl;
+
+        if (downloadUrl) {
+          const link = document.createElement("a");
+          link.href = downloadUrl;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          return;
+        }
+      } catch {
+        // Fall back to previewUrl below
+      }
+    }
+
+    if (previewUrl) {
       const link = document.createElement("a");
-      link.href = fileUrl;
+      link.href = previewUrl;
       link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      // Show success toast
-      showToast({
-        type: "success",
-        message: "Download started",
-      });
+    }
+  };
+
+  const handleShare = () => {
+    if (onShare) {
+      onShare();
+    } else {
+      toggleSharingPopup();
     }
   };
 
@@ -170,44 +165,9 @@ const FilePreview: React.FC<FilePreviewProps> = ({
     }
   };
 
-  const handleShare = () => {
-    toggleSharingPopup();
-  };
-
-  const commonProps = {
-    url: fileUrl,
-    fileName,
-    fileType: detectedType,
-    fileId,
-    onClose,
-    onEdit,
-    onDownload: handleDownload,
-    onShare: handleShare,
-  };
-
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
       onClose();
-    }
-  };
-
-  const checkIfFavorited = async () => {
-    if (!fileId) return;
-
-    try {
-      const response = await fetch(`/api/files/favorites/check-favorites`, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-
-      const data = await response.json();
-      if (data.success) setIsFavorited(data.favorites.includes(fileId));
-    } catch (err) {
-      console.error("Error checking favorite:", err);
-      showToast({
-        type: "error",
-        message: "Failed to check favorite status",
-      });
     }
   };
 
@@ -223,30 +183,18 @@ const FilePreview: React.FC<FilePreviewProps> = ({
       const data = await response.json();
       if (data.success) {
         setIsFavorited(data.favorited);
-        showToast({
-          type: "success",
-          message: data.favorited
-            ? "Added to favorites"
-            : "Removed from favorites",
-        });
       }
     } catch (err) {
       console.error("Error toggling favorite:", err);
-      showToast({
-        type: "error",
-        message: "Failed to update favorites",
-      });
     }
   };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't handle shortcuts if a modal is open (except share popup)
       if (isSharingPopupOpen && e.key !== "Escape") {
         return;
       }
 
-      // Handle Escape key
       if (e.key === "Escape") {
         if (isSharingPopupOpen) {
           toggleSharingPopup();
@@ -256,7 +204,6 @@ const FilePreview: React.FC<FilePreviewProps> = ({
         return;
       }
 
-      // Handle navigation arrows
       if (hasNavigation && e.key === "ArrowLeft" && hasPrevious) {
         e.preventDefault();
         handlePrevious();
@@ -269,14 +216,12 @@ const FilePreview: React.FC<FilePreviewProps> = ({
         return;
       }
 
-      // Handle info panel toggle (Ctrl+I)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "i") {
         e.preventDefault();
         setShowInfo((prev) => !prev);
         return;
       }
 
-      // Handle share shortcut (Ctrl+Shift+S)
       if (
         (e.ctrlKey || e.metaKey) &&
         e.shiftKey &&
@@ -287,7 +232,6 @@ const FilePreview: React.FC<FilePreviewProps> = ({
         return;
       }
 
-      // Handle download shortcut (Ctrl+S)
       if (
         (e.ctrlKey || e.metaKey) &&
         e.key.toLowerCase() === "s" &&
@@ -298,7 +242,6 @@ const FilePreview: React.FC<FilePreviewProps> = ({
         return;
       }
 
-      // Handle favorite shortcut (S)
       if (
         e.key.toLowerCase() === "s" &&
         !e.ctrlKey &&
@@ -307,6 +250,12 @@ const FilePreview: React.FC<FilePreviewProps> = ({
       ) {
         e.preventDefault();
         handleFavorite();
+        return;
+      }
+
+      if (e.key === "F5") {
+        e.preventDefault();
+        refreshPreview();
         return;
       }
     };
@@ -328,24 +277,77 @@ const FilePreview: React.FC<FilePreviewProps> = ({
     handleDownload,
     handleShare,
     handleFavorite,
+    refreshPreview,
   ]);
 
   useEffect(() => {
+    const checkIfFavorited = async () => {
+      if (!fileId) return;
+
+      try {
+        const response = await fetch(`/api/files/favorites/check-favorites`, {
+          method: "GET",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+
+        const data = await response.json();
+        if (data.success) setIsFavorited(data.favorites.includes(fileId));
+      } catch (err) {
+        console.error("Error checking favorite:", err);
+      }
+    };
+
     if (fileId && accessToken) {
       checkIfFavorited();
     }
   }, [fileId, accessToken]);
+
+  if (isLoading || error) {
+    return (
+      <Overlay onClick={handleBackdropClick}>
+        <Container>
+          <Header
+            fileName={fileName}
+            files={headerFiles}
+            currentIndex={currentIndex}
+            onNavigate={onNavigate}
+            onClose={onClose}
+            handleShare={handleShare}
+            handleFavorite={handleFavorite}
+            isFavorited={isFavorited}
+            handleDownload={handleDownload}
+            setShowInfo={setShowInfo}
+            showInfo={showInfo}
+          />
+
+          <ContentWrapper $isTransitioning={isTransitioning}>
+            {isLoading ? (
+              <LoadingContainer>
+                <LoadingSpinner />
+                <LoadingText>Loading preview...</LoadingText>
+              </LoadingContainer>
+            ) : (
+              <ErrorContainer>
+                <ErrorIcon>⚠️</ErrorIcon>
+                <ErrorText>{error}</ErrorText>
+                <ErrorSubtext>Please try again or contact support</ErrorSubtext>
+                <RetryButton onClick={refreshPreview}>Retry</RetryButton>
+              </ErrorContainer>
+            )}
+          </ContentWrapper>
+        </Container>
+      </Overlay>
+    );
+  }
 
   return (
     <Overlay onClick={handleBackdropClick}>
       <Container>
         <Header
           fileName={fileName}
-          ownerName={ownerName}
-          files={allFiles.length > 0 ? allFiles : files}
-          currentIndex={currentIndex >= 0 ? currentIndex : 0}
+          files={headerFiles}
+          currentIndex={currentIndex}
           onNavigate={onNavigate}
-          onRename={onRename}
           onClose={onClose}
           handleShare={handleShare}
           handleFavorite={handleFavorite}
@@ -356,38 +358,29 @@ const FilePreview: React.FC<FilePreviewProps> = ({
         />
 
         <ContentWrapper $isTransitioning={isTransitioning}>
-          {loading ? (
-            <LoadingContainer>
-              <LoadingSpinner />
-              <LoadingText>Loading file...</LoadingText>
-            </LoadingContainer>
-          ) : error ? (
-            <ErrorContainer>
-              <ErrorIcon>⚠️</ErrorIcon>
-              <ErrorText>{error}</ErrorText>
-              <ErrorSubtext>Please try again or contact support</ErrorSubtext>
-            </ErrorContainer>
-          ) : (
-            <PreviewRenderer
-              type={detectedType}
-              common={commonProps}
-              files={allFiles.length > 0 ? allFiles : files}
-              index={currentIndex >= 0 ? currentIndex : 0}
-              onNavigate={onNavigate}
-            />
-          )}
+          <FilePreview
+            url={previewUrl || propUrl || ""}
+            fileName={fileName}
+            mimeType={mimeType}
+            onDownload={handleDownload}
+            onClose={onClose}
+            maxSize={options.maxSize}
+            headers={{
+              Authorization: `Bearer ${accessToken}`,
+            }}
+          />
 
           <InfoSidebar
             show={showInfo}
             mimeType={mimeType}
-            fileType={fileType}
-            detectedType={detectedType}
+            fileType={previewCategory}
+            detectedType={previewCategory}
             metadata={metadata}
-            tags={tags}
-            viewers={viewers}
-            comments={comments}
-            activityLog={activityLog}
-            relatedFiles={relatedFiles}
+            tags={props.tags}
+            viewers={props.viewers}
+            comments={props.comments}
+            activityLog={props.activityLog}
+            relatedFiles={props.relatedFiles}
           />
         </ContentWrapper>
 
@@ -415,43 +408,60 @@ const FilePreview: React.FC<FilePreviewProps> = ({
   );
 };
 
-// Keyframes definitions
-const slideIn = keyframes`
-  from {
-    opacity: 0;
-    transform: translateY(-50%) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(-50%) scale(1);
+// Styled Components (keep your existing styles)
+const Overlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(8px);
+  animation: fadeIn 0.2s ease-out;
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 `;
 
-const fadeIn = keyframes`
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
+const Container = styled.div`
+  position: relative;
+  width: 90vw;
+  height: 90vh;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease-out;
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(20px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
   }
 `;
 
-const spin = keyframes`
-  to {
-    transform: rotate(360deg);
-  }
+const ContentWrapper = styled.div<{ $isTransitioning: boolean }>`
+  position: relative;
+  height: calc(100% - 64px);
+  transition: opacity 0.15s ease-out;
+  opacity: ${({ $isTransitioning }) => ($isTransitioning ? 0.5 : 1)};
 `;
 
-const pulse = keyframes`
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-`;
-
-// Styled components
 const NavButton = styled.button<{ $position: "left" | "right" }>`
   position: absolute;
   top: 50%;
@@ -468,10 +478,10 @@ const NavButton = styled.button<{ $position: "left" | "right" }>`
   cursor: pointer;
   color: #202124;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s;
   z-index: 10;
   opacity: 0;
-  animation: ${fadeIn} 0.3s ease-out 0.2s forwards;
+  animation: fadeIn 0.3s ease-out 0.2s forwards;
 
   &:hover {
     background: white;
@@ -481,12 +491,6 @@ const NavButton = styled.button<{ $position: "left" | "right" }>`
 
   &:active {
     transform: translateY(-50%) scale(0.95);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-  }
-
-  &:focus-visible {
-    outline: 2px solid #1a73e8;
-    outline-offset: 2px;
   }
 `;
 
@@ -499,7 +503,6 @@ const LoadingContainer = styled.div`
   justify-content: center;
   gap: 16px;
   background: #f8f9fa;
-  animation: ${fadeIn} 0.2s ease-out;
 `;
 
 const LoadingSpinner = styled.div`
@@ -508,14 +511,22 @@ const LoadingSpinner = styled.div`
   border: 4px solid #e0e0e0;
   border-top-color: #1a73e8;
   border-radius: 50%;
-  animation: ${spin} 0.8s linear infinite;
+  animation: spin 1s linear infinite;
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
 `;
 
 const LoadingText = styled.div`
   font-size: 16px;
   color: #5f6368;
   font-weight: 500;
-  animation: ${pulse} 2s ease-in-out infinite;
 `;
 
 const ErrorContainer = styled.div`
@@ -528,13 +539,11 @@ const ErrorContainer = styled.div`
   gap: 12px;
   background: #f8f9fa;
   padding: 40px;
-  animation: ${fadeIn} 0.3s ease-out;
 `;
 
 const ErrorIcon = styled.div`
   font-size: 64px;
   margin-bottom: 8px;
-  animation: ${slideIn} 0.4s ease-out;
 `;
 
 const ErrorText = styled.div`
@@ -551,4 +560,20 @@ const ErrorSubtext = styled.div`
   text-align: center;
 `;
 
-export default FilePreview;
+const RetryButton = styled.button`
+  margin-top: 16px;
+  background: #1a73e8;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    background: #0d62d9;
+  }
+`;
+
+export default FilesPreview;

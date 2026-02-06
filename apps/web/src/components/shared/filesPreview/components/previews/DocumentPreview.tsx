@@ -1,548 +1,500 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import styled from "styled-components";
-import { FileText, Download, AlertCircle, Loader2 } from "lucide-react";
+import {
+  Download,
+  Search,
+  FileText,
+  ZoomIn,
+  ZoomOut,
+  BookOpen,
+  Hash,
+  Copy,
+} from "lucide-react";
+import mammoth from "mammoth";
 
-interface DocumentViewerProps {
+interface DocumentPreviewProps {
   url: string;
   fileName: string;
-  onEdit?: () => void;
+  mimeType?: string;
   onDownload?: () => void;
+  onError?: (error: string) => void;
+  headers?: Record<string, string>;
 }
+
+const DocumentPreview: React.FC<DocumentPreviewProps> = ({
+  url,
+  fileName,
+  onDownload,
+  onError,
+  headers,
+}) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [content, setContent] = useState<string>("");
+  const [zoom, setZoom] = useState(1);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [wordCount, setWordCount] = useState(0);
+  const [pageCount, setPageCount] = useState(0);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    loadDocument();
+  }, [url]);
+
+  const loadDocument = async () => {
+    try {
+      setLoading(true);
+
+      const response = await fetch(url, { headers });
+      if (!response.ok) {
+        throw new Error(`Failed to load file: ${response.status}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const extension = fileName.toLowerCase().split(".").pop();
+
+      let text = "";
+
+      if (extension === "docx") {
+        // Use mammoth for .docx files
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        text = result.value;
+      } else if (extension === "rtf" || extension === "odt") {
+        // For RTF and ODT, try to extract text
+        // Note: This is a simple implementation - consider using a library like unrtf for RTF
+        const decoder = new TextDecoder("utf-8");
+        text = decoder.decode(arrayBuffer);
+
+        // Simple RTF text extraction (remove RTF tags)
+        if (extension === "rtf") {
+          text = text.replace(/\\[^{}]+|\{[^{}]*\}/g, "");
+        }
+      } else {
+        // Fallback for other text documents
+        const decoder = new TextDecoder("utf-8");
+        text = decoder.decode(arrayBuffer);
+      }
+
+      setContent(text);
+
+      // Calculate word count
+      const words = text.split(/\s+/).filter((word) => word.length > 0);
+      setWordCount(words.length);
+
+      // Estimate page count (assuming 250 words per page)
+      setPageCount(Math.ceil(words.length / 250));
+
+      setLoading(false);
+    } catch (err) {
+      setError("Failed to load document. The format may not be supported.");
+      onError?.("Failed to load document");
+      setLoading(false);
+    }
+  };
+
+  const handleZoomIn = () => {
+    setZoom((prev) => Math.min(prev + 0.1, 2));
+  };
+
+  const handleZoomOut = () => {
+    setZoom((prev) => Math.max(prev - 0.1, 0.5));
+  };
+
+  const handleResetZoom = () => {
+    setZoom(1);
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(content);
+  };
+
+  const highlightSearchTerm = (text: string, term: string) => {
+    if (!term) return text;
+
+    const regex = new RegExp(
+      `(${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
+      "gi",
+    );
+    return text
+      .split(regex)
+      .map((part, index) => (regex.test(part) ? `<mark>${part}</mark>` : part))
+      .join("");
+  };
+
+  if (loading) {
+    return (
+      <LoadingContainer>
+        <Spinner />
+        <p>Loading document...</p>
+      </LoadingContainer>
+    );
+  }
+
+  if (error) {
+    return (
+      <ErrorContainer>
+        <ErrorIcon>⚠️</ErrorIcon>
+        <h3>Unable to load document</h3>
+        <p>{error}</p>
+        <ButtonGroup>
+          <Button onClick={() => window.open(url, "_blank")}>
+            Open in new tab
+          </Button>
+          {onDownload && (
+            <Button $primary onClick={onDownload}>
+              <Download size={16} />
+              Download Document
+            </Button>
+          )}
+        </ButtonGroup>
+      </ErrorContainer>
+    );
+  }
+
+  return (
+    <Container>
+      <Toolbar>
+        <ZoomControls>
+          <ZoomButton onClick={handleZoomOut} disabled={zoom <= 0.5}>
+            <ZoomOut size={16} />
+          </ZoomButton>
+          <ZoomLevel>{Math.round(zoom * 100)}%</ZoomLevel>
+          <ZoomButton onClick={handleZoomIn} disabled={zoom >= 2}>
+            <ZoomIn size={16} />
+          </ZoomButton>
+          <ZoomButton onClick={handleResetZoom}>Reset</ZoomButton>
+        </ZoomControls>
+
+        <SearchBox>
+          <Search size={16} />
+          <SearchInput
+            type="text"
+            placeholder="Search in document..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </SearchBox>
+
+        <ToolbarButtons>
+          <ToolbarButton onClick={handleCopy}>
+            <Copy size={16} />
+            Copy Text
+          </ToolbarButton>
+          {onDownload && (
+            <ToolbarButton $primary onClick={onDownload}>
+              <Download size={16} />
+              Download
+            </ToolbarButton>
+          )}
+        </ToolbarButtons>
+      </Toolbar>
+
+      <ContentContainer>
+        <DocumentInfo>
+          <InfoItem>
+            <FileText size={14} />
+            <strong>{wordCount}</strong> words
+          </InfoItem>
+          <InfoItem>
+            <BookOpen size={14} />
+            <strong>{pageCount}</strong> pages (estimated)
+          </InfoItem>
+          <InfoItem>
+            <Hash size={14} />
+            {content.split("\n").length} lines
+          </InfoItem>
+        </DocumentInfo>
+
+        <DocumentContent
+          ref={contentRef}
+          $zoom={zoom}
+          dangerouslySetInnerHTML={{
+            __html: highlightSearchTerm(
+              content
+                .replace(/\n/g, "<br>")
+                .replace(/\t/g, "&nbsp;&nbsp;&nbsp;&nbsp;"),
+              searchTerm,
+            ),
+          }}
+        />
+      </ContentContainer>
+
+      <StatusBar>
+        <StatusInfo>{fileName} • Document</StatusInfo>
+        <StatusInfo>Zoom: {Math.round(zoom * 100)}%</StatusInfo>
+      </StatusBar>
+    </Container>
+  );
+};
 
 const Container = styled.div`
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #e9eef6;
+  background: white;
 `;
 
-const Content = styled.div`
-  flex: 1;
-  overflow: hidden;
-  background: #e9eef6;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-`;
-
-const IFrame = styled.iframe`
-  width: 100%;
-  height: 100%;
-  border: none;
-  background: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-`;
-
-const TextContainer = styled.div`
-  width: 100%;
-  height: 100%;
-  max-width: 1200px;
-  overflow: auto;
-  background: #ffffff;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-`;
-
-const PreFormatted = styled.pre`
-  font-size: 14px;
-  font-family: "Consolas", "Monaco", "Courier New", monospace;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: #202124;
-  background: #ffffff;
-  margin: 0;
-  line-height: 1.6;
-`;
-
-const CenteredContainer = styled.div`
+const LoadingContainer = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
-  background: #e9eef6;
-  gap: 1rem;
+  gap: 16px;
 `;
 
-const IconWrapper = styled.div<{ $size?: string; $color?: string }>`
-  width: ${(props) => props.$size || "3rem"};
-  height: ${(props) => props.$size || "3rem"};
-  color: ${(props) => props.$color || "#5f6368"};
-
-  svg {
-    width: 100%;
-    height: 100%;
-  }
-
-  &.spinning svg {
-    animation: spin 1s linear infinite;
-  }
+const Spinner = styled.div`
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e0e0e0;
+  border-top-color: #1a73e8;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 
   @keyframes spin {
-    from {
+    0% {
       transform: rotate(0deg);
     }
-    to {
+    100% {
       transform: rotate(360deg);
     }
   }
 `;
 
-const Title = styled.p`
-  font-size: 1.125rem;
-  font-weight: 500;
-  margin: 0;
-  color: #202124;
+const ErrorContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+  gap: 16px;
 `;
 
-const Subtitle = styled.p`
-  font-size: 0.875rem;
-  color: #5f6368;
-  margin: 0.5rem 0;
-  text-align: center;
-  max-width: 400px;
+const ErrorIcon = styled.div`
+  font-size: 48px;
+  margin-bottom: 8px;
+`;
+
+const ButtonGroup = styled.div`
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
 `;
 
 const Button = styled.button<{ $primary?: boolean }>`
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  font-size: 0.875rem;
-  font-weight: 500;
+  gap: 8px;
+  padding: 10px 20px;
   border: none;
-  border-radius: 0.5rem;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
 
-  ${(props) =>
-    props.$primary
+  ${({ $primary }) =>
+    $primary
       ? `
-    color: white;
     background: #1a73e8;
+    color: white;
     
     &:hover {
-      background: #1557b0;
-      box-shadow: 0 2px 8px rgba(26, 115, 232, 0.3);
+      background: #0d62d9;
     }
   `
       : `
-    color: #202124;
     background: white;
+    color: #202124;
     border: 1px solid #dadce0;
     
     &:hover {
       background: #f8f9fa;
     }
   `}
+`;
 
-  &:active {
-    transform: scale(0.98);
+const Toolbar = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #dadce0;
+  gap: 16px;
+`;
+
+const ZoomControls = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+`;
+
+const ZoomButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border: 1px solid #dadce0;
+  background: white;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #202124;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: #f8f9fa;
+  }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
   }
 `;
 
-const ViewerWrapper = styled.div`
-  width: 100%;
-  height: 100%;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-`;
-
-const ViewerNotice = styled.div`
-  position: absolute;
-  top: 1rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
-  background: rgba(234, 134, 0, 0.95);
-  color: white;
-  padding: 0.75rem 1.25rem;
-  border-radius: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(4px);
-`;
-
-const NoticeText = styled.span`
-  font-size: 0.875rem;
+const ZoomLevel = styled.span`
+  font-size: 12px;
+  min-width: 50px;
+  text-align: center;
   font-weight: 500;
 `;
 
-const NoticeButton = styled.button`
+const SearchBox = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 8px;
+  padding: 6px 12px;
   background: white;
-  color: #ea8600;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  flex: 1;
+  max-width: 400px;
+`;
+
+const SearchInput = styled.input`
   border: none;
-  padding: 0.375rem 0.75rem;
-  border-radius: 0.375rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
+  outline: none;
+  flex: 1;
+  font-size: 14px;
+
+  &::placeholder {
+    color: #9aa0a6;
+  }
+`;
+
+const ToolbarButtons = styled.div`
+  display: flex;
+  gap: 8px;
+`;
+
+const ToolbarButton = styled.button<{ $primary?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid ${({ $primary }) => ($primary ? "#1a73e8" : "#dadce0")};
+  background: ${({ $primary }) => ($primary ? "#1a73e8" : "white")};
+  color: ${({ $primary }) => ($primary ? "white" : "#202124")};
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
 
   &:hover {
-    background: #f8f9fa;
+    background: ${({ $primary }) => ($primary ? "#0d62d9" : "#f8f9fa")};
   }
 `;
 
-const FileName = styled.div`
-  font-size: 0.875rem;
-  color: #202124;
-  background: white;
-  padding: 0.75rem 1.25rem;
-  border-radius: 0.5rem;
-  font-family: monospace;
-  max-width: 80%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin: 0.5rem 0;
-  border: 1px solid #dadce0;
+const ContentContainer = styled.div`
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+  background: #f8f9fa;
 `;
 
-const InfoBox = styled.div`
-  background: white;
-  border: 1px solid #dadce0;
-  border-radius: 0.5rem;
-  padding: 1rem;
-  max-width: 500px;
-  margin: 1rem 0;
-  text-align: left;
-`;
-
-const InfoTitle = styled.div`
-  color: #202124;
-  font-weight: 600;
-  font-size: 0.875rem;
-  margin-bottom: 0.75rem;
-`;
-
-const InfoText = styled.div`
-  color: #5f6368;
-  font-size: 0.8125rem;
-  line-height: 1.5;
-  margin-bottom: 0.375rem;
-
-  &:last-child {
-    margin-bottom: 0;
-  }
-`;
-
-const ButtonGroup = styled.div`
+const DocumentInfo = styled.div`
   display: flex;
-  gap: 0.75rem;
-  margin-top: 1rem;
+  gap: 24px;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 `;
 
-export default function DocumentViewer({
-  url,
-  fileName,
-  onEdit,
-  onDownload,
-}: DocumentViewerProps) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [content, setContent] = useState<string>("");
-  const [fileType, setFileType] = useState<string>("");
-  const [viewerFailed, setViewerFailed] = useState(false);
+const InfoItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #5f6368;
 
-  const getFileExtension = (name: string): string => {
-    const parts = name.split(".");
-    return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : "";
-  };
+  strong {
+    color: #202124;
+  }
+`;
 
-  const loadDocument = async () => {
-    setLoading(true);
-    setError(null);
+const DocumentContent = styled.div<{ $zoom: number }>`
+  background: white;
+  padding: 40px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  line-height: 1.6;
+  font-size: ${({ $zoom }) => $zoom * 16}px;
+  color: #202124;
+  transform-origin: top left;
 
-    const ext = getFileExtension(fileName);
-    setFileType(ext);
-
-    const textFormats = [
-      // Plain text & markup
-      "txt",
-      "text",
-      "md",
-      "markdown",
-      "rst",
-      "asciidoc",
-      "textile",
-      // Data formats
-      "json",
-      "xml",
-      "yaml",
-      "yml",
-      "toml",
-      "ini",
-      "cfg",
-      "conf",
-      // Web formats
-      "html",
-      "htm",
-      "css",
-      "scss",
-      "sass",
-      "less",
-      // Documentation
-      "log",
-      "csv",
-      "tsv",
-      // Config files
-      "env",
-      "gitignore",
-      "dockerignore",
-      "editorconfig",
-    ];
-
-    // Office document formats (Google Viewer)
-    const officeFormats = [
-      // Microsoft Office
-      "doc",
-      "docx",
-      "xls",
-      "xlsx",
-      "ppt",
-      "pptx",
-      // OpenDocument
-      "odt",
-      "ods",
-      "odp",
-      "odg",
-      "odf",
-      // Other document formats
-      "rtf",
-      "pages",
-      "numbers",
-      "key",
-    ];
-
-    // E-book and specialized document formats
-    const ebookFormats = ["epub", "mobi", "azw", "fb2"];
-
-    try {
-      if (ext === "pdf") {
-        setLoading(false);
-        return;
-      }
-
-      // Handle text-based files with proper UTF-8 decoding (supports č, ć, ž, etc.)
-      if (textFormats.includes(ext)) {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("Failed to load document");
-
-        const arrayBuffer = await response.arrayBuffer();
-        const decoder = new TextDecoder("utf-8");
-        const text = decoder.decode(arrayBuffer);
-
-        setContent(text);
-        setLoading(false);
-        return;
-      }
-
-      // Office and OpenDocument formats
-      if (officeFormats.includes(ext)) {
-        setLoading(false);
-        return;
-      }
-
-      // E-book formats
-      if (ebookFormats.includes(ext)) {
-        setLoading(false);
-        return;
-      }
-
-      // Archive formats - cannot preview
-      if (["tar", "gz", "zip", "rar", "7z", "bz2", "xz"].includes(ext)) {
-        setError(
-          `${ext.toUpperCase()} archives cannot be previewed. Please download to extract.`,
-        );
-        setLoading(false);
-        return;
-      }
-
-      setLoading(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load document");
-      setLoading(false);
-    }
-  };
-
-  const renderContent = () => {
-    if (fileType === "pdf") {
-      return <IFrame src={`${url}#view=FitH`} title={fileName} />;
-    }
-
-    // Text-based formats with UTF-8 support
-    const textFormats = [
-      "txt",
-      "text",
-      "md",
-      "markdown",
-      "rst",
-      "asciidoc",
-      "textile",
-      "json",
-      "xml",
-      "yaml",
-      "yml",
-      "toml",
-      "ini",
-      "cfg",
-      "conf",
-      "html",
-      "htm",
-      "css",
-      "scss",
-      "sass",
-      "less",
-      "log",
-      "csv",
-      "tsv",
-      "env",
-      "gitignore",
-      "dockerignore",
-      "editorconfig",
-    ];
-
-    if (textFormats.includes(fileType)) {
-      return (
-        <TextContainer>
-          <PreFormatted>{content}</PreFormatted>
-        </TextContainer>
-      );
-    }
-
-    // Office documents and OpenDocument formats
-    // Google Viewer and Office Online often fail due to CORS - direct download is more reliable
-    const officeFormats = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
-    const openDocFormats = ["odt", "ods", "odp", "odg", "odf"];
-
-    if (officeFormats.includes(fileType) || openDocFormats.includes(fileType)) {
-      return (
-        <CenteredContainer>
-          <IconWrapper $size="4rem" $color="#1a73e8">
-            <FileText />
-          </IconWrapper>
-          <Title>{fileType.toUpperCase()} Document</Title>
-          <Subtitle>
-            Office documents cannot be previewed directly in the browser due to
-            security restrictions
-          </Subtitle>
-          <FileName>{fileName}</FileName>
-          <InfoBox>
-            <InfoTitle>How to view this file:</InfoTitle>
-            <InfoText>• Download the file to your computer</InfoText>
-            <InfoText>
-              • Open with Microsoft Office, LibreOffice, or Google Docs
-            </InfoText>
-            <InfoText>
-              • Or upload to a cloud service for online viewing
-            </InfoText>
-          </InfoBox>
-          <ButtonGroup>
-            {onDownload && (
-              <Button $primary onClick={onDownload}>
-                <Download size={16} />
-                Download {fileType.toUpperCase()}
-              </Button>
-            )}
-            <Button onClick={() => window.open(url, "_blank")}>
-              Open in new tab
-            </Button>
-          </ButtonGroup>
-        </CenteredContainer>
-      );
-    }
-
-    // RTF and other document formats
-    if (fileType === "rtf" || fileType === "epub") {
-      return (
-        <CenteredContainer>
-          <IconWrapper $size="4rem">
-            <FileText />
-          </IconWrapper>
-          <Title>{fileType.toUpperCase()} Document</Title>
-          <Subtitle>
-            This file format requires specialized software to view
-          </Subtitle>
-          <FileName>{fileName}</FileName>
-          {onDownload && (
-            <Button $primary onClick={onDownload}>
-              <Download size={16} />
-              Download to view
-            </Button>
-          )}
-        </CenteredContainer>
-      );
-    }
-
-    return (
-      <CenteredContainer>
-        <IconWrapper $size="4rem">
-          <FileText />
-        </IconWrapper>
-        <Title>Preview not available</Title>
-        <Subtitle>This file type cannot be previewed in the browser</Subtitle>
-        <FileName>{fileName}</FileName>
-        {onDownload && (
-          <Button $primary onClick={onDownload}>
-            <Download size={16} />
-            Download to view
-          </Button>
-        )}
-      </CenteredContainer>
-    );
-  };
-
-  useEffect(() => {
-    loadDocument();
-  }, [url]);
-
-  if (loading) {
-    return (
-      <Container>
-        <CenteredContainer>
-          <IconWrapper className="spinning">
-            <Loader2 />
-          </IconWrapper>
-          <Subtitle>Loading document...</Subtitle>
-        </CenteredContainer>
-      </Container>
-    );
+  mark {
+    background: #fff59d;
+    padding: 2px 4px;
+    border-radius: 2px;
   }
 
-  if (error) {
-    return (
-      <Container>
-        <CenteredContainer>
-          <IconWrapper $size="3rem" $color="#d93025">
-            <AlertCircle />
-          </IconWrapper>
-          <Title>Failed to load document</Title>
-          <Subtitle>{error}</Subtitle>
-          {onDownload && (
-            <Button $primary onClick={onDownload}>
-              <Download size={16} />
-              Download file
-            </Button>
-          )}
-        </CenteredContainer>
-      </Container>
-    );
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+    font-weight: 600;
+    line-height: 1.3;
   }
 
-  return (
-    <Container>
-      <Content>{renderContent()}</Content>
-    </Container>
-  );
-}
+  p {
+    margin-bottom: 1em;
+  }
+
+  ul,
+  ol {
+    margin-left: 2em;
+    margin-bottom: 1em;
+  }
+
+  li {
+    margin-bottom: 0.5em;
+  }
+`;
+
+const StatusBar = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: #f8f9fa;
+  border-top: 1px solid #dadce0;
+  font-size: 12px;
+  color: #5f6368;
+`;
+
+const StatusInfo = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+export default DocumentPreview;

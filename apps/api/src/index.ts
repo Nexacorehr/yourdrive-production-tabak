@@ -34,7 +34,6 @@ app.use("/api/files", filesRoutes);
 app.use("/api/sharing", sharingRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/devices", devicesRoutes);
-app.use("/api/conversion", conversionRoutes);
 app.use("/api/file-actions", fileActionsRoutes);
 
 app.get("/api/health", (req, res) => {

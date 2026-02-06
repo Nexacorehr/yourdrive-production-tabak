@@ -1,289 +1,261 @@
 import React, { useState, useRef, useEffect } from "react";
 import styled from "styled-components";
+import {
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+  Maximize2,
+  Download,
+  RotateCcw,
+} from "lucide-react";
 
 interface VideoPreviewProps {
   url: string;
   fileName: string;
-  fileType?: string;
-  onClose?: () => void;
-  onEdit?: () => void;
+  mimeType?: string;
   onDownload?: () => void;
-  onShare?: () => void;
+  onError?: (error: string) => void;
+  maxSize?: number;
+  headers?: Record<string, string>;
 }
 
-const VideoPreview: React.FC<VideoPreviewProps> = ({ url, fileName }) => {
+const VideoPreview: React.FC<VideoPreviewProps> = ({
+  url,
+  fileName,
+  onDownload,
+  onError,
+  maxSize = 50 * 1024 * 1024,
+  headers,
+}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
-  const controlsTimeout = useRef<NodeJS.Timeout | null>(null);
+  const controlsTimeoutRef = useRef<NodeJS.Timeout>();
 
-  const togglePlayPause = () => {
+  useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    if (video.paused) {
-      video.play();
+    const handleLoadedData = () => {
+      setLoading(false);
+      setDuration(video.duration);
+    };
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(video.currentTime);
+    };
+
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleEnded = () => setIsPlaying(false);
+
+    const handleError = () => {
+      setError("Failed to load video. The format may not be supported.");
+      onError?.("Failed to load video");
+      setLoading(false);
+    };
+
+    video.addEventListener("loadeddata", handleLoadedData);
+    video.addEventListener("timeupdate", handleTimeUpdate);
+    video.addEventListener("play", handlePlay);
+    video.addEventListener("pause", handlePause);
+    video.addEventListener("ended", handleEnded);
+    video.addEventListener("error", handleError);
+
+    return () => {
+      video.removeEventListener("loadeddata", handleLoadedData);
+      video.removeEventListener("timeupdate", handleTimeUpdate);
+      video.removeEventListener("play", handlePlay);
+      video.removeEventListener("pause", handlePause);
+      video.removeEventListener("ended", handleEnded);
+      video.removeEventListener("error", handleError);
+    };
+  }, [onError]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
+  const togglePlay = () => {
+    if (!videoRef.current) return;
+
+    if (isPlaying) {
+      videoRef.current.pause();
     } else {
-      video.pause();
+      videoRef.current.play();
     }
   };
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const time = parseFloat(e.target.value);
-    video.currentTime = time;
-    setCurrentTime(time);
+  const handleSeek = (value: number) => {
+    if (!videoRef.current) return;
+    videoRef.current.currentTime = value;
+    setCurrentTime(value);
   };
 
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const newVolume = parseFloat(e.target.value);
-    video.volume = newVolume;
-    setVolume(newVolume);
-    if (newVolume === 0) {
-      setIsMuted(true);
-    } else if (isMuted) {
-      setIsMuted(false);
-    }
+  const handleVolumeChange = (value: number) => {
+    if (!videoRef.current) return;
+    videoRef.current.volume = value;
+    setVolume(value);
+    setIsMuted(value === 0);
   };
 
   const toggleMute = () => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    video.muted = !video.muted;
+    if (!videoRef.current) return;
+    videoRef.current.muted = !isMuted;
     setIsMuted(!isMuted);
   };
 
-  const changePlaybackRate = (rate: number) => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    video.playbackRate = rate;
-    setPlaybackRate(rate);
-    setShowSettings(false);
+  const changePlaybackRate = () => {
+    if (!videoRef.current) return;
+    const rates = [0.5, 0.75, 1, 1.25, 1.5, 2];
+    const currentIndex = rates.indexOf(playbackRate);
+    const nextIndex = (currentIndex + 1) % rates.length;
+    const newRate = rates[nextIndex];
+    videoRef.current.playbackRate = newRate;
+    setPlaybackRate(newRate);
   };
 
   const toggleFullscreen = () => {
-    const container = videoRef.current?.parentElement;
-    if (!container) return;
+    if (!videoRef.current) return;
 
-    if (!document.fullscreenElement) {
-      container.requestFullscreen();
+    if (!isFullscreen) {
+      if (videoRef.current.requestFullscreen) {
+        videoRef.current.requestFullscreen();
+      }
     } else {
-      document.exitFullscreen();
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
     }
   };
 
+  const handleMouseMove = () => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    controlsTimeoutRef.current = setTimeout(() => {
+      setShowControls(false);
+    }, 3000);
+  };
+
   const formatTime = (seconds: number): string => {
-    if (isNaN(seconds)) return "0:00";
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handleMouseMove = () => {
-    setShowControls(true);
-    if (controlsTimeout.current) {
-      clearTimeout(controlsTimeout.current);
-    }
-    controlsTimeout.current = setTimeout(() => {
-      if (isPlaying) {
-        setShowControls(false);
-      }
-    }, 3000);
-  };
+  if (loading) {
+    return (
+      <LoadingContainer>
+        <Spinner />
+        <p>Loading video...</p>
+      </LoadingContainer>
+    );
+  }
 
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const handleTimeUpdate = () => setCurrentTime(video.currentTime);
-    const handleDurationChange = () => setDuration(video.duration);
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
-    const handleVolumeChange = () => {
-      setVolume(video.volume);
-      setIsMuted(video.muted);
-    };
-
-    video.addEventListener("timeupdate", handleTimeUpdate);
-    video.addEventListener("durationchange", handleDurationChange);
-    video.addEventListener("play", handlePlay);
-    video.addEventListener("pause", handlePause);
-    video.addEventListener("volumechange", handleVolumeChange);
-
-    return () => {
-      video.removeEventListener("timeupdate", handleTimeUpdate);
-      video.removeEventListener("durationchange", handleDurationChange);
-      video.removeEventListener("play", handlePlay);
-      video.removeEventListener("pause", handlePause);
-      video.removeEventListener("volumechange", handleVolumeChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const video = videoRef.current;
-      if (!video) return;
-
-      if (e.key === " " || e.key === "k") {
-        e.preventDefault();
-        togglePlayPause();
-      }
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        video.currentTime = Math.max(0, video.currentTime - 5);
-      }
-      if (e.key === "ArrowRight") {
-        e.preventDefault();
-        video.currentTime = Math.min(duration, video.currentTime + 5);
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        video.volume = Math.min(1, video.volume + 0.1);
-      }
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        video.volume = Math.max(0, video.volume - 0.1);
-      }
-      if (e.key === "m") {
-        e.preventDefault();
-        toggleMute();
-      }
-      if (e.key === "f") {
-        e.preventDefault();
-        toggleFullscreen();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [duration]);
+  if (error) {
+    return (
+      <ErrorContainer>
+        <ErrorIcon>⚠️</ErrorIcon>
+        <h3>Unable to play video</h3>
+        <p>{error}</p>
+        <ButtonGroup>
+          <Button onClick={() => window.open(url, "_blank")}>
+            Open in new tab
+          </Button>
+          {onDownload && (
+            <Button $primary onClick={onDownload}>
+              <Download size={16} />
+              Download Video
+            </Button>
+          )}
+        </ButtonGroup>
+      </ErrorContainer>
+    );
+  }
 
   return (
     <Container onMouseMove={handleMouseMove}>
-      <VideoElement ref={videoRef} src={url} />
+      <Video ref={videoRef} src={url} controls={false} onClick={togglePlay} />
 
-      <Controls $visible={showControls}>
-        <ProgressContainer>
-          <ProgressBar
-            type="range"
-            min="0"
-            max={duration || 0}
-            value={currentTime}
-            onChange={handleSeek}
-            step="0.1"
-          />
-        </ProgressContainer>
+      {showControls && (
+        <ControlsOverlay>
+          <TopControls>
+            <FileName>{fileName}</FileName>
+            <PlaybackRate onClick={changePlaybackRate}>
+              {playbackRate}x
+            </PlaybackRate>
+          </TopControls>
 
-        <ControlsRow>
-          <LeftControls>
-            <ControlButton onClick={togglePlayPause}>
-              {isPlaying ? (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"
-                    fill="currentColor"
-                  />
-                </svg>
-              ) : (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <path d="M8 5v14l11-7z" fill="currentColor" />
-                </svg>
-              )}
-            </ControlButton>
+          <CenterControls>
+            <PlayButton onClick={togglePlay}>
+              {isPlaying ? <Pause size={32} /> : <Play size={32} />}
+            </PlayButton>
+          </CenterControls>
 
-            <VolumeContainer>
+          <BottomControls>
+            <TimeInfo>
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </TimeInfo>
+
+            <SeekBar
+              type="range"
+              min="0"
+              max={duration}
+              value={currentTime}
+              onChange={(e) => handleSeek(parseFloat(e.target.value))}
+            />
+
+            <RightControls>
               <ControlButton onClick={toggleMute}>
-                {isMuted || volume === 0 ? (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                ) : volume < 0.5 ? (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <path d="M7 9v6h4l5 5V4l-5 5H7z" fill="currentColor" />
-                  </svg>
-                ) : (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                )}
+                {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
               </ControlButton>
+
               <VolumeSlider
                 type="range"
                 min="0"
                 max="1"
                 step="0.1"
                 value={isMuted ? 0 : volume}
-                onChange={handleVolumeChange}
+                onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
               />
-            </VolumeContainer>
 
-            <TimeDisplay>
-              {formatTime(currentTime)} / {formatTime(duration)}
-            </TimeDisplay>
-          </LeftControls>
+              <ControlButton onClick={toggleFullscreen}>
+                <Maximize2 size={20} />
+              </ControlButton>
 
-          <RightControls>
-            <SettingsButton onClick={() => setShowSettings(!showSettings)}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94L14.4 2.81c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"
-                  fill="currentColor"
-                />
-              </svg>
-              {showSettings && (
-                <SettingsMenu>
-                  <SettingsTitle>Playback Speed</SettingsTitle>
-                  {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => (
-                    <SettingsOption
-                      key={rate}
-                      onClick={() => changePlaybackRate(rate)}
-                      $active={playbackRate === rate}
-                    >
-                      {rate === 1 ? "Normal" : `${rate}x`}
-                    </SettingsOption>
-                  ))}
-                </SettingsMenu>
+              {onDownload && (
+                <ControlButton onClick={onDownload}>
+                  <Download size={20} />
+                </ControlButton>
               )}
-            </SettingsButton>
+            </RightControls>
+          </BottomControls>
+        </ControlsOverlay>
+      )}
 
-            <ControlButton onClick={toggleFullscreen} title="Fullscreen (F)">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"
-                  fill="currentColor"
-                />
-              </svg>
-            </ControlButton>
-          </RightControls>
-        </ControlsRow>
-      </Controls>
-
-      <KeyboardHints>
-        <Hint>Space Play/Pause</Hint>
-        <Hint>← → Seek</Hint>
-        <Hint>↑ ↓ Volume</Hint>
-        <Hint>M Mute</Hint>
-        <Hint>F Fullscreen</Hint>
-      </KeyboardHints>
+      {!isPlaying && !showControls && (
+        <PlayOverlay onClick={togglePlay}>
+          <Play size={48} />
+        </PlayOverlay>
+      )}
     </Container>
   );
 };
@@ -293,216 +265,265 @@ const Container = styled.div`
   height: 100%;
   position: relative;
   background: #000;
+  overflow: hidden;
+`;
+
+const LoadingContainer = styled.div`
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  height: 100%;
+  gap: 16px;
+  background: #000;
+  color: white;
 `;
 
-const VideoElement = styled.video`
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
+const Spinner = styled.div`
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #1a73e8;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
 `;
 
-const Controls = styled.div<{ $visible: boolean }>`
+const ErrorContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+  gap: 16px;
+  background: white;
+`;
+
+const ErrorIcon = styled.div`
+  font-size: 48px;
+  margin-bottom: 8px;
+`;
+
+const ButtonGroup = styled.div`
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+`;
+
+const Button = styled.button<{ $primary?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  ${({ $primary }) =>
+    $primary
+      ? `
+    background: #1a73e8;
+    color: white;
+    
+    &:hover {
+      background: #0d62d9;
+    }
+  `
+      : `
+    background: white;
+    color: #202124;
+    border: 1px solid #dadce0;
+    
+    &:hover {
+      background: #f8f9fa;
+    }
+  `}
+`;
+
+const Video = styled.video`
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  cursor: pointer;
+`;
+
+const ControlsOverlay = styled.div`
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
-  padding: 24px 16px 16px;
-  opacity: ${(props) => (props.$visible ? 1 : 0)};
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
   transition: opacity 0.3s;
 `;
 
-const ProgressContainer = styled.div`
-  margin-bottom: 12px;
+const TopControls = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
 `;
 
-const ProgressBar = styled.input`
-  width: 100%;
+const FileName = styled.div`
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.9;
+`;
+
+const PlaybackRate = styled.button`
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+`;
+
+const CenterControls = styled.div`
+  display: flex;
+  justify-content: center;
+`;
+
+const PlayButton = styled.button`
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: white;
+    transform: scale(1.1);
+  }
+`;
+
+const BottomControls = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: white;
+`;
+
+const TimeInfo = styled.div`
+  font-size: 14px;
+  min-width: 100px;
+`;
+
+const SeekBar = styled.input`
+  flex: 1;
   height: 4px;
+  -webkit-appearance: none;
   background: rgba(255, 255, 255, 0.3);
   border-radius: 2px;
-  outline: none;
   cursor: pointer;
-  appearance: none;
 
   &::-webkit-slider-thumb {
-    appearance: none;
+    -webkit-appearance: none;
     width: 12px;
     height: 12px;
-    background: #1a73e8;
     border-radius: 50%;
+    background: #1a73e8;
     cursor: pointer;
   }
 
   &::-moz-range-thumb {
     width: 12px;
     height: 12px;
-    background: #1a73e8;
     border-radius: 50%;
+    background: #1a73e8;
     cursor: pointer;
     border: none;
   }
-`;
-
-const ControlsRow = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-`;
-
-const LeftControls = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
 `;
 
 const RightControls = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 `;
 
 const ControlButton = styled.button`
-  background: transparent;
+  background: none;
   border: none;
   color: white;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
+  padding: 8px;
+  border-radius: 4px;
 
   &:hover {
     background: rgba(255, 255, 255, 0.1);
   }
-
-  svg {
-    width: 24px;
-    height: 24px;
-  }
-`;
-
-const VolumeContainer = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
 `;
 
 const VolumeSlider = styled.input`
   width: 80px;
   height: 4px;
+  -webkit-appearance: none;
   background: rgba(255, 255, 255, 0.3);
   border-radius: 2px;
-  outline: none;
   cursor: pointer;
-  appearance: none;
 
   &::-webkit-slider-thumb {
-    appearance: none;
+    -webkit-appearance: none;
     width: 12px;
     height: 12px;
-    background: white;
     border-radius: 50%;
+    background: #1a73e8;
     cursor: pointer;
   }
 
   &::-moz-range-thumb {
     width: 12px;
     height: 12px;
-    background: white;
     border-radius: 50%;
+    background: #1a73e8;
     cursor: pointer;
     border: none;
   }
 `;
 
-const TimeDisplay = styled.span`
-  color: white;
-  font-size: 13px;
-  font-family: monospace;
-  white-space: nowrap;
-`;
-
-const SettingsButton = styled.button`
-  position: relative;
-  background: transparent;
-  border: none;
-  color: white;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  cursor: pointer;
+const PlayOverlay = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-`;
-
-const SettingsMenu = styled.div`
-  position: absolute;
-  bottom: 48px;
-  right: 0;
-  background: rgba(0, 0, 0, 0.95);
-  border-radius: 8px;
-  padding: 8px;
-  min-width: 140px;
-  backdrop-filter: blur(8px);
-`;
-
-const SettingsTitle = styled.div`
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 12px;
-  padding: 8px 12px 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-`;
-
-const SettingsOption = styled.button<{ $active: boolean }>`
-  width: 100%;
-  background: ${(props) =>
-    props.$active ? "rgba(26, 115, 232, 0.3)" : "transparent"};
-  border: none;
-  color: white;
-  padding: 8px 12px;
-  text-align: left;
+  background: rgba(0, 0, 0, 0.4);
   cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.2s;
 
   &:hover {
-    background: ${(props) =>
-      props.$active ? "rgba(26, 115, 232, 0.4)" : "rgba(255, 255, 255, 0.1)"};
+    background: rgba(0, 0, 0, 0.3);
   }
-`;
-
-const KeyboardHints = styled.div`
-  position: absolute;
-  bottom: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 12px;
-  background: rgba(0, 0, 0, 0.7);
-  padding: 8px 16px;
-  border-radius: 20px;
-  backdrop-filter: blur(8px);
-  pointer-events: none;
-`;
-
-const Hint = styled.span`
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 12px;
 `;
 
 export default VideoPreview;
