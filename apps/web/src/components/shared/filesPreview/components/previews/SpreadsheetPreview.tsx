@@ -66,7 +66,7 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
       }
       const workbook = XLSX.read(arrayBuffer, { type: "array" });
 
-      const sheetData: SheetData[] = workbook.SheetNames.map((sheetName) => {
+      const sheetData: SheetData[] = workbook.SheetNames.map((sheetName: string) => {
         const worksheet = workbook.Sheets[sheetName];
         const data = XLSX.utils.sheet_to_json(worksheet, {
           header: 1,
