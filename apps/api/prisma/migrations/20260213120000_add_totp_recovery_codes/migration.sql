@@ -1,5 +1,5 @@
--- CreateTable
-CREATE TABLE "totp_recovery_codes" (
+-- CreateTable (idempotent: table may already exist from 20260206162442_)
+CREATE TABLE IF NOT EXISTS "totp_recovery_codes" (
     "id" TEXT NOT NULL,
     "user_id" TEXT NOT NULL,
     "code_hash" TEXT NOT NULL,
@@ -10,5 +10,15 @@ CREATE TABLE "totp_recovery_codes" (
     CONSTRAINT "totp_recovery_codes_pkey" PRIMARY KEY ("id")
 );
 
--- AddForeignKey
-ALTER TABLE "totp_recovery_codes" ADD CONSTRAINT "totp_recovery_codes_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- AddForeignKey (only if not already present)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'totp_recovery_codes_user_id_fkey'
+  ) THEN
+    ALTER TABLE "totp_recovery_codes"
+    ADD CONSTRAINT "totp_recovery_codes_user_id_fkey"
+    FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;

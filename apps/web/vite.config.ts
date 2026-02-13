@@ -11,7 +11,7 @@ export default defineConfig({
   },
   server: {
     host: "0.0.0.0",
-    port: 5173,
+    port: parseInt(process.env.PORT || "5173", 10),
     proxy: {
       "/api": {
         // Default: localhost so setup works on any machine. Override with API_PROXY_TARGET (e.g. http://192.168.1.2:3000).
