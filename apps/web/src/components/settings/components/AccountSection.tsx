@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import styled from "styled-components";
 import {
   Section,
   SectionTitle,
@@ -20,6 +21,28 @@ import {
 import { settingsService } from "../service/settingsService";
 import { useSettings } from "../../shared/hooks/useSettings";
 import type { UserSettings } from "../types/UserSettings";
+
+const FieldRow = styled.div`
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+`;
+
+const AlertMessage = styled.div<{ $success?: boolean }>`
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 0.95rem;
+  border-radius: 10px;
+  border: 1px solid ${(props) => (props.$success ? "#b8efc9" : "#ffd1d1")};
+  background: ${(props) => (props.$success ? "#eafff0" : "#fff4f4")};
+  color: ${(props) => (props.$success ? "#0f7c3a" : "#c23232")};
+  font-size: 0.875rem;
+`;
+
+const HiddenInput = styled.input`
+  display: none;
+`;
 
 interface AccountSectionProps {
   settings: UserSettings | null;
@@ -231,7 +254,7 @@ export const AccountSection: React.FC<AccountSectionProps> = ({
       <Section>
         <SectionTitle>Personal Information</SectionTitle>
         <SectionDescription>
-          Update your profile details and email address
+          Update your identity details and profile avatar.
         </SectionDescription>
 
         <ProfilePictureWrapper>
@@ -241,7 +264,7 @@ export const AccountSection: React.FC<AccountSectionProps> = ({
             <ButtonGroup>
               <Button
                 type="button"
-                variant="default"
+                  $variant="default"
                 onClick={handleAvatarClick}
                 disabled={uploadingAvatar || removingAvatar}
               >
@@ -250,7 +273,7 @@ export const AccountSection: React.FC<AccountSectionProps> = ({
               {avatarUrl && (
                 <Button
                   type="button"
-                  variant="danger"
+                  $variant="danger"
                   onClick={handleRemoveAvatar}
                   disabled={uploadingAvatar || removingAvatar}
                 >
@@ -261,86 +284,66 @@ export const AccountSection: React.FC<AccountSectionProps> = ({
             <SmallText>JPG, PNG, GIF or WebP. Max 5MB.</SmallText>
           </div>
 
-          <input
+          <HiddenInput
             ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-            style={{ display: "none" }}
             onChange={handleAvatarChange}
           />
         </ProfilePictureWrapper>
 
         <FormGroup>
           <Label>Email</Label>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+          <FieldRow>
             <Input
               type="email"
               value={formData.email}
               onChange={handleEmailChange}
               placeholder="your@email.com"
-              style={{ flex: "1", minWidth: "200px" }}
+              style={{ flex: 1, minWidth: 220 }}
             />
             <Button
               type="button"
-              variant="default"
+              $variant="default"
               onClick={handleSaveEmail}
               disabled={savingEmail || !formData.email.trim()}
             >
               {savingEmail ? "Saving..." : "Save email"}
             </Button>
-          </div>
+          </FieldRow>
         </FormGroup>
 
         <FormGroup>
           <Label>First name</Label>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+          <FieldRow>
             <Input
               type="text"
               value={formData.firstName}
               onChange={handleFirstNameChange}
               placeholder="First name"
-              style={{ flex: "1", minWidth: "200px" }}
+              style={{ flex: 1, minWidth: 220 }}
             />
             <Button
               type="button"
-              variant="default"
+              $variant="default"
               onClick={handleSaveFirstName}
               disabled={savingFirstName}
             >
               {savingFirstName ? "Saving..." : "Save name"}
             </Button>
-          </div>
+          </FieldRow>
         </FormGroup>
 
         {message && (
-          <div
-            style={{
-              padding: "0.75rem 1rem",
-              borderRadius: "8px",
-              background:
-                message.toLowerCase().includes("success") ||
-                message.toLowerCase().includes("saved") ||
-                message.toLowerCase().includes("updated")
-                  ? "#dcfce7"
-                  : "#fee2e2",
-              color:
-                message.toLowerCase().includes("success") ||
-                message.toLowerCase().includes("saved") ||
-                message.toLowerCase().includes("updated")
-                  ? "#15803d"
-                  : "#dc2626",
-              fontSize: "0.875rem",
-              marginBottom: "1rem",
-              border:
-                message.toLowerCase().includes("success") ||
-                message.toLowerCase().includes("saved") ||
-                message.toLowerCase().includes("updated")
-                  ? "1px solid #bbf7d0"
-                  : "1px solid #fecaca",
-            }}
+          <AlertMessage
+            $success={
+              message.toLowerCase().includes("success") ||
+              message.toLowerCase().includes("saved") ||
+              message.toLowerCase().includes("updated")
+            }
           >
             {message}
-          </div>
+          </AlertMessage>
         )}
       </Section>
 
@@ -348,7 +351,7 @@ export const AccountSection: React.FC<AccountSectionProps> = ({
         <DangerZone>
           <SectionTitle>Delete Account</SectionTitle>
           <SectionDescription>
-            Permanently delete your account and all associated data
+            Permanently remove your account and all associated data.
           </SectionDescription>
 
           <DangerItem>
@@ -360,7 +363,7 @@ export const AccountSection: React.FC<AccountSectionProps> = ({
               </DangerDescription>
             </DangerInfo>
             <Button
-              variant="danger"
+              $variant="danger"
               onClick={handleDeleteAccount}
               disabled={deleting}
             >

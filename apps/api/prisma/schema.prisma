@@ -198,6 +198,7 @@ model FileShare {
   fileId          Int              @map("file_id")
   ownerId         String          @map("owner_id")
   shareToken      String          @unique @map("share_token")
+  shortId         String?         @unique @map("short_id")
   shareType       String          @map("share_type")
   permission      String
   password        String?

@@ -19,7 +19,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-import { trackFileActivity } from "../lib/helper";
+import { trackFileActivity, generateShortId } from "../lib/helper";
 import { buildContentDisposition } from "../lib/contentDisposition";
 import favoritesRoutes from "./favorite.routes";
 
@@ -55,6 +55,50 @@ export const s3Client = new S3Client({
 });
 
 const BUCKET_NAME = process.env.B2_BUCKET_NAME;
+
+function isLocalOrPrivateHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host.endsWith(".local") ||
+    host.startsWith("10.") ||
+    host.startsWith("192.168.") ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+  );
+}
+
+function normalizeFrontendBase(rawBase: string): string {
+  try {
+    const url = new URL(rawBase);
+    if (url.protocol === "https:" && isLocalOrPrivateHost(url.hostname)) {
+      url.protocol = "http:";
+    }
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return "http://localhost:5173";
+  }
+}
+
+function resolveFrontendBase(req: Request): string {
+  const origin = String(req.headers.origin || "").trim();
+  if (origin) return normalizeFrontendBase(origin);
+
+  const forwardedProto = String(req.headers["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim();
+  const forwardedHost = String(req.headers["x-forwarded-host"] || "")
+    .split(",")[0]
+    .trim();
+  if (forwardedProto && forwardedHost) {
+    return normalizeFrontendBase(`${forwardedProto}://${forwardedHost}`);
+  }
+
+  const envBase = (process.env.FRONTEND_URL || "").trim();
+  if (envBase) return normalizeFrontendBase(envBase);
+
+  return "http://localhost:5173";
+}
 
 function inferMimeTypeFromName(fileName: string): string | undefined {
   const ext = fileName.split(".").pop()?.toLowerCase();
@@ -227,20 +271,21 @@ filesRoutes.post(
 
       // Create share link (expires in 7 days)
       const shareToken = crypto.randomBytes(32).toString("hex");
+      const shortId = generateShortId();
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7);
       const shareId = crypto.randomUUID();
 
-      const shareRecord = await pool.query(
+      await pool.query(
         `INSERT INTO file_shares 
-         (id, file_id, owner_id, share_token, share_type, permission, expires_at, max_downloads, download_count, is_active, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
-         RETURNING share_token`,
+         (id, file_id, owner_id, share_token, short_id, share_type, permission, expires_at, max_downloads, download_count, is_active, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())`,
         [
           shareId,
           fileId,
           userId,
           shareToken,
+          shortId,
           "link",
           "view",
           expiresAt,
@@ -250,13 +295,15 @@ filesRoutes.post(
         ]
       );
 
-      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+      const frontendUrl = resolveFrontendBase(req);
       const shareUrl = `${frontendUrl}/shared/${shareToken}`;
+      const shortUrl = `${frontendUrl}/s/${shortId}`;
 
       res.json({
         success: true,
         shareToken,
         shareUrl,
+        shortUrl,
         fileName: file.originalname,
         fileSize: file.size,
         expiresAt: expiresAt.toISOString(),
@@ -1576,9 +1623,11 @@ filesRoutes.get("/recent", authMiddleware, async (req: AuthRequest, res) => {
     // Parse and validate query parameters
     const daysParam = req.query.days;
     const limitParam = req.query.limit;
+    const scopeParam = req.query.scope;
     
     const days = daysParam ? parseInt(String(daysParam), 10) : 30;
     const limit = limitParam ? parseInt(String(limitParam), 10) : 50;
+    const scope = scopeParam === "activity" ? "activity" : "edited";
 
     // Validate parsed values
     if (isNaN(days) || days < 1 || days > 365) {
@@ -1595,10 +1644,132 @@ filesRoutes.get("/recent", authMiddleware, async (req: AuthRequest, res) => {
       });
     }
 
+    // Activity scope powers Home -> Recent Files.
+    // It intentionally includes uploads/updates/shares, not only explicit edits.
+    if (scope === "activity") {
+      const ownResult = await pool.query(
+        `
+        SELECT
+          uf.id,
+          uf.original_name,
+          uf.s3_key,
+          uf.folder_path,
+          uf.size,
+          uf.mime_type,
+          uf.created_at,
+          uf.updated_at,
+          uf.is_locked,
+          GREATEST(uf.created_at, uf.updated_at) as last_edited_at,
+          0 as edit_count,
+          CASE WHEN ff.id IS NOT NULL THEN true ELSE false END AS is_favorited
+        FROM user_files uf
+        LEFT JOIN favorited_files ff ON ff.file_id = uf.id AND ff.user_id = $1
+        WHERE uf.user_id = $1
+          AND uf.deleted_at IS NULL
+          AND uf.original_name != '.metadata'
+          AND (
+            uf.updated_at >= NOW() - INTERVAL '${days} days'
+            OR uf.created_at >= NOW() - INTERVAL '${days} days'
+          )
+        ORDER BY GREATEST(uf.created_at, uf.updated_at) DESC
+        LIMIT $2
+        `,
+        [req.userId, limit],
+      );
+
+      let activityFiles = ownResult.rows.map((row) => ({
+        ...row,
+        is_locked: row.is_locked || false,
+        is_favorited: row.is_favorited || false,
+        last_edited_at: row.last_edited_at || row.updated_at || row.created_at,
+        edit_count: 0,
+        is_shared: false,
+        owner_name: null,
+        owner_email: null,
+      }));
+
+      // Include shared-with-me files as recent activity (shared timeline).
+      try {
+        const tableCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'share_recipients'
+          );
+        `);
+        if (tableCheck.rows[0]?.exists) {
+          const sharedResult = await pool.query(
+            `
+            SELECT
+              uf.id,
+              uf.original_name,
+              uf.s3_key,
+              uf.folder_path,
+              uf.size,
+              uf.mime_type,
+              uf.created_at,
+              uf.updated_at,
+              uf.is_locked,
+              fs.created_at AS last_edited_at,
+              u.name AS owner_name,
+              u.email AS owner_email,
+              CASE WHEN ff.id IS NOT NULL THEN true ELSE false END AS is_favorited
+            FROM share_recipients sr
+            JOIN file_shares fs ON fs.id = sr.share_id
+            JOIN user_files uf ON uf.id = fs.file_id
+            JOIN "User" u ON u.id = fs.owner_id
+            LEFT JOIN favorited_files ff ON ff.user_id = $1 AND ff.file_id = uf.id
+            WHERE sr.recipient_user_id = $1
+              AND fs.is_active = true
+              AND (fs.expires_at IS NULL OR fs.expires_at > NOW())
+              AND uf.deleted_at IS NULL
+              AND fs.created_at >= NOW() - INTERVAL '${days} days'
+            ORDER BY fs.created_at DESC
+            LIMIT $2
+            `,
+            [req.userId, limit],
+          );
+
+          const sharedRows = sharedResult.rows.map((row) => ({
+            id: row.id,
+            original_name: row.original_name,
+            s3_key: row.s3_key,
+            folder_path: row.folder_path,
+            size: row.size,
+            mime_type: row.mime_type,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            is_locked: row.is_locked || false,
+            is_favorited: row.is_favorited || false,
+            last_edited_at: row.last_edited_at || row.updated_at || row.created_at,
+            edit_count: 0,
+            is_shared: true,
+            owner_name: row.owner_name,
+            owner_email: row.owner_email,
+          }));
+
+          activityFiles = activityFiles.concat(sharedRows);
+          activityFiles.sort(
+            (a, b) =>
+              new Date(b.last_edited_at).getTime() -
+              new Date(a.last_edited_at).getTime(),
+          );
+          activityFiles = activityFiles.slice(0, limit);
+        }
+      } catch {
+        // Non-fatal: keep own files only
+      }
+
+      return res.json({
+        success: true,
+        files: activityFiles,
+        count: activityFiles.length,
+      });
+    }
+
     let result;
     
-    // Try the full query with file_activity table first
-    // If the table doesn't exist, fall back to a simpler query
+    // Recently edited should only include files with explicit 'edited' activity.
+    // Do not fall back to created_at/updated_at, because that incorrectly includes uploads.
     try {
       result = await pool.query(
         `
@@ -1612,15 +1783,14 @@ filesRoutes.get("/recent", authMiddleware, async (req: AuthRequest, res) => {
           uf.created_at,
           uf.updated_at,
           uf.is_locked,
-          COALESCE(
-            (SELECT created_at 
-             FROM file_activity 
-             WHERE file_id = uf.id 
-               AND user_id = $1 
-               AND activity_type = 'edited'
-             ORDER BY created_at DESC 
-             LIMIT 1),
-            uf.updated_at
+          (
+            SELECT created_at 
+            FROM file_activity 
+            WHERE file_id = uf.id 
+              AND user_id = $1 
+              AND activity_type = 'edited'
+            ORDER BY created_at DESC 
+            LIMIT 1
           ) as last_edited_at,
           (
             SELECT COUNT(*)
@@ -1636,16 +1806,12 @@ filesRoutes.get("/recent", authMiddleware, async (req: AuthRequest, res) => {
         WHERE uf.user_id = $1
           AND uf.deleted_at IS NULL
           AND uf.original_name != '.metadata'
-          AND (
-            uf.updated_at >= NOW() - INTERVAL '${days} days'
-            OR uf.created_at >= NOW() - INTERVAL '${days} days'
-            OR EXISTS (
-              SELECT 1 FROM file_activity fa
-              WHERE fa.file_id = uf.id
-                AND fa.user_id = $1
-                AND fa.activity_type = 'edited'
-                AND fa.created_at >= NOW() - INTERVAL '${days} days'
-            )
+          AND EXISTS (
+            SELECT 1 FROM file_activity fa
+            WHERE fa.file_id = uf.id
+              AND fa.user_id = $1
+              AND fa.activity_type = 'edited'
+              AND fa.created_at >= NOW() - INTERVAL '${days} days'
           )
         ORDER BY last_edited_at DESC
         LIMIT $2
@@ -1653,78 +1819,13 @@ filesRoutes.get("/recent", authMiddleware, async (req: AuthRequest, res) => {
         [req.userId, limit],
       );
     } catch (queryError: any) {
-      // If file_activity table doesn't exist, use a simpler query
+      // If file_activity table doesn't exist, return an empty edited list.
       if (queryError?.code === '42P01' || queryError?.message?.includes('does not exist') || queryError?.message?.includes('relation "file_activity"')) {
-        console.warn("file_activity table not found, using simplified query");
-        result = await pool.query(
-          `
-          SELECT 
-            uf.id,
-            uf.original_name,
-            uf.s3_key,
-            uf.folder_path,
-            uf.size,
-            uf.mime_type,
-            uf.created_at,
-            uf.updated_at,
-            GREATEST(uf.created_at, uf.updated_at) as last_edited_at,
-            0 as edit_count,
-            CASE WHEN ff.id IS NOT NULL THEN true ELSE false END AS is_favorited,
-            uf.is_locked
-          FROM user_files uf
-          LEFT JOIN favorited_files ff ON ff.file_id = uf.id AND ff.user_id = $1
-          WHERE uf.user_id = $1
-            AND uf.deleted_at IS NULL
-            AND uf.original_name != '.metadata'
-            AND (
-              uf.updated_at >= NOW() - INTERVAL '${days} days'
-              OR uf.created_at >= NOW() - INTERVAL '${days} days'
-            )
-          ORDER BY GREATEST(uf.created_at, uf.updated_at) DESC
-          LIMIT $2
-          `,
-          [req.userId, limit],
-        );
+        console.warn("file_activity table not found, returning empty recently edited list");
+        result = { rows: [] };
       } else {
         // Re-throw if it's a different error
         throw queryError;
-      }
-    }
-
-    // If no files found with time filter, show most recent files regardless of date
-    if (result && result.rows.length === 0) {
-      try {
-        const fallbackResult = await pool.query(
-          `
-          SELECT 
-            uf.id,
-            uf.original_name,
-            uf.s3_key,
-            uf.folder_path,
-            uf.size,
-            uf.mime_type,
-            uf.created_at,
-            uf.updated_at,
-            GREATEST(uf.created_at, uf.updated_at) as last_edited_at,
-            0 as edit_count,
-            CASE WHEN ff.id IS NOT NULL THEN true ELSE false END AS is_favorited,
-            uf.is_locked
-          FROM user_files uf
-          LEFT JOIN favorited_files ff ON ff.file_id = uf.id AND ff.user_id = $1
-          WHERE uf.user_id = $1
-            AND uf.deleted_at IS NULL
-            AND uf.original_name != '.metadata'
-          ORDER BY GREATEST(uf.created_at, uf.updated_at) DESC
-          LIMIT $2
-          `,
-          [req.userId, limit],
-        );
-        if (fallbackResult && fallbackResult.rows.length > 0) {
-          result = fallbackResult;
-        }
-      } catch (fallbackError: any) {
-        // If fallback also fails, just continue with empty result
-        console.warn("Fallback query also failed:", fallbackError);
       }
     }
 
@@ -1739,7 +1840,7 @@ filesRoutes.get("/recent", authMiddleware, async (req: AuthRequest, res) => {
       owner_email: null,
     }));
 
-    // Include shared-with-me files in recent (when share_recipients exists)
+    // Include shared-with-me files only when THIS user edited them.
     try {
       const tableCheck = await pool.query(`
         SELECT EXISTS (
@@ -1760,7 +1861,15 @@ filesRoutes.get("/recent", authMiddleware, async (req: AuthRequest, res) => {
             uf.created_at,
             uf.updated_at,
             uf.is_locked,
-            fs.created_at AS share_created_at,
+            (
+              SELECT created_at
+              FROM file_activity fa
+              WHERE fa.file_id = uf.id
+                AND fa.user_id = $1
+                AND fa.activity_type = 'edited'
+              ORDER BY created_at DESC
+              LIMIT 1
+            ) AS last_edited_at,
             u.name AS owner_name,
             u.email AS owner_email,
             CASE WHEN ff.id IS NOT NULL THEN true ELSE false END AS is_favorited
@@ -1773,7 +1882,15 @@ filesRoutes.get("/recent", authMiddleware, async (req: AuthRequest, res) => {
             AND fs.is_active = true
             AND (fs.expires_at IS NULL OR fs.expires_at > NOW())
             AND uf.deleted_at IS NULL
-          ORDER BY fs.created_at DESC
+            AND EXISTS (
+              SELECT 1
+              FROM file_activity fa
+              WHERE fa.file_id = uf.id
+                AND fa.user_id = $1
+                AND fa.activity_type = 'edited'
+                AND fa.created_at >= NOW() - INTERVAL '${days} days'
+            )
+          ORDER BY last_edited_at DESC
           LIMIT $2
           `,
           [req.userId, limit],
@@ -1789,7 +1906,7 @@ filesRoutes.get("/recent", authMiddleware, async (req: AuthRequest, res) => {
           updated_at: row.updated_at,
           is_locked: row.is_locked || false,
           is_favorited: row.is_favorited || false,
-          last_edited_at: row.share_created_at,
+          last_edited_at: row.last_edited_at || row.updated_at || row.created_at,
           edit_count: 0,
           is_shared: true,
           owner_name: row.owner_name,

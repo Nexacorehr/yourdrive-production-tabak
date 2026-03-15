@@ -20,6 +20,21 @@ export const getApiBaseURL = (): string => {
   let envApiUrl = import.meta.env.VITE_API_URL;
   if (envApiUrl && typeof envApiUrl === "string" && envApiUrl.trim() !== "") {
     envApiUrl = envApiUrl.trim();
+    const isAbsoluteHttp = /^https?:\/\//i.test(envApiUrl);
+    const allowCrossOriginApiInDev =
+      String(import.meta.env.VITE_ALLOW_CROSS_ORIGIN_API ?? "").toLowerCase() ===
+      "true";
+
+    // In local dev prefer same-origin /api proxy for auth cookies and CORS reliability.
+    // Set VITE_ALLOW_CROSS_ORIGIN_API=true if you intentionally want direct cross-origin API calls.
+    if (import.meta.env.DEV && isAbsoluteHttp && !allowCrossOriginApiInDev) {
+      console.warn(
+        `[api] Ignoring VITE_API_URL="${envApiUrl}" in dev. Using "/api" proxy. ` +
+          `Set VITE_ALLOW_CROSS_ORIGIN_API=true to force direct cross-origin calls.`,
+      );
+      return "/api";
+    }
+
     // Local/LAN servers usually run HTTP; force http to avoid ERR_SSL_PROTOCOL_ERROR
     if (
       envApiUrl.startsWith("https://") &&

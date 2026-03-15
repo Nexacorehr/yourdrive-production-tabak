@@ -4,7 +4,10 @@ import {
   createRootRoute,
   redirect,
   Outlet,
+  useLocation,
 } from "@tanstack/react-router";
+import { AnimatePresence, motion } from "framer-motion";
+import styled from "styled-components";
 import { useAuthStore } from "../store/authStore";
 
 import LandingPage from "../components/landing/Landing";
@@ -26,6 +29,7 @@ import Favorited from "../components/dashboard/component/favorited/Favorited";
 import Home from "../components/dashboard/component/main/Home";
 import Settings from "../components/settings/Settings";
 import SharedViewer from "../components/shared/sharedViewer/SharedViewer";
+import ShortLinkRedirect from "../components/shared/ShortLinkRedirect";
 import Features from "../components/features/Features";
 import TermsOfService from "../components/termsofservice/TermsOfService";
 import PrivacyPolicy from "../components/privacypolicy/PrivacyPolicy";
@@ -40,6 +44,12 @@ import { VerifyEmail } from "../components/auth/VerifyEmail";
 import FileEditor from "../components/shared/fileEditor/FileEditor";
 import NotFound from "../components/notfound/NotFound";
 import { GlobalReset } from "../components/landing/styles/landing";
+
+const RouteTransitionContainer = styled.div`
+  width: 100%;
+  min-height: 100vh;
+  background: #e9eef6;
+`;
 
 export const ROUTES = {
   HOME: "/",
@@ -68,14 +78,30 @@ export const ROUTES = {
   FAVORITED: "/dashboard/favorited",
   SETTINGS: "/dashboard/settings",
   SHARED_FILE: "/shared/$token",
+  SHORT_LINK: "/s/$shortId",
   EDIT_FILE: "/edit/$fileId",
 } as const;
 
 function RootComponent() {
+  const location = useLocation();
+
   return (
     <>
       <GlobalReset />
-      <Outlet />
+      <RouteTransitionContainer>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            style={{ minHeight: "100vh" }}
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
+      </RouteTransitionContainer>
     </>
   );
 }
@@ -266,6 +292,12 @@ const sharedFileRoute = createRoute({
   component: SharedViewer,
 });
 
+const shortLinkRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/s/$shortId",
+  component: ShortLinkRedirect,
+});
+
 const editFileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/edit/$fileId",
@@ -304,6 +336,7 @@ const routeTree = rootRoute.addChildren([
   featuresRoute,
   helpCenterRoute,
   sharedFileRoute,
+  shortLinkRoute,
   editFileRoute,
   notFoundRoute,
   catchAllRoute,

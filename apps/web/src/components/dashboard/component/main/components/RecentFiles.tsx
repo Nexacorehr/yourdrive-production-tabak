@@ -208,7 +208,7 @@ const RecentFiles: React.FC = () => {
   const fetchRecentFiles = async () => {
     try {
       setLoading(true);
-      const response = await api.get("/files/recent?limit=10");
+      const response = await api.get("/files/recent?limit=10&scope=activity");
       const data = response.data;
 
       if (data.success && data.files) {

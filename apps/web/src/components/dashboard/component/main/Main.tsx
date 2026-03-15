@@ -25,7 +25,7 @@ const Main = ({ children }: MainProps) => {
           }}
           style={{
             width: "100%",
-            height: "100%",
+            minHeight: "100%",
           }}
         >
           {children}
@@ -39,7 +39,8 @@ export default Main;
 
 const MainContainer = styled.main`
   flex: 1;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   position: relative;
   background: #f8f9fa;
   border-radius: 10px;

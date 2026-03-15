@@ -4,7 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { uploadToS3, generateSignedUrl } from "../lib/helper";
+import { uploadToS3, generateSignedUrl, generateShortId } from "../lib/helper";
 import { emailService } from "../lib/email.service";
 import { s3Client } from "./files.routes";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
@@ -12,7 +12,50 @@ import { SettingsService } from "../services/settings.service";
 
 const sharingRoutes = express.Router();
 const prisma = new PrismaClient();
-const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+
+function isLocalOrPrivateHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host.endsWith(".local") ||
+    host.startsWith("10.") ||
+    host.startsWith("192.168.") ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+  );
+}
+
+function normalizeFrontendBase(rawBase: string): string {
+  try {
+    const url = new URL(rawBase);
+    if (url.protocol === "https:" && isLocalOrPrivateHost(url.hostname)) {
+      url.protocol = "http:";
+    }
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return "http://localhost:5173";
+  }
+}
+
+function resolveFrontendBase(req: express.Request): string {
+  const origin = String(req.headers.origin || "").trim();
+  if (origin) return normalizeFrontendBase(origin);
+
+  const forwardedProto = String(req.headers["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim();
+  const forwardedHost = String(req.headers["x-forwarded-host"] || "")
+    .split(",")[0]
+    .trim();
+  if (forwardedProto && forwardedHost) {
+    return normalizeFrontendBase(`${forwardedProto}://${forwardedHost}`);
+  }
+
+  const envBase = (process.env.FRONTEND_URL || "").trim();
+  if (envBase) return normalizeFrontendBase(envBase);
+
+  return "http://localhost:5173";
+}
 
 const addCommentSchema = z.object({
   text: z.string().min(1).max(1000),
@@ -40,9 +83,31 @@ const updateShareSchema = z.object({
   maxDownloads: z.number().nullable().optional(),
 });
 
+// Resolve short id to share token (for /s/:shortId redirect; no auth)
+sharingRoutes.get("/resolve-short/:shortId", async (req, res) => {
+  try {
+    const { shortId } = req.params;
+    const share = await prisma.fileShare.findFirst({
+      where: { shortId, isActive: true },
+      select: { shareToken: true, expiresAt: true },
+    });
+    if (!share) {
+      return res.status(404).json({ success: false, error: "Share not found" });
+    }
+    if (share.expiresAt && share.expiresAt < new Date()) {
+      return res.status(404).json({ success: false, error: "Share expired" });
+    }
+    res.json({ success: true, shareToken: share.shareToken });
+  } catch (err) {
+    console.error("Resolve short error:", err);
+    res.status(500).json({ success: false, error: "Failed to resolve short link" });
+  }
+});
+
 // Get all shares for a specific file
 sharingRoutes.get("/file/:fileId", async (req, res) => {
   try {
+    const frontendUrl = resolveFrontendBase(req);
     const fileId = parseInt(req.params.fileId);
 
     if (isNaN(fileId)) {
@@ -87,6 +152,7 @@ sharingRoutes.get("/file/:fileId", async (req, res) => {
       shares: shares.map((share: (typeof shares)[number]) => ({
         id: share.id,
         shareToken: share.shareToken,
+        shortId: share.shortId,
         shareType: share.shareType,
         permission: share.permission,
         hasPassword: !!share.password,
@@ -100,6 +166,7 @@ sharingRoutes.get("/file/:fileId", async (req, res) => {
         commentCount: share._count.comments,
         activityCount: share._count.activities,
         url: `${frontendUrl}/shared/${share.shareToken}`,
+        shortUrl: share.shortId ? `${frontendUrl}/s/${share.shortId}` : null,
       })),
     });
   } catch (err) {
@@ -115,6 +182,7 @@ sharingRoutes.get("/file/:fileId", async (req, res) => {
 // Create a new share (auth required; apply user's default share settings when not provided)
 sharingRoutes.post("/create", authMiddleware, async (req: AuthRequest, res) => {
   try {
+    const frontendUrl = resolveFrontendBase(req);
     if (!req.userId) {
       return res.status(401).json({ success: false, error: "Authentication required" });
     }
@@ -168,6 +236,7 @@ sharingRoutes.post("/create", authMiddleware, async (req: AuthRequest, res) => {
     }
 
     const shareToken = crypto.randomBytes(32).toString("hex");
+    const shortId = generateShortId();
 
     let hashedPassword: string | null = null;
     if (validated.password && validated.password.trim().length > 0) {
@@ -194,6 +263,7 @@ sharingRoutes.post("/create", authMiddleware, async (req: AuthRequest, res) => {
         fileId: validated.fileId,
         ownerId: file.userId,
         shareToken,
+        shortId,
         shareType: validated.shareType,
         permission: validated.permission,
         password: hashedPassword,
@@ -306,11 +376,15 @@ sharingRoutes.post("/create", authMiddleware, async (req: AuthRequest, res) => {
       }
     }
 
+    const fullUrl = `${frontendUrl}/shared/${share.shareToken}`;
+    const shortUrl = share.shortId ? `${frontendUrl}/s/${share.shortId}` : null;
+
     res.status(201).json({
       success: true,
       share: {
         id: share.id,
         shareToken: share.shareToken,
+        shortId: share.shortId,
         shareType: share.shareType,
         permission: share.permission,
         hasPassword: !!share.password,
@@ -319,7 +393,8 @@ sharingRoutes.post("/create", authMiddleware, async (req: AuthRequest, res) => {
         downloadCount: share.downloadCount,
         isActive: share.isActive,
         createdAt: share.createdAt.toISOString(),
-        url: `${frontendUrl}/shared/${share.shareToken}`,
+        url: fullUrl,
+        shortUrl,
       },
     });
   } catch (err) {

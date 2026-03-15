@@ -1,81 +1,76 @@
 import styled from "styled-components";
 
 export const PageWrapper = styled.div`
-  height: 100vh;
-  overflow-y: auto;
-  background: #fafbfc;
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+  min-height: 100%;
+  overflow: visible;
+  background: transparent;
+  font-family: "Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
 `;
 
 export const Container = styled.div`
-  max-width: 1200px;
+  width: min(1140px, 100%);
   margin: 0 auto;
-  padding: 24px;
-  padding-bottom: 80px;
+  padding: 28px 24px 88px;
 `;
 
 export const Header = styled.div`
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
 `;
 
 export const Title = styled.h1`
-  font-size: 1.875rem;
+  font-family: "Forma DJR Display", "Poppins", sans-serif;
+  font-size: clamp(1.6rem, 2.2vw, 2rem);
   font-weight: 700;
-  margin-bottom: 0.5rem;
-  color: #0f1419;
+  margin-bottom: 0.375rem;
+  color: #0d1b2a;
+  letter-spacing: -0.02em;
 `;
 
 export const Subtitle = styled.p`
-  color: #536471;
+  color: #5c6b7d;
   font-size: 0.9375rem;
+  line-height: 1.5;
 `;
 
 export const TabsWrapper = styled.div`
-  border-bottom: 1px solid #eff3f4;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
+  padding: 0.25rem;
+  border: 1px solid #dbe7f4;
+  border-radius: 14px;
+  background: #f3f7fc;
   overflow-x: auto;
 
   &::-webkit-scrollbar {
-    height: 4px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: #f7f9fa;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: #cfd9de;
-    border-radius: 2px;
+    height: 0;
   }
 `;
 
 export const TabsList = styled.div`
   display: flex;
-  gap: 0;
+  gap: 0.375rem;
   min-width: max-content;
 `;
 
-export const TabButton = styled.button<{ active: boolean }>`
+export const TabButton = styled.button<{ $active: boolean }>`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 1rem 1.25rem;
+  padding: 0.625rem 0.85rem;
   border: none;
-  background: transparent;
-  color: ${(props) => (props.active ? "#1286FE" : "#536471")};
+  border-radius: 10px;
+  background: ${(props) => (props.$active ? "#ffffff" : "transparent")};
+  color: ${(props) => (props.$active ? "#14314c" : "#52657a")};
   cursor: pointer;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  transition: all 0.2s ease;
-  border-bottom: 3px solid
-    ${(props) => (props.active ? "#1286FE" : "transparent")};
-  position: relative;
+  transition: all 0.2s ease-out;
   white-space: nowrap;
+  box-shadow: ${(props) => (props.$active ? "0 1px 2px rgba(15, 32, 58, 0.08)" : "none")};
 
   &:hover {
-    color: #1286fe;
-    background: #f7f9fa;
+    background: ${(props) => (props.$active ? "#ffffff" : "#eaf1f9")};
+    color: #20354c;
   }
 
   svg {
@@ -84,97 +79,111 @@ export const TabButton = styled.button<{ active: boolean }>`
 `;
 
 export const MainContent = styled.div`
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 2rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  border: 1px solid #eff3f4;
+  background: transparent;
+  border-radius: 0;
+  padding: 0.35rem 0 0.15rem;
+  box-shadow: none;
+  border: none;
+
+  @media (max-width: 768px) {
+    padding: 0.25rem 0 0.1rem;
+  }
 `;
 
 export const Section = styled.div`
-  margin-bottom: 3rem;
+  margin-bottom: 1.7rem;
+  padding-bottom: 1.4rem;
+  border-bottom: 1px solid #e4edf7;
 
   &:last-child {
     margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
   }
 `;
 
 export const SectionTitle = styled.h2`
-  font-size: 1.25rem;
+  font-family: "Forma DJR Display", "Poppins", sans-serif;
+  font-size: 1.125rem;
   font-weight: 700;
-  margin-bottom: 0.5rem;
-  color: #0f1419;
+  margin-bottom: 0.4rem;
+  color: #102033;
+  letter-spacing: -0.01em;
 `;
 
 export const SectionDescription = styled.p`
-  color: #536471;
+  color: #5c6b7d;
   font-size: 0.9375rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
   line-height: 1.5;
 `;
 
 export const ProfilePictureWrapper = styled.div`
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 1.25rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
 `;
 
 export const Avatar = styled.div`
-  width: 80px;
-  height: 80px;
+  width: 84px;
+  height: 84px;
   background: linear-gradient(135deg, #1286fe 0%, #0d6efd 100%);
-  border-radius: 16px;
+  border-radius: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 2rem;
+  font-size: 1.9rem;
   font-weight: 700;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(18, 134, 254, 0.2);
+  box-shadow: 0 12px 24px rgba(18, 134, 254, 0.24);
 `;
 
 export const ButtonGroup = styled.div`
   display: flex;
-  gap: 0.75rem;
+  gap: 0.625rem;
   flex-wrap: wrap;
 `;
 
 export const Button = styled.button<{
-  variant?: "primary" | "danger" | "default";
+  $variant?: "primary" | "danger" | "default";
 }>`
-  padding: 0.625rem 1.25rem;
+  padding: 0.68rem 1.06rem;
   border: ${(props) =>
-    props.variant === "primary" ? "none" : "1px solid #cfd9de"};
-  border-radius: 9999px;
+    props.$variant === "primary" ? "1px solid #1286fe" : "1px solid #d8e6f6"};
+  border-radius: 11px;
   background: ${(props) => {
-    if (props.variant === "primary") return "#1286FE";
-    if (props.variant === "danger") return "#fee2e2";
+    if (props.$variant === "primary") return "#1286fe";
+    if (props.$variant === "danger") return "#fff1f1";
     return "#ffffff";
   }};
   color: ${(props) => {
-    if (props.variant === "primary") return "#ffffff";
-    if (props.variant === "danger") return "#dc2626";
-    return "#0f1419";
+    if (props.$variant === "primary") return "#ffffff";
+    if (props.$variant === "danger") return "#cc2f2f";
+    return "#1b2d44";
   }};
   cursor: pointer;
-  font-size: 0.9375rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.4rem;
   font-family: inherit;
 
   &:hover:not(:disabled) {
     background: ${(props) => {
-      if (props.variant === "primary") return "#0d6efd";
-      if (props.variant === "danger") return "#fecaca";
-      return "#f7f9fa";
+      if (props.$variant === "primary") return "#0f74db";
+      if (props.$variant === "danger") return "#ffe5e5";
+      return "#f5f9ff";
     }};
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-color: ${(props) =>
+      props.$variant === "default" ? "#bfd7f2" : "transparent"};
+    transform: translateY(-1px) scale(1.01);
+    box-shadow: 0 8px 18px rgba(10, 42, 75, 0.08);
   }
 
   &:disabled {
@@ -185,65 +194,69 @@ export const Button = styled.button<{
 `;
 
 export const SmallText = styled.p`
-  color: #8899a6;
-  font-size: 0.8125rem;
+  color: #6f8093;
+  font-size: 0.81rem;
   margin-top: 0.5rem;
 `;
 
 export const FormGroup = styled.div`
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.15rem;
 `;
 
 export const Label = styled.label`
   display: block;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  margin-bottom: 0.5rem;
-  color: #0f1419;
+  margin-bottom: 0.42rem;
+  color: #1b2d44;
 
   span {
-    color: #f91880;
+    color: #dc3b3b;
   }
 `;
 
 export const Input = styled.input`
   width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid #cfd9de;
-  border-radius: 12px;
+  height: 44px;
+  padding: 0 0.9rem;
+  border: 1px solid #d7e5f5;
+  border-radius: 11px;
   background: #ffffff;
-  color: #0f1419;
+  color: #16324b;
   font-size: 0.9375rem;
-  transition: all 0.2s ease;
+  transition: all 0.16s ease;
   font-family: inherit;
+  box-sizing: border-box;
 
   &:focus {
     outline: none;
     border-color: #1286fe;
-    box-shadow: 0 0 0 4px rgba(18, 134, 254, 0.1);
+    box-shadow: 0 0 0 4px rgba(18, 134, 254, 0.12);
   }
 
   &::placeholder {
-    color: #8899a6;
+    color: #88a0b6;
   }
 `;
 
 export const Select = styled.select`
   width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid #cfd9de;
-  border-radius: 12px;
+  height: 44px;
+  padding: 0 0.9rem;
+  border: 1px solid #d7e5f5;
+  border-radius: 11px;
   background: #ffffff;
-  color: #0f1419;
+  color: #16324b;
   font-size: 0.9375rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.16s ease;
   font-family: inherit;
+  box-sizing: border-box;
 
   &:focus {
     outline: none;
     border-color: #1286fe;
-    box-shadow: 0 0 0 4px rgba(18, 134, 254, 0.1);
+    box-shadow: 0 0 0 4px rgba(18, 134, 254, 0.12);
   }
 `;
 
@@ -261,15 +274,15 @@ export const LinkedAccountCard = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.25rem;
-  border: 1px solid #eff3f4;
+  padding: 1rem;
+  border: 1px solid #e0ecf7;
   border-radius: 12px;
   margin-bottom: 0.75rem;
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: #cfd9de;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border-color: #bfd7f2;
+    box-shadow: 0 8px 18px rgba(10, 42, 75, 0.06);
   }
 `;
 
@@ -282,7 +295,7 @@ export const LinkedAccountInfo = styled.div`
 export const IconWrapper = styled.div`
   width: 44px;
   height: 44px;
-  background: #f7f9fa;
+  background: #eef5fc;
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -296,11 +309,11 @@ export const AccountName = styled.p`
   font-weight: 600;
   font-size: 0.9375rem;
   margin-bottom: 0.125rem;
-  color: #0f1419;
+  color: #123050;
 `;
 
 export const AccountEmail = styled.p`
-  color: #1286fe;
+  color: #2f6ea7;
   font-size: 0.875rem;
 `;
 
@@ -311,7 +324,7 @@ export const UnlinkButton = styled.button`
   padding: 0.5rem 0.875rem;
   border: none;
   background: transparent;
-  color: #536471;
+  color: #5d6f84;
   cursor: pointer;
   font-size: 0.875rem;
   border-radius: 8px;
@@ -320,8 +333,8 @@ export const UnlinkButton = styled.button`
   font-family: inherit;
 
   &:hover {
-    background: #f7f9fa;
-    color: #0f1419;
+    background: #edf4fc;
+    color: #20344a;
   }
 `;
 
@@ -329,8 +342,8 @@ export const ToggleWrapper = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 0;
-  border-bottom: 1px solid #eff3f4;
+  padding: 1rem 0;
+  border-bottom: 1px solid #e8f0fa;
 
   &:last-child {
     border-bottom: none;
@@ -346,21 +359,21 @@ export const ToggleTitle = styled.p`
   font-weight: 600;
   font-size: 0.9375rem;
   margin-bottom: 0.25rem;
-  color: #0f1419;
+  color: #17324a;
 `;
 
 export const ToggleDescription = styled.p`
-  color: #536471;
+  color: #5c6b7d;
   font-size: 0.875rem;
   line-height: 1.4;
 `;
 
-export const Toggle = styled.button<{ active: boolean }>`
+export const Toggle = styled.button<{ $active: boolean }>`
   width: 52px;
   height: 30px;
   border-radius: 15px;
   border: none;
-  background: ${(props) => (props.active ? "#1286FE" : "#cfd9de")};
+  background: ${(props) => (props.$active ? "#1286FE" : "#cfd9de")};
   cursor: pointer;
   position: relative;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -370,7 +383,7 @@ export const Toggle = styled.button<{ active: boolean }>`
     content: "";
     position: absolute;
     top: 3px;
-    left: ${(props) => (props.active ? "25px" : "3px")};
+    left: ${(props) => (props.$active ? "25px" : "3px")};
     width: 24px;
     height: 24px;
     border-radius: 50%;
@@ -380,7 +393,7 @@ export const Toggle = styled.button<{ active: boolean }>`
   }
 
   &:hover {
-    background: ${(props) => (props.active ? "#0d6efd" : "#b8c5cf")};
+    background: ${(props) => (props.$active ? "#0d6efd" : "#b8c5cf")};
   }
 
   &:disabled {
@@ -390,10 +403,10 @@ export const Toggle = styled.button<{ active: boolean }>`
 `;
 
 export const DangerZone = styled.div`
-  border: 1px solid #fee2e2;
-  border-radius: 12px;
-  padding: 1.5rem;
-  background: rgba(254, 226, 226, 0.3);
+  border: 1px solid #f8d2d2;
+  border-radius: 14px;
+  padding: 1.25rem;
+  background: #fff7f7;
 `;
 
 export const DangerItem = styled.div`
@@ -417,11 +430,11 @@ export const DangerTitle = styled.p`
   font-weight: 600;
   font-size: 0.9375rem;
   margin-bottom: 0.25rem;
-  color: #0f1419;
+  color: #183248;
 `;
 
 export const DangerDescription = styled.p`
-  color: #536471;
+  color: #5f6d7f;
   font-size: 0.875rem;
   line-height: 1.5;
 `;
@@ -438,9 +451,9 @@ export const ThemeOptionWrapper = styled.div`
   margin-top: 1rem;
 `;
 
-export const ThemeOption = styled.button<{ active: boolean }>`
+export const ThemeOption = styled.button<{ $active: boolean }>`
   padding: 1.25rem;
-  border: 2px solid ${(props) => (props.active ? "#1286FE" : "#eff3f4")};
+  border: 2px solid ${(props) => (props.$active ? "#1286FE" : "#e5eff9")};
   border-radius: 12px;
   background: #ffffff;
   cursor: pointer;
@@ -452,33 +465,36 @@ export const ThemeOption = styled.button<{ active: boolean }>`
 
   &:hover {
     border-color: #1286fe;
-    box-shadow: 0 2px 8px rgba(18, 134, 254, 0.1);
+    box-shadow: 0 8px 20px rgba(18, 134, 254, 0.12);
   }
 
   svg {
-    color: ${(props) => (props.active ? "#1286FE" : "#536471")};
+    color: ${(props) => (props.$active ? "#1286FE" : "#536471")};
   }
 
   span {
     font-size: 0.9375rem;
     font-weight: 600;
-    color: ${(props) => (props.active ? "#1286FE" : "#0f1419")};
+    color: ${(props) => (props.$active ? "#1286FE" : "#0f1419")};
   }
 `;
 
 export const StorageBar = styled.div`
   width: 100%;
   height: 10px;
-  background: #eff3f4;
+  background: #e4edf7;
   border-radius: 5px;
   overflow: hidden;
   margin: 1rem 0;
 `;
 
-export const StorageFill = styled.div<{ percentage: number }>`
+export const StorageFill = styled.div<{ $percentage: number; color?: string }>`
   height: 100%;
-  background: linear-gradient(90deg, #1286fe 0%, #0d6efd 100%);
-  width: ${(props) => Math.min(props.percentage, 100)}%;
+  background: ${(props) =>
+    props.color
+      ? props.color
+      : "linear-gradient(90deg, #1286fe 0%, #0d6efd 100%)"};
+  width: ${(props) => Math.min(props.$percentage, 100)}%;
   transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 5px;
 `;
@@ -486,28 +502,28 @@ export const StorageFill = styled.div<{ percentage: number }>`
 export const StorageInfo = styled.div`
   display: flex;
   justify-content: space-between;
-  color: #536471;
+  color: #5e6e80;
   font-size: 0.875rem;
   font-weight: 500;
 `;
 
 export const Divider = styled.div`
   height: 1px;
-  background: #eff3f4;
+  background: #e8f0fa;
   margin: 1.5rem 0;
 `;
 
 export const InfoCard = styled.div`
-  padding: 1rem 1.25rem;
-  background: #e8f5ff;
-  border: 1px solid #b3dcff;
+  padding: 0.9rem 1rem;
+  background: #f6f9fd;
+  border: 1px solid #cce4fd;
   border-radius: 12px;
   margin-bottom: 1rem;
 `;
 
 export const InfoText = styled.p`
   font-size: 0.875rem;
-  color: #0f1419;
+  color: #17324c;
   line-height: 1.5;
 
   strong {
@@ -520,14 +536,14 @@ export const SessionCard = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.25rem;
-  border: 1px solid #eff3f4;
+  border: 1px solid #e2ecf7;
   border-radius: 12px;
   margin-bottom: 0.75rem;
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: #cfd9de;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border-color: #c0d7f2;
+    box-shadow: 0 8px 20px rgba(10, 42, 75, 0.06);
   }
 `;
 
@@ -544,11 +560,11 @@ export const SessionName = styled.p`
   font-weight: 600;
   font-size: 0.9375rem;
   margin-bottom: 0.125rem;
-  color: #0f1419;
+  color: #18334d;
 `;
 
 export const SessionMeta = styled.p`
-  color: #536471;
+  color: #5f7084;
   font-size: 0.875rem;
 `;
 

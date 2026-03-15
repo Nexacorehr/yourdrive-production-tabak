@@ -15,7 +15,7 @@ export const InputWrapper = styled.div`
   display: flex;
   justify-content: center;
 
-  svg {
+  > svg {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
@@ -24,14 +24,30 @@ export const InputWrapper = styled.div`
     height: 18px;
   }
 
-  svg:nth-of-type(1) {
+  > svg:nth-of-type(1) {
     left: 14px;
   }
 
-  svg:nth-of-type(2) {
+  > button[data-advanced-filter="true"] {
+    position: absolute;
     right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    padding: 0;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  > button[data-advanced-filter="true"] > svg {
+    position: static;
+    transform: none;
     pointer-events: auto;
+    width: 18px;
+    height: 18px;
   }
 
   input {

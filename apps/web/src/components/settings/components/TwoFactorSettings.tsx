@@ -1,317 +1,75 @@
 import { useState, useEffect } from "react";
 import styled from "styled-components";
-import { Shield, Copy, Download, AlertCircle, CheckCircle } from "lucide-react";
+import { Shield, Copy, Download, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useAuthStore } from "../../../store/authStore";
-import api from "../../../lib/axios"; // Add this import
+import api from "../../../lib/axios";
+import {
+  Section,
+  SectionTitle,
+  SectionDescription,
+  FormGroup,
+  Label,
+  Input,
+  Button,
+  ButtonGroup,
+  InfoCard,
+  InfoText,
+  SmallText,
+} from "../styles/settings.styles";
 
-const Container = styled.div`
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 40px 24px;
-  font-family: "Poppins", sans-serif;
-`;
-
-const Header = styled.div`
-  margin-bottom: 40px;
-`;
-
-const Title = styled.h1`
-  font-size: 32px;
-  font-weight: 700;
-  color: #000000;
-  margin: 0 0 8px 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-
-  svg {
-    color: #3b82f6;
-  }
-`;
-
-const Description = styled.p`
-  color: #64748b;
-  font-size: 14px;
-  margin: 0;
-  line-height: 1.6;
-`;
-
-const Card = styled.div`
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 32px;
-  margin-bottom: 24px;
-`;
-
-const StatusBanner = styled.div<{ enabled: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 20px;
+const StatusBanner = styled.div<{ $enabled: boolean }>`
+  border: 1px solid ${(props) => (props.$enabled ? "#b8efc9" : "#ffd1d1")};
+  background: ${(props) => (props.$enabled ? "#eafff0" : "#fff4f4")};
+  color: ${(props) => (props.$enabled ? "#0f7c3a" : "#c23232")};
   border-radius: 12px;
-  background: ${props => props.enabled ? '#f0fdf4' : '#fef2f2'};
-  border: 1px solid ${props => props.enabled ? '#bbf7d0' : '#fecaca'};
-  margin-bottom: 24px;
-
-  svg {
-    color: ${props => props.enabled ? '#22c55e' : '#ef4444'};
-    flex-shrink: 0;
-  }
-`;
-
-const StatusText = styled.div`
-  flex: 1;
-
-  strong {
-    display: block;
-    font-weight: 600;
-    color: #000000;
-    margin-bottom: 2px;
-  }
-
-  span {
-    font-size: 13px;
-    color: #64748b;
-  }
-`;
-
-const QRSection = styled.div`
-  text-align: center;
-  margin: 32px 0;
-`;
-
-const QRCodeWrapper = styled.div`
-  display: inline-block;
-  padding: 24px;
-  background: #ffffff;
-  border: 2px solid #e2e8f0;
-  border-radius: 16px;
-  margin-bottom: 16px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-
-  img {
-    display: block;
-    width: 240px;
-    height: 240px;
-  }
-`;
-
-const QRInstructions = styled.div`
-  max-width: 400px;
-  margin: 0 auto 24px;
-  color: #64748b;
-  font-size: 14px;
-  line-height: 1.6;
-`;
-
-const SecretKeyBox = styled.div`
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
-  margin: 24px 0;
-`;
-
-const SecretKeyLabel = styled.div`
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
-`;
-
-const SecretKeyValue = styled.div`
+  padding: 0.85rem 0.95rem;
   display: flex;
+  gap: 0.6rem;
   align-items: center;
-  gap: 12px;
+  margin-bottom: 1rem;
+`;
+
+const QRWrapper = styled.div`
+  display: inline-flex;
+  border: 1px solid #dbe9f7;
+  border-radius: 14px;
+  padding: 0.75rem;
+  background: #ffffff;
+  margin: 0.8rem 0 0.5rem;
+`;
+
+const SecretRow = styled.div`
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
   justify-content: space-between;
-
-  code {
-    font-family: "SF Mono", "Monaco", "Inconsolata", "Roboto Mono", monospace;
-    font-size: 15px;
-    color: #000000;
-    font-weight: 600;
-    letter-spacing: 2px;
-    word-break: break-all;
-  }
+  flex-wrap: wrap;
 `;
 
-const CopyButton = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-
-  &:hover {
-    background: #2563eb;
-    transform: translateY(-1px);
-  }
-
-  &:active {
-    transform: translateY(0);
-  }
-
-  svg {
-    width: 16px;
-    height: 16px;
-  }
-`;
-
-const InputGroup = styled.div`
-  margin: 24px 0;
-`;
-
-const InputLabel = styled.label`
-  display: block;
-  font-size: 14px;
-  font-weight: 600;
-  color: #000000;
-  margin-bottom: 8px;
-`;
-
-const Input = styled.input`
-  width: 100%;
-  padding: 14px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 16px;
-  font-family: "SF Mono", "Monaco", monospace;
-  letter-spacing: 4px;
-  text-align: center;
-  transition: all 0.2s;
-  box-sizing: border-box;
-
-  &:focus {
-    outline: none;
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  }
-
-  &::placeholder {
-    letter-spacing: normal;
-  }
-`;
-
-const ButtonGroup = styled.div`
-  display: flex;
-  gap: 12px;
-  margin-top: 24px;
-`;
-
-const Button = styled.button<{ variant?: 'primary' | 'danger' | 'secondary' }>`
-  flex: 1;
-  padding: 14px 24px;
-  border: none;
-  border-radius: 12px;
-  font-size: 15px;
-  font-weight: 600;
-  font-family: "Poppins", sans-serif;
-  cursor: pointer;
-  transition: all 0.2s;
-
-  ${props => props.variant === 'primary' && `
-    background: #3b82f6;
-    color: white;
-
-    &:hover:not(:disabled) {
-      background: #2563eb;
-    }
-  `}
-
-  ${props => props.variant === 'danger' && `
-    background: #ef4444;
-    color: white;
-
-    &:hover:not(:disabled) {
-      background: #dc2626;
-    }
-  `}
-
-  ${props => props.variant === 'secondary' && `
-    background: #f1f5f9;
-    color: #000000;
-
-    &:hover:not(:disabled) {
-      background: #e2e8f0;
-    }
-  `}
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`;
-
-const RecoveryCodesSection = styled.div`
-  margin-top: 32px;
+const SecretCode = styled.code`
+  font-family: "SF Mono", "Consolas", "Roboto Mono", monospace;
+  letter-spacing: 1.5px;
+  font-size: 0.9rem;
+  color: #17324c;
+  word-break: break-all;
 `;
 
 const RecoveryCodesGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 12px;
-  margin: 16px 0;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.5rem;
+  margin: 0.75rem 0 1rem;
 `;
 
-const RecoveryCodeItem = styled.div`
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 12px;
+const RecoveryCode = styled.div`
+  border: 1px solid #deebf8;
+  border-radius: 10px;
+  background: #f7fbff;
+  padding: 0.55rem 0.6rem;
   text-align: center;
-  font-family: "SF Mono", "Monaco", monospace;
-  font-size: 14px;
-  font-weight: 600;
-  color: #000000;
-  letter-spacing: 1px;
-`;
-
-const WarningBox = styled.div`
-  background: #fef3c7;
-  border: 1px solid #fde68a;
-  border-radius: 12px;
-  padding: 16px;
-  margin: 16px 0;
-  display: flex;
-  gap: 12px;
-
-  svg {
-    color: #f59e0b;
-    flex-shrink: 0;
-    margin-top: 2px;
-  }
-`;
-
-const WarningText = styled.div`
-  color: #92400e;
-  font-size: 13px;
-  line-height: 1.6;
-
-  strong {
-    display: block;
-    margin-bottom: 4px;
-    color: #78350f;
-  }
-`;
-
-const DownloadButton = styled(Button)`
-  background: #10b981;
-  color: white;
-
-  &:hover:not(:disabled) {
-    background: #059669;
-  }
+  font-family: "SF Mono", "Consolas", "Roboto Mono", monospace;
+  font-size: 0.82rem;
+  color: #18344f;
 `;
 
 interface SetupData {
@@ -436,147 +194,122 @@ export default function TwoFactorSettings() {
   };
 
   return (
-    <Container>
-      <Header>
-        <Title>
-          <Shield size={32} />
-          Two-Factor Authentication
-        </Title>
-        <Description>
-          Add an extra layer of security to your account by requiring a verification code from your authenticator app.
-        </Description>
-      </Header>
+    <Section>
+      <SectionTitle>
+        <Shield size={18} style={{ marginRight: 8, verticalAlign: "middle" }} />
+        Two-Factor Authentication
+      </SectionTitle>
+      <SectionDescription>
+        Add a second verification step to significantly improve account
+        security.
+      </SectionDescription>
 
-      <Card>
-        <StatusBanner enabled={isEnabled}>
-          {isEnabled ? <CheckCircle size={24} /> : <AlertCircle size={24} />}
-          <StatusText>
-            <strong>{isEnabled ? "2FA is Enabled" : "2FA is Disabled"}</strong>
-            <span>
-              {isEnabled 
-                ? "Your account is protected with two-factor authentication" 
-                : "Your account is not using two-factor authentication"}
-            </span>
-          </StatusText>
-        </StatusBanner>
+      <StatusBanner $enabled={isEnabled}>
+        {isEnabled ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+        <div>
+          <strong>{isEnabled ? "2FA is enabled" : "2FA is disabled"}</strong>
+          <SmallText style={{ marginTop: 2 }}>
+            {isEnabled
+              ? "Your account requires a verification code during sign-in."
+              : "Enable 2FA to protect account access beyond password only."}
+          </SmallText>
+        </div>
+      </StatusBanner>
 
-        {error && (
-          <WarningBox>
-            <AlertCircle size={20} />
-            <WarningText>
-              <strong>Error</strong>
-              {error}
-            </WarningText>
-          </WarningBox>
-        )}
+      {error && (
+        <InfoCard style={{ background: "#fff4f4", borderColor: "#ffd1d1" }}>
+          <InfoText style={{ color: "#c23232" }}>{error}</InfoText>
+        </InfoCard>
+      )}
 
-        {!isEnabled && !setupData && (
-          <>
-            <p style={{ color: "#64748b", fontSize: "14px", marginBottom: "24px" }}>
-              Two-factor authentication adds an additional layer of security to your account by requiring more than just a password to sign in.
-            </p>
-            <Button variant="primary" onClick={handleSetupTwoFactor} disabled={isLoading}>
-              {isLoading ? "Setting up..." : "Enable Two-Factor Authentication"}
-            </Button>
-          </>
-        )}
+      {!isEnabled && !setupData && (
+        <Button
+          $variant="primary"
+          onClick={handleSetupTwoFactor}
+          disabled={isLoading}
+        >
+          {isLoading ? "Preparing setup..." : "Enable Two-Factor Authentication"}
+        </Button>
+      )}
 
-        {setupData && !isEnabled && (
-          <>
-            <QRSection>
-              <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "16px" }}>
-                Scan QR Code
-              </h3>
-              <QRCodeWrapper>
-                <img src={setupData.qrCode} alt="2FA QR Code" />
-              </QRCodeWrapper>
-              <QRInstructions>
-                Scan this QR code with your authenticator app (Google Authenticator, Authy, 1Password, etc.)
-              </QRInstructions>
-            </QRSection>
+      {setupData && !isEnabled && (
+        <>
+          <FormGroup style={{ marginTop: 12 }}>
+            <Label>Scan QR code with your authenticator app</Label>
+            <QRWrapper>
+              <img src={setupData.qrCode} alt="2FA QR code" width={220} height={220} />
+            </QRWrapper>
+          </FormGroup>
 
-            <SecretKeyBox>
-              <SecretKeyLabel>Manual Entry Key</SecretKeyLabel>
-              <SecretKeyValue>
-                <code>{setupData.secret}</code>
-                <CopyButton onClick={handleCopySecret}>
-                  {copySuccess ? <CheckCircle /> : <Copy />}
-                  {copySuccess ? "Copied!" : "Copy"}
-                </CopyButton>
-              </SecretKeyValue>
-            </SecretKeyBox>
-
-            <InputGroup>
-              <InputLabel>Enter Verification Code</InputLabel>
-              <Input
-                type="text"
-                maxLength={6}
-                placeholder="000000"
-                value={verificationCode}
-                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
-                onKeyPress={(e) => {
-                  if (e.key === "Enter") {
-                    handleVerifyAndEnable();
-                  }
-                }}
-              />
-            </InputGroup>
-
-            <ButtonGroup>
-              <Button variant="secondary" onClick={handleCancelSetup} disabled={isLoading}>
-                Cancel
+          <InfoCard>
+            <InfoText>
+              If scanning fails, use this manual key:
+            </InfoText>
+            <SecretRow>
+              <SecretCode>{setupData.secret}</SecretCode>
+              <Button type="button" $variant="default" onClick={handleCopySecret}>
+                {copySuccess ? <CheckCircle2 size={14} /> : <Copy size={14} />}
+                {copySuccess ? "Copied" : "Copy key"}
               </Button>
-              <Button 
-                variant="primary" 
-                onClick={handleVerifyAndEnable} 
-                disabled={isLoading || verificationCode.length !== 6}
-              >
-                {isLoading ? "Verifying..." : "Verify & Enable"}
-              </Button>
-            </ButtonGroup>
-          </>
-        )}
+            </SecretRow>
+          </InfoCard>
 
-        {isEnabled && (
-          <>
-            <p style={{ color: "#64748b", fontSize: "14px", marginBottom: "24px" }}>
-              Two-factor authentication is currently enabled on your account. You'll need to enter a code from your authenticator app each time you sign in.
-            </p>
-            <Button variant="danger" onClick={handleDisableTwoFactor} disabled={isLoading}>
-              {isLoading ? "Disabling..." : "Disable Two-Factor Authentication"}
+          <FormGroup>
+            <Label>Verification code</Label>
+            <Input
+              type="text"
+              maxLength={6}
+              placeholder="000000"
+              value={verificationCode}
+              onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
+              onKeyPress={(e) => {
+                if (e.key === "Enter") handleVerifyAndEnable();
+              }}
+            />
+          </FormGroup>
+
+          <ButtonGroup>
+            <Button $variant="default" onClick={handleCancelSetup} disabled={isLoading}>
+              Cancel
             </Button>
-          </>
-        )}
-      </Card>
+            <Button
+              $variant="primary"
+              onClick={handleVerifyAndEnable}
+              disabled={isLoading || verificationCode.length !== 6}
+            >
+              {isLoading ? "Verifying..." : "Verify & Enable"}
+            </Button>
+          </ButtonGroup>
+        </>
+      )}
+
+      {isEnabled && (
+        <Button
+          $variant="danger"
+          onClick={handleDisableTwoFactor}
+          disabled={isLoading}
+        >
+          {isLoading ? "Disabling..." : "Disable Two-Factor Authentication"}
+        </Button>
+      )}
 
       {recoveryCodes.length > 0 && (
-        <Card>
-          <RecoveryCodesSection>
-            <h3 style={{ fontSize: "18px", fontWeight: "600", marginBottom: "12px" }}>
-              Recovery Codes
-            </h3>
-            
-            <WarningBox>
-              <AlertCircle size={20} />
-              <WarningText>
-                <strong>Save these recovery codes!</strong>
-                Each code can only be used once. Store them in a safe place in case you lose access to your authenticator app.
-              </WarningText>
-            </WarningBox>
-
-            <RecoveryCodesGrid>
-              {recoveryCodes.map((code, index) => (
-                <RecoveryCodeItem key={index}>{code}</RecoveryCodeItem>
-              ))}
-            </RecoveryCodesGrid>
-
-            <DownloadButton onClick={handleDownloadRecoveryCodes}>
-              <Download size={18} />
-              Download Recovery Codes
-            </DownloadButton>
-          </RecoveryCodesSection>
-        </Card>
+        <Section style={{ marginTop: "1.6rem", marginBottom: 0 }}>
+          <SectionTitle>Recovery Codes</SectionTitle>
+          <SectionDescription>
+            Save these codes in a safe place. Each code can be used once.
+          </SectionDescription>
+          <RecoveryCodesGrid>
+            {recoveryCodes.map((code, index) => (
+              <RecoveryCode key={index}>{code}</RecoveryCode>
+            ))}
+          </RecoveryCodesGrid>
+          <Button type="button" $variant="default" onClick={handleDownloadRecoveryCodes}>
+            <Download size={15} />
+            Download recovery codes
+          </Button>
+        </Section>
       )}
-    </Container>
+    </Section>
   );
 }

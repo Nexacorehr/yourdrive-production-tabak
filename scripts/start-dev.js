@@ -1,39 +1,35 @@
 #!/usr/bin/env node
-import { spawn, execSync } from "child_process";
-import path from "path";
+import { spawn } from "child_process";
 import fs from "fs";
+import net from "net";
+import os from "os";
+import path from "path";
 
 const root = path.resolve();
 const isWin = process.platform === "win32";
 
-let processes = [];
+const colors = {
+  reset: "\x1b[0m",
+  cyan: "\x1b[36m",
+  yellow: "\x1b[33m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  magenta: "\x1b[35m",
+  gray: "\x1b[90m",
+};
 
-// --- Logging ---
-function log(msg, color = 35) {
-  console.log(`\x1b[${color}m[dev]\x1b[0m ${msg}`);
+const services = [];
+let shuttingDown = false;
+let startupPrinted = false;
+let sigintCount = 0;
+let resolvedApiPort = 3000;
+let resolvedWebPort = 5173;
+const fallbackNotes = [];
+
+function log(message, color = colors.magenta) {
+  console.log(`${color}[dev]${colors.reset} ${message}`);
 }
 
-// --- Spawn child processes safely ---
-function run(label, cwd, args = ["run", "dev"]) {
-  const cmd = isWin ? "npm.cmd" : "npm";
-
-  const proc = spawn(cmd, args, {
-    cwd,
-    shell: true,
-    stdio: "inherit",
-    detached: !isWin, // detached only on Unix
-  });
-
-  processes.push({ label, proc });
-
-  proc.on("close", (code) =>
-    log(`${label} stopped (code ${code})`, 31)
-  );
-
-  return proc;
-}
-
-// --- Detect monorepo structure ---
 function detectStructure() {
   const combos = [
     { api: "apps/api", web: "apps/web" },
@@ -43,149 +39,279 @@ function detectStructure() {
   return combos.find(
     (s) =>
       fs.existsSync(path.join(root, s.api)) &&
-      fs.existsSync(path.join(root, s.web))
+      fs.existsSync(path.join(root, s.web)),
   );
 }
 
-// --- Docker helpers ---
-function isDockerRunning() {
-  try {
-    const output = execSync("docker info", { stdio: "pipe" }).toString();
-    return output.includes("Server Version");
-  } catch {
-    return false;
-  }
+function npmCommand() {
+  return isWin ? "npm" : "npm";
 }
 
-function isImagePresent(imageName) {
-  try {
-    const output = execSync(`docker images -q ${imageName}`, { stdio: "pipe" }).toString();
-    return output.trim().length > 0;
-  } catch {
-    return false;
-  }
+function parsePort(rawValue, fallback) {
+  const parsed = Number.parseInt(String(rawValue ?? fallback), 10);
+  if (Number.isNaN(parsed) || parsed < 1 || parsed > 65535) return fallback;
+  return parsed;
 }
 
-function buildVertImage() {
-  log("Building Vert image from GitHub...", 33);
-  execSync(
-    [
-      "docker build",
-      "-t vert-local",
-      "--build-arg PUB_ENV=production",
-      "--build-arg PUB_HOSTNAME=localhost:5173",
-      "--build-arg PUB_PLAUSIBLE_URL=",
-      "--build-arg PUB_VERTD_URL=",
-      "--build-arg PUB_DONATION_URL=https://donations.vert.sh",
-      "--build-arg PUB_DISABLE_ALL_EXTERNAL_REQUESTS=false",
-      '--build-arg PUB_STRIPE_KEY=""',
-      "https://github.com/VERT-sh/VERT.git",
-    ].join(" "),
-    { stdio: "inherit" }
-  );
+function canBindPort(port, host = "0.0.0.0") {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.on("error", () => resolve(false));
+    server.listen(port, host, () => {
+      server.close(() => resolve(true));
+    });
+  });
 }
 
-function runVertContainer() {
-  log("Starting Vert container...", 33);
-  try {
-    execSync(
-      "docker run -d --name vert -p 3001:80 --restart unless-stopped vert-local",
-      { stdio: "inherit" }
-    );
-  } catch {
-    log("⚠ Existing Vert container detected. Removing...", 33);
-    try {
-      execSync("docker rm -f vert", { stdio: "inherit" });
-      execSync(
-        "docker run -d --name vert -p 3001:80 --restart unless-stopped vert-local",
-        { stdio: "inherit" }
-      );
-    } catch (err2) {
-      log(`❌ Could not start Vert: ${err2.message}`, 31);
-      return false;
+async function findAvailablePort(preferredPort, label, maxAttempts = 25) {
+  for (let offset = 0; offset <= maxAttempts; offset += 1) {
+    const candidate = preferredPort + offset;
+    // eslint-disable-next-line no-await-in-loop
+    const available = await canBindPort(candidate);
+    if (available) {
+      if (candidate !== preferredPort) {
+        fallbackNotes.push(
+          `${label} port ${preferredPort} is busy, using ${candidate}.`,
+        );
+      }
+      return candidate;
     }
   }
-  return true;
+  throw new Error(
+    `Could not find an open port for ${label} near ${preferredPort}.`,
+  );
 }
 
-// --- Terminal dashboard ---
-function printDashboard() {
+function getLanHosts() {
+  const nets = os.networkInterfaces();
+  const hosts = [];
+  for (const entries of Object.values(nets)) {
+    if (!entries) continue;
+    for (const info of entries) {
+      if (info.family === "IPv4" && !info.internal) {
+        hosts.push(info.address);
+      }
+    }
+  }
+  return Array.from(new Set(hosts));
+}
 
-  // todo make actually changeable with the env
+function printDashboard() {
+  if (startupPrinted) return;
+  startupPrinted = true;
+
+  const webPort = resolvedWebPort;
+  const apiPort = resolvedApiPort;
+  const hosts = getLanHosts();
+
+  const localWeb = `http://localhost:${webPort}`;
+  const localApi = `http://localhost:${apiPort}`;
+
   const lines = [
-    "Dev Environment Started Successfully!",
-    "Web:         http://localhost:5173/",
-    "API:         http://localhost:3000/",
+    "YourDrive Development",
+    `Web (local):       ${localWeb}`,
+    `API (local):       ${localApi}`,
+    `Health check:      ${localApi}/api/health`,
+    `Tryout link flow:  ${localWeb}/s/<shortId>`,
   ];
 
-  const maxLength = Math.max(...lines.map((line) => line.length));
-  const border = "═".repeat(maxLength + 2);
-
-  const padLine = (text) => `║ ${text.padEnd(maxLength)} ║`;
-
-  console.log(`\n╔${border}╗`);
-  console.log(padLine(lines[0]));
-  console.log(`╠${border}╣`);
-  for (let i = 1; i < lines.length; i++) console.log(padLine(lines[i]));
-  console.log(`╚${border}╝\n`);
-  console.log("Press Ctrl+C to stop everything gracefully.\n");
-}
-
-// --- Graceful shutdown ---
-function cleanup() {
-  log("Shutting down dev environment...", 33);
-
-  // Kill all child processes
-  for (const { label, proc } of processes) {
-    try {
-      if (isWin) {
-        execSync(`taskkill /PID ${proc.pid} /T /F`, { stdio: "ignore" });
-      } else {
-        process.kill(-proc.pid);
-      }
-      log(`${label} stopped`, 32);
-    } catch {}
+  if (hosts.length > 0) {
+    lines.push(...hosts.map((ip, idx) => {
+      if (idx === 0) return `Web (LAN):         http://${ip}:${webPort}`;
+      return `                   http://${ip}:${webPort}`;
+    }));
+    lines.push(...hosts.map((ip, idx) => {
+      if (idx === 0) return `API (LAN):         http://${ip}:${apiPort}`;
+      return `                   http://${ip}:${apiPort}`;
+    }));
   }
 
-  // Remove Vert container if running
-  // try {
-  //  execSync("docker rm -f vert", { stdio: "ignore" });
-  //} catch {}
+  lines.push(" ");
+  if (fallbackNotes.length > 0) {
+    lines.push("Safe fallback:");
+    for (const note of fallbackNotes) lines.push(`  ${note}`);
+    lines.push(" ");
+  }
+  lines.push(" ");
+  lines.push("Controls:");
+  lines.push("  Ctrl+C once  -> graceful shutdown");
+  lines.push("  Ctrl+C twice -> force exit");
+  lines.push(" ");
+  lines.push("Useful commands:");
+  lines.push("  npm run dev:api   (API only)");
+  lines.push("  npm run dev:web   (Web only)");
+  lines.push("  npm run db:push   (sync schema)");
 
-  log("Cleanup complete.", 32);
-  console.log("\nYou can now continue using this terminal.\n");
+  const width = Math.max(...lines.map((l) => l.length));
+  const border = "-".repeat(width + 2);
+  console.log(`\n+${border}+`);
+  for (const line of lines) {
+    console.log(`| ${line.padEnd(width)} |`);
+  }
+  console.log(`+${border}+\n`);
 }
 
-// --- Main ---
-(async () => {
+function startService(name, cwd, args = ["run", "dev"], envOverrides = {}) {
+  log(`Starting ${name} in ${path.relative(root, cwd)}...`, colors.cyan);
+  const child = spawn(npmCommand(), args, {
+    cwd,
+    env: { ...process.env, ...envOverrides },
+    stdio: "inherit",
+    shell: isWin,
+    windowsHide: true,
+  });
+
+  const record = { name, cwd, child };
+  services.push(record);
+
+  child.on("error", (err) => {
+    log(`${name} failed to spawn: ${err.message}`, colors.red);
+    if (!shuttingDown) void shutdown(1);
+  });
+
+  child.on("exit", (code, signal) => {
+    if (shuttingDown) return;
+    if (code === 0) {
+      log(`${name} exited cleanly. Stopping dev environment...`, colors.yellow);
+    } else {
+      log(
+        `${name} exited unexpectedly (code=${code ?? "null"}, signal=${signal ?? "none"}).`,
+        colors.red,
+      );
+    }
+    void shutdown(code && code !== 0 ? 1 : 0);
+  });
+
+  return record;
+}
+
+async function taskkillTree(pid) {
+  if (!pid) return;
+  await new Promise((resolve) => {
+    const killer = spawn("taskkill", ["/PID", String(pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
+      shell: false,
+    });
+    killer.on("close", () => resolve());
+    killer.on("error", () => resolve());
+  });
+}
+
+async function stopService(service) {
+  const { name, child } = service;
+  if (!child || child.killed || child.exitCode !== null) return;
+
+  log(`Stopping ${name}...`, colors.yellow);
+
+  if (isWin) {
+    await taskkillTree(child.pid);
+    return;
+  }
+
+  try {
+    child.kill("SIGTERM");
+  } catch {
+    return;
+  }
+
+  await new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+      } catch {}
+      resolve();
+    }, 2500);
+
+    child.once("exit", () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+}
+
+async function shutdown(exitCode = 0) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
+  log("Shutting down development services...", colors.yellow);
+  await Promise.all(services.map(stopService));
+  log("Cleanup complete. Terminal is ready.", colors.green);
+  process.exit(exitCode);
+}
+
+function attachSignalHandlers() {
+  process.on("SIGINT", () => {
+    sigintCount += 1;
+    if (sigintCount > 1) {
+      log("Force exit requested.", colors.red);
+      process.exit(1);
+    }
+    void shutdown(0);
+  });
+
+  process.on("SIGTERM", () => void shutdown(0));
+  process.on("SIGHUP", () => void shutdown(0));
+
+  process.on("unhandledRejection", (reason) => {
+    log(`Unhandled rejection: ${String(reason)}`, colors.red);
+    void shutdown(1);
+  });
+
+  process.on("uncaughtException", (err) => {
+    log(`Uncaught exception: ${err.message}`, colors.red);
+    void shutdown(1);
+  });
+}
+
+async function main() {
   console.clear();
-  log("Starting full dev environment...", 36);
+  log("Booting YourDrive development environment...", colors.cyan);
 
   const structure = detectStructure();
   if (!structure) {
-    console.error("Could not detect project structure.");
+    log("Could not detect project structure (api/web).", colors.red);
     process.exit(1);
   }
 
-  // log("Checking Docker...", 36);
-  // if (!isDockerRunning()) {
-  //   log("Docker not running. Please start Docker Desktop.", 31);
-  //   process.exit(1);
-  // }
-  // log("Docker is running", 32);
+  attachSignalHandlers();
 
-  // if (!isImagePresent("vert-local")) buildVertImage();
-  // else log("Vert image already exists locally", 32);
+  const preferredApiPort = parsePort(
+    process.env.API_PORT ?? process.env.PORT,
+    3000,
+  );
+  resolvedApiPort = await findAvailablePort(preferredApiPort, "API");
 
-  // runVertContainer(); // optional
+  const preferredWebPort = parsePort(process.env.WEB_PORT, 5173);
+  resolvedWebPort = await findAvailablePort(preferredWebPort, "Web");
+  if (resolvedWebPort === resolvedApiPort) {
+    resolvedWebPort = await findAvailablePort(
+      resolvedWebPort + 1,
+      "Web",
+      40,
+    );
+  }
 
-  // Start API & Web
-  run("API", path.join(root, structure.api));
-  setTimeout(() => run("Web", path.join(root, structure.web)), 500);
+  if (fallbackNotes.length > 0) {
+    for (const note of fallbackNotes) log(note, colors.yellow);
+  }
 
-  setTimeout(printDashboard, 2000);
+  startService("API", path.join(root, structure.api), ["run", "dev"], {
+    PORT: String(resolvedApiPort),
+  });
+  setTimeout(
+    () =>
+      startService("Web", path.join(root, structure.web), ["run", "dev"], {
+        PORT: String(resolvedWebPort),
+        WEB_PORT: String(resolvedWebPort),
+        API_PROXY_TARGET:
+          process.env.API_PROXY_TARGET ??
+          `http://localhost:${resolvedApiPort}`,
+      }),
+    700,
+  );
+  setTimeout(() => printDashboard(), 2200);
+}
 
-  // Catch signals
-  process.on("SIGINT", cleanup);
-  process.on("SIGTERM", cleanup);
-})();
+void main();

@@ -80,14 +80,11 @@ const QuickSearch: React.FC<QuickSearchProps> = ({
             {showFilters && (
               <button
                 type="button"
+                data-advanced-filter="true"
                 ref={advancedFilterRef}
                 onClick={toggleAdvancedPopup}
                 style={{
-                  cursor: "pointer",
                   opacity: hasActiveFilters() ? 1 : 0.6,
-                  background: "none",
-                  border: "none",
-                  padding: 0,
                 }}
               >
                 <FilterIcon color={iconColor} />

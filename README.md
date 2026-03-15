@@ -208,6 +208,17 @@ This starts the API and the web app (see `scripts/start-dev.js`). Typical URLs:
 - Web: http://localhost:5173/
 - API: http://localhost:3000/
 
+`npm run dev` now prints a single startup dashboard with:
+- local and LAN URLs for Web/API,
+- health check endpoint,
+- quick command cheatsheet,
+- clear shutdown instructions.
+
+**Graceful shutdown**
+
+- Press `Ctrl+C` once to stop API and Web gracefully.
+- Press `Ctrl+C` twice to force exit if a process is stuck.
+
 **Option B – Run separately**
 
 Terminal 1 – API:

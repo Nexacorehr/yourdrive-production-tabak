@@ -13,6 +13,9 @@ import {
 import Image from "../../../shared/image/Image";
 import api from "../../../../lib/axios";
 import { toast } from "../../../../services/toast.service";
+import { copyToClipboard } from "../../../../lib/copyToClipboard";
+
+const TRYOUT_UPLOAD_TIMEOUT_MS = 10 * 60 * 1000;
 
 const Tryout: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
@@ -31,29 +34,40 @@ const Tryout: React.FC = () => {
 
     try {
       const response = await api.post("/files/anonymous-upload", formData, {
+        timeout: TRYOUT_UPLOAD_TIMEOUT_MS,
         headers: {
           "Content-Type": "multipart/form-data",
         },
       });
 
       if (response.data?.success) {
-        const shareUrl = response.data.shareUrl || `${window.location.origin}/shared/${response.data.shareToken}`;
-        
-        // Copy share URL to clipboard
-        try {
-          await navigator.clipboard.writeText(shareUrl);
-          toast.success(`File uploaded successfully! Share link copied to clipboard: ${shareUrl}`);
-        } catch (clipboardError) {
-          // Fallback if clipboard API fails
-          console.error("Failed to copy to clipboard:", clipboardError);
-          toast.success(`File uploaded successfully! Share link: ${shareUrl}`);
+        const shareUrl =
+          response.data.shareUrl ||
+          response.data.shortUrl ||
+          `${window.location.origin}/shared/${response.data.shareToken}`;
+
+        const copied = await copyToClipboard(shareUrl);
+        if (copied) {
+          toast.success("File uploaded! Share link copied to clipboard.");
+        } else {
+          toast.success(`File uploaded! Share link: ${shareUrl}`);
         }
       } else {
         toast.error("Upload failed. Please try again.");
       }
     } catch (error: any) {
       console.error("Upload error:", error);
-      toast.error(error.response?.data?.error || "Upload failed. Please try again.");
+      if (error?.code === "ECONNABORTED") {
+        toast.error(
+          "Upload timed out. Please try a smaller file or retry in a moment.",
+        );
+      } else if (error?.code === "ERR_NETWORK") {
+        toast.error(
+          "Network error while uploading. Check that API server is running and try again.",
+        );
+      } else {
+        toast.error(error.response?.data?.error || "Upload failed. Please try again.");
+      }
     } finally {
       setIsUploading(false);
     }

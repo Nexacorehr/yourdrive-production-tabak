@@ -1,5 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
+import styled from "styled-components";
+import type { UserSettings } from "../types/UserSettings";
 import TwoFactorSettings from "./TwoFactorSettings";
 import { settingsService } from "../service/settingsService";
 import {
@@ -13,21 +15,54 @@ import {
   InfoCard,
   InfoText,
   SmallText,
+  ToggleWrapper,
+  ToggleInfo,
+  ToggleTitle,
+  ToggleDescription,
+  Toggle,
 } from "../styles/settings.styles";
 
 interface SecuritySectionProps {
-  settings: any;
-  updateSecurity: (data: any) => Promise<void>;
+  settings: UserSettings | null;
+  updateSecurity: (data: Partial<UserSettings["security"]>) => Promise<void>;
 }
+
+const PasswordFieldWrap = styled.div`
+  position: relative;
+`;
+
+const VisibilityButton = styled.button`
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b7f95;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const getErrorMessage = (error: unknown): string => {
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return "Failed to update security setting. Please try again.";
+};
 
 export const SecuritySection: React.FC<SecuritySectionProps> = ({
   settings,
-  updateSecurity: _updateSecurity,
+  updateSecurity,
 }) => {
-  const [_securityData, _setSecurityData] = useState<Record<string, boolean>>({
-    twoFactorEnabled: settings?.security?.twoFactorEnabled || false,
-    clientSideEncryption: settings?.security?.clientSideEncryption || false,
-    offlineModeEnabled: settings?.security?.offlineModeEnabled || false,
+  const [securitySaving, setSecuritySaving] = useState(false);
+  const [securityMessage, setSecurityMessage] = useState("");
+  const [securityError, setSecurityError] = useState("");
+  const [securityFlags, setSecurityFlags] = useState({
+    clientSideEncryption: settings?.security?.clientSideEncryption ?? false,
+    offlineModeEnabled: settings?.security?.offlineModeEnabled ?? false,
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -35,63 +70,78 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
     newPassword: "",
     confirmPassword: "",
   });
-
   const [showPasswords, setShowPasswords] = useState({
     current: false,
     new: false,
     confirm: false,
   });
-
-  const [_loading, _setLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
+  useEffect(() => {
+    setSecurityFlags({
+      clientSideEncryption: settings?.security?.clientSideEncryption ?? false,
+      offlineModeEnabled: settings?.security?.offlineModeEnabled ?? false,
+    });
+  }, [settings?.security?.clientSideEncryption, settings?.security?.offlineModeEnabled]);
+
   const validatePassword = (password: string): string | null => {
-    if (password.length < 8) {
-      return "Password must be at least 8 characters";
-    }
-    if (!/[A-Z]/.test(password)) {
+    if (password.length < 8) return "Password must be at least 8 characters";
+    if (!/[A-Z]/.test(password))
       return "Password must contain at least one uppercase letter";
-    }
-    if (!/[a-z]/.test(password)) {
+    if (!/[a-z]/.test(password))
       return "Password must contain at least one lowercase letter";
-    }
-    if (!/[0-9]/.test(password)) {
+    if (!/[0-9]/.test(password))
       return "Password must contain at least one number";
-    }
-    if (!/[^A-Za-z0-9]/.test(password)) {
+    if (!/[^A-Za-z0-9]/.test(password))
       return "Password must contain at least one special character";
-    }
     return null;
+  };
+
+  const handleSecurityToggle = async (
+    key: "clientSideEncryption" | "offlineModeEnabled",
+  ) => {
+    const nextValue = !securityFlags[key];
+    setSecurityFlags((prev) => ({ ...prev, [key]: nextValue }));
+    setSecurityMessage("");
+    setSecurityError("");
+    setSecuritySaving(true);
+
+    try {
+      await updateSecurity({ [key]: nextValue });
+      setSecurityMessage("Security preference updated.");
+      setTimeout(() => setSecurityMessage(""), 2200);
+    } catch (error: unknown) {
+      setSecurityFlags((prev) => ({ ...prev, [key]: !nextValue }));
+      setSecurityError(getErrorMessage(error));
+    } finally {
+      setSecuritySaving(false);
+    }
   };
 
   const handlePasswordUpdate = async () => {
     setPasswordError("");
     setPasswordSuccess(false);
 
-    // Validation
     if (!passwordData.currentPassword) {
       setPasswordError("Current password is required");
       return;
     }
-
     if (!passwordData.newPassword) {
       setPasswordError("New password is required");
       return;
     }
 
-    const passwordValidationError = validatePassword(passwordData.newPassword);
-    if (passwordValidationError) {
-      setPasswordError(passwordValidationError);
+    const validation = validatePassword(passwordData.newPassword);
+    if (validation) {
+      setPasswordError(validation);
       return;
     }
-
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       setPasswordError("Passwords do not match");
       return;
     }
-
     if (passwordData.currentPassword === passwordData.newPassword) {
       setPasswordError("New password must be different from current password");
       return;
@@ -103,23 +153,15 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword,
       });
-
-      // Clear form and show success
-      setPasswordData({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      });
+      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
       setPasswordSuccess(true);
-
-      // Hide success message after 5 seconds
-      setTimeout(() => {
-        setPasswordSuccess(false);
-      }, 5000);
-    } catch (error: any) {
-      console.error("Failed to update password:", error);
+      setTimeout(() => setPasswordSuccess(false), 5000);
+    } catch (error: unknown) {
       setPasswordError(
-        error.message || "Failed to update password. Please check your current password and try again."
+        getErrorMessage(error).replace(
+          "security setting",
+          "password. Please check your current password",
+        ),
       );
     } finally {
       setPasswordLoading(false);
@@ -128,165 +170,154 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
 
   return (
     <>
-      <TwoFactorSettings /> 
+      <Section>
+        <SectionTitle>Security Preferences</SectionTitle>
+        <SectionDescription>
+          Configure account protection behavior and advanced safeguards.
+        </SectionDescription>
+
+        <ToggleWrapper>
+          <ToggleInfo>
+            <ToggleTitle>Client-side encryption</ToggleTitle>
+            <ToggleDescription>
+              Encrypt file payloads in your browser before upload.
+            </ToggleDescription>
+          </ToggleInfo>
+          <Toggle
+            $active={securityFlags.clientSideEncryption}
+            onClick={() => handleSecurityToggle("clientSideEncryption")}
+            disabled={securitySaving}
+            type="button"
+          />
+        </ToggleWrapper>
+
+        <ToggleWrapper>
+          <ToggleInfo>
+            <ToggleTitle>Offline mode</ToggleTitle>
+            <ToggleDescription>
+              Cache file metadata for faster load and offline resilience.
+            </ToggleDescription>
+          </ToggleInfo>
+          <Toggle
+            $active={securityFlags.offlineModeEnabled}
+            onClick={() => handleSecurityToggle("offlineModeEnabled")}
+            disabled={securitySaving}
+            type="button"
+          />
+        </ToggleWrapper>
+
+        {securityMessage && (
+          <InfoCard>
+            <InfoText style={{ color: "#167144" }}>{securityMessage}</InfoText>
+          </InfoCard>
+        )}
+        {securityError && (
+          <InfoCard style={{ backgroundColor: "#fff4f4", borderColor: "#ffd1d1" }}>
+            <InfoText style={{ color: "#991b1b" }}>{securityError}</InfoText>
+          </InfoCard>
+        )}
+      </Section>
+
+      <TwoFactorSettings />
+
       <Section>
         <SectionTitle>Change Password</SectionTitle>
         <SectionDescription>
-          Update your password to keep your account secure
+          Use a strong, unique password to secure your account.
         </SectionDescription>
 
         {passwordError && (
-          <InfoCard style={{ backgroundColor: "#fef2f2", borderColor: "#fecaca" }}>
+          <InfoCard style={{ backgroundColor: "#fff4f4", borderColor: "#ffd1d1" }}>
             <InfoText style={{ color: "#991b1b" }}>
-              <AlertCircle
-                size={16}
-                style={{ display: "inline", marginRight: "0.5rem" }}
-              />
+              <AlertCircle size={16} style={{ display: "inline", marginRight: "0.5rem" }} />
               {passwordError}
             </InfoText>
           </InfoCard>
         )}
 
         {passwordSuccess && (
-          <InfoCard style={{ backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }}>
+          <InfoCard style={{ backgroundColor: "#eafff0", borderColor: "#b8efc9" }}>
             <InfoText style={{ color: "#166534" }}>
-              <CheckCircle
-                size={16}
-                style={{ display: "inline", marginRight: "0.5rem" }}
-              />
-              Password updated successfully!
+              <CheckCircle size={16} style={{ display: "inline", marginRight: "0.5rem" }} />
+              Password updated successfully.
             </InfoText>
           </InfoCard>
         )}
 
         <FormGroup>
           <Label>Current Password</Label>
-          <div style={{ position: "relative" }}>
+          <PasswordFieldWrap>
             <Input
               type={showPasswords.current ? "text" : "password"}
               value={passwordData.currentPassword}
               onChange={(e) =>
-                setPasswordData((prev) => ({
-                  ...prev,
-                  currentPassword: e.target.value,
-                }))
+                setPasswordData((prev) => ({ ...prev, currentPassword: e.target.value }))
               }
               placeholder="Enter current password"
               disabled={passwordLoading}
             />
-            <button
+            <VisibilityButton
               onClick={() =>
-                setShowPasswords((prev) => ({
-                  ...prev,
-                  current: !prev.current,
-                }))
+                setShowPasswords((prev) => ({ ...prev, current: !prev.current }))
               }
-              style={{
-                position: "absolute",
-                right: "0.75rem",
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: "#6b7280",
-              }}
               type="button"
             >
               {showPasswords.current ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
+            </VisibilityButton>
+          </PasswordFieldWrap>
         </FormGroup>
 
         <FormGroup>
           <Label>New Password</Label>
-          <div style={{ position: "relative" }}>
+          <PasswordFieldWrap>
             <Input
               type={showPasswords.new ? "text" : "password"}
               value={passwordData.newPassword}
               onChange={(e) =>
-                setPasswordData((prev) => ({
-                  ...prev,
-                  newPassword: e.target.value,
-                }))
+                setPasswordData((prev) => ({ ...prev, newPassword: e.target.value }))
               }
               placeholder="Enter new password"
               disabled={passwordLoading}
             />
-            <button
-              onClick={() =>
-                setShowPasswords((prev) => ({ ...prev, new: !prev.new }))
-              }
-              style={{
-                position: "absolute",
-                right: "0.75rem",
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: "#6b7280",
-              }}
+            <VisibilityButton
+              onClick={() => setShowPasswords((prev) => ({ ...prev, new: !prev.new }))}
               type="button"
             >
               {showPasswords.new ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
-          <SmallText style={{ marginTop: "0.5rem" }}>
-            Must be at least 8 characters with uppercase, lowercase, number, and
-            special character
+            </VisibilityButton>
+          </PasswordFieldWrap>
+          <SmallText>
+            At least 8 characters with uppercase, lowercase, number and symbol.
           </SmallText>
         </FormGroup>
 
         <FormGroup>
           <Label>Confirm New Password</Label>
-          <div style={{ position: "relative" }}>
+          <PasswordFieldWrap>
             <Input
               type={showPasswords.confirm ? "text" : "password"}
               value={passwordData.confirmPassword}
               onChange={(e) =>
-                setPasswordData((prev) => ({
-                  ...prev,
-                  confirmPassword: e.target.value,
-                }))
+                setPasswordData((prev) => ({ ...prev, confirmPassword: e.target.value }))
               }
               placeholder="Confirm new password"
               disabled={passwordLoading}
               onKeyPress={(e) => {
-                if (e.key === "Enter") {
-                  handlePasswordUpdate();
-                }
+                if (e.key === "Enter") handlePasswordUpdate();
               }}
             />
-            <button
+            <VisibilityButton
               onClick={() =>
-                setShowPasswords((prev) => ({
-                  ...prev,
-                  confirm: !prev.confirm,
-                }))
+                setShowPasswords((prev) => ({ ...prev, confirm: !prev.confirm }))
               }
-              style={{
-                position: "absolute",
-                right: "0.75rem",
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: "#6b7280",
-              }}
               type="button"
             >
               {showPasswords.confirm ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </div>
+            </VisibilityButton>
+          </PasswordFieldWrap>
         </FormGroup>
 
-        <Button 
-          variant="primary" 
-          onClick={handlePasswordUpdate}
-          disabled={passwordLoading}
-        >
+        <Button $variant="primary" onClick={handlePasswordUpdate} disabled={passwordLoading}>
           {passwordLoading ? "Updating..." : "Update Password"}
         </Button>
       </Section>

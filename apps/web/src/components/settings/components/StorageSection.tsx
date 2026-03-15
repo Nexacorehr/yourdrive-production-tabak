@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { HardDrive, Trash2, RefreshCw, AlertTriangle } from "lucide-react";
+import styled from "styled-components";
 import {
   Section,
   SectionTitle,
@@ -13,15 +14,6 @@ import {
 } from "../styles/settings.styles";
 import api from "../../../lib/axios";
 
-interface StorageSectionProps {
-  settings: {
-    storage?: {
-      autoSync?: boolean;
-    };
-  };
-  updateStorage: (data: Record<string, unknown>) => Promise<void>;
-}
-
 interface StorageInfo {
   limit: string; // bytes as string
   used: string; // bytes as string
@@ -31,18 +23,11 @@ interface StorageInfo {
   deviceName: string;
 }
 
-export const StorageSection: React.FC<StorageSectionProps> = ({
-  settings,
-  updateStorage: _updateStorage,
-}) => {
+export const StorageSection: React.FC = () => {
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [storageLoading, setStorageLoading] = useState(true);
-  const [_storageSettings, _setStorageSettings] = useState<{
-    autoSync: boolean;
-  }>({
-    autoSync: settings?.storage?.autoSync ?? true,
-  });
+  const [feedback, setFeedback] = useState<string>("");
 
   useEffect(() => {
     fetchStorageInfo();
@@ -108,9 +93,9 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
     try {
       setLoading(true);
       await api.post("/storage/clear-cache");
-      alert("Cache cleared successfully");
+      setFeedback("Cache cleared successfully.");
     } catch {
-      alert("Failed to clear cache");
+      setFeedback("Failed to clear cache.");
     } finally {
       setLoading(false);
     }
@@ -127,10 +112,10 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
     try {
       setLoading(true);
       await api.post("/storage/remove-duplicates");
-      alert("Duplicate files removed successfully");
+      setFeedback("Duplicate files removed successfully.");
       fetchStorageInfo(); // Refresh storage info
     } catch {
-      alert("Failed to remove duplicates");
+      setFeedback("Failed to remove duplicates.");
     } finally {
       setLoading(false);
     }
@@ -142,7 +127,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
     return (
       <Section>
         <SectionTitle>Storage Usage</SectionTitle>
-        <div>Loading storage information...</div>
+        <SectionDescription>Loading storage information...</SectionDescription>
       </Section>
     );
   }
@@ -161,79 +146,43 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
         </SectionDescription>
 
         {storageInfo?.tier && (
-          <div
-            style={{
-              background: "#f0f9ff",
-              border: "1px solid #1F9AFE",
-              borderRadius: "8px",
-              padding: "12px 16px",
-              marginBottom: "1.5rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-            }}
-          >
+          <TierCard>
             <HardDrive size={20} color="#1F9AFE" />
             <div>
-              <div style={{ fontWeight: 600, color: "#1F9AFE" }}>
-                {storageInfo.tier}
-              </div>
-              <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
+              <TierTitle>{storageInfo.tier}</TierTitle>
+              <TierMeta>
                 Current storage plan
-              </div>
+              </TierMeta>
             </div>
-          </div>
+          </TierCard>
         )}
 
-        <div style={{ marginBottom: "1.5rem" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "1rem",
-            }}
-          >
+        <UsageWrap>
+          <UsageTop>
             <div>
-              <div style={{ fontSize: "2rem", fontWeight: 700 }}>
-                {formatBytes(usedStorage)}
-              </div>
-              <div style={{ fontSize: "0.875rem", color: "#6b7280" }}>
+              <UsageValue>{formatBytes(usedStorage)}</UsageValue>
+              <UsageMeta>
                 of {formatBytes(totalStorage)} used
                 {storageInfo?.deviceName && ` on ${storageInfo.deviceName}`}
-              </div>
+              </UsageMeta>
             </div>
-            <div
-              style={{
-                fontSize: "1.5rem",
-                fontWeight: 600,
-                color: getUsageColor(usedPercentage),
-              }}
-            >
+            <UsagePct style={{ color: getUsageColor(usedPercentage) }}>
               {usedPercentage.toFixed(1)}%
-            </div>
-          </div>
+            </UsagePct>
+          </UsageTop>
 
           <StorageBar>
             <StorageFill
-              percentage={usedPercentage}
+              $percentage={usedPercentage}
               color={getUsageColor(usedPercentage)}
             />
           </StorageBar>
 
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginTop: "0.5rem",
-              fontSize: "0.875rem",
-              color: "#6b7280",
-            }}
-          >
+          <StorageInfoRow>
             <span>{formatBytes(usedStorage)} used</span>
             <span>{formatBytes(availableStorage)} available</span>
-          </div>
-        </div>
+          </StorageInfoRow>
+        </UsageWrap>
 
         {usedPercentage > 80 && (
           <InfoCard
@@ -261,7 +210,7 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
       <Section>
         <SectionTitle>Storage Settings</SectionTitle>
         <SectionDescription>
-          Configure how your files are stored
+          Storage behavior settings will be expanded in the next release.
         </SectionDescription>
       </Section>
 
@@ -273,14 +222,20 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
 
         <ButtonGroup>
           <Button onClick={handleClearCache} disabled={loading}>
-            <Trash2 size={16} style={{ marginRight: "0.5rem" }} />
+            <Trash2 size={16} />
             Clear Cache
           </Button>
           <Button onClick={handleRemoveDuplicates} disabled={loading}>
-            <RefreshCw size={16} style={{ marginRight: "0.5rem" }} />
+            <RefreshCw size={16} />
             Remove Duplicates
           </Button>
         </ButtonGroup>
+
+        {feedback && (
+          <InfoCard style={{ marginTop: "0.8rem" }}>
+            <InfoText>{feedback}</InfoText>
+          </InfoCard>
+        )}
 
         <InfoCard style={{ marginTop: "1rem" }}>
           <InfoText>
@@ -293,3 +248,61 @@ export const StorageSection: React.FC<StorageSectionProps> = ({
     </>
   );
 };
+
+const TierCard = styled.div`
+  background: #f2f8ff;
+  border: 1px solid #cfe5fb;
+  border-radius: 12px;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+`;
+
+const TierTitle = styled.div`
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1f9afe;
+`;
+
+const TierMeta = styled.div`
+  font-size: 0.85rem;
+  color: #60748a;
+`;
+
+const UsageWrap = styled.div`
+  margin-bottom: 1.4rem;
+`;
+
+const UsageTop = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  gap: 12px;
+`;
+
+const UsageValue = styled.div`
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #17324c;
+`;
+
+const UsageMeta = styled.div`
+  font-size: 0.85rem;
+  color: #62758b;
+`;
+
+const UsagePct = styled.div`
+  font-size: 1.3rem;
+  font-weight: 700;
+`;
+
+const StorageInfoRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #6a7d92;
+`;

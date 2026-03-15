@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import styled from "styled-components";
 import {
   X,
@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useSettings } from "../../hooks/useSettings";
 import api from "../../../../lib/axios";
+import { copyToClipboard } from "../../../../lib/copyToClipboard";
 
 interface SharePopupProps {
   fileId: string;
@@ -34,6 +35,7 @@ interface Share {
   id: string;
   token: string;
   url: string;
+  shortUrl?: string | null;
   permission: Permission;
   shareType: ShareType;
   hasPassword: boolean;
@@ -84,11 +86,7 @@ const SharePopup: React.FC<SharePopupProps> = ({
     if (typeof s.defaultDownloadLimit === "number") setMaxDownloads(s.defaultDownloadLimit);
   }, [settings]);
 
-  useEffect(() => {
-    fetchExistingShares();
-  }, [fileId]);
-
-  const fetchExistingShares = async () => {
+  const fetchExistingShares = useCallback(async () => {
     try {
       const response = await api.get(`/sharing/file/${fileId}`);
       const data = response.data;
@@ -98,7 +96,11 @@ const SharePopup: React.FC<SharePopupProps> = ({
     } catch (err) {
       console.error("Error fetching shares:", err);
     }
-  };
+  }, [fileId]);
+
+  useEffect(() => {
+    fetchExistingShares();
+  }, [fetchExistingShares]);
 
   const handleCreateShare = async () => {
     setLoading(true);
@@ -161,13 +163,12 @@ const SharePopup: React.FC<SharePopupProps> = ({
     }
   };
 
-  const handleCopyUrl = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedUrl(url);
+  const handleCopyUrl = async (share: Share) => {
+    const urlToCopy = share.shortUrl || share.url;
+    const ok = await copyToClipboard(urlToCopy);
+    if (ok) {
+      setCopiedUrl(urlToCopy);
       setTimeout(() => setCopiedUrl(null), 2000);
-    } catch (err) {
-      console.error("Failed to copy:", err);
     }
   };
 
@@ -406,8 +407,8 @@ const SharePopup: React.FC<SharePopupProps> = ({
                         </ShareItemTitle>
                       </ShareItemInfo>
                       <ShareItemActions>
-                        <IconButton onClick={() => handleCopyUrl(share.url)}>
-                          {copiedUrl === share.url ? (
+                        <IconButton onClick={() => handleCopyUrl(share)}>
+                          {copiedUrl === (share.shortUrl || share.url) ? (
                             <Check size={16} />
                           ) : (
                             <Copy size={16} />

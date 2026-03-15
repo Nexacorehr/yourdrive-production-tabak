@@ -1,6 +1,14 @@
 import { useState } from "react";
 import styled from "styled-components";
-import { User, Shield, Palette, Globe, HardDrive, Share2 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  User,
+  Shield,
+  SlidersHorizontal,
+  HardDrive,
+  Share2,
+  CheckCircle2,
+} from "lucide-react";
 import { useSettings } from "../shared/hooks/useSettings";
 import SidebarToggle from "../dashboard/component/sidebar/SidebarToggle";
 
@@ -19,33 +27,44 @@ import {
   TabsList,
   TabButton,
   MainContent,
+  Section,
+  SectionTitle,
+  SectionDescription,
+  FormGroup,
+  Label,
+  Select,
+  GridTwo,
+  SmallText,
+  InfoCard,
+  InfoText,
 } from "./styles/settings.styles";
 
-const ComingSoonCard = styled.div`
-  background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 2.5rem;
-  text-align: center;
-  max-width: 420px;
-  margin: 0 auto;
-`;
-const ComingSoonIcon = styled.div`
-  color: #94a3b8;
-  margin-bottom: 1rem;
+const HeaderRow = styled.div`
   display: flex;
+  align-items: center;
+  gap: 12px;
+`;
+
+const CenterContent = styled.div`
+  display: flex;
+  align-items: center;
   justify-content: center;
+  min-height: 220px;
+  color: #5c6b7d;
 `;
-const ComingSoonTitle = styled.div`
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: #334155;
-  margin-bottom: 0.5rem;
+
+const SaveRow = styled.div`
+  margin-top: 0.5rem;
 `;
-const ComingSoonText = styled.div`
-  font-size: 0.875rem;
-  color: #64748b;
-  line-height: 1.5;
+
+const SectionIcon = styled.span`
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 8px;
+`;
+
+const MotionContent = styled(motion.div)`
+  width: 100%;
 `;
 
 const Settings = () => {
@@ -56,48 +75,226 @@ const Settings = () => {
     error,
     updateProfile,
     updateSecurity,
-    updateStorage,
+    updateAppearance,
+    updateLanguage,
   } = useSettings();
+  const [appearanceSaving, setAppearanceSaving] = useState(false);
+  const [languageSaving, setLanguageSaving] = useState(false);
+  const [appearanceSaved, setAppearanceSaved] = useState(false);
+  const [languageSaved, setLanguageSaved] = useState(false);
 
   const tabs = [
     { id: "account", label: "Account", icon: User },
     { id: "security", label: "Security", icon: Shield },
-    { id: "appearance", label: "Appearance", icon: Palette },
-    { id: "language", label: "Language", icon: Globe },
+    { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
     { id: "storage", label: "Storage", icon: HardDrive },
     { id: "sharing", label: "Sharing", icon: Share2 },
   ];
 
+  const renderPreferences = () => {
+    const appearance = settings?.appearance;
+    const language = settings?.language;
+    const hasData = Boolean(appearance);
+    const hasLanguage = Boolean(language);
+
+    const onChange = async (
+      key: "theme" | "fileView" | "thumbnailQuality",
+      value: string,
+    ) => {
+      if (!hasData) return;
+      setAppearanceSaved(false);
+      setAppearanceSaving(true);
+      try {
+        await updateAppearance({ [key]: value } as {
+          theme?: "light" | "dark" | "system";
+          fileView?: "grid" | "list" | "compact";
+          thumbnailQuality?: "high" | "medium" | "low";
+        });
+        setAppearanceSaved(true);
+        setTimeout(() => setAppearanceSaved(false), 2600);
+      } finally {
+        setAppearanceSaving(false);
+      }
+    };
+
+    const onLanguageChange = async (
+      key: "displayLanguage" | "dateFormat" | "timeFormat" | "timezone",
+      value: string,
+    ) => {
+      if (!hasLanguage) return;
+      setLanguageSaved(false);
+      setLanguageSaving(true);
+      try {
+        await updateLanguage({ [key]: value } as {
+          displayLanguage?: string;
+          dateFormat?: "MM/DD/YYYY" | "DD/MM/YYYY" | "YYYY-MM-DD";
+          timeFormat?: "12-hour" | "24-hour";
+          timezone?: string;
+        });
+        setLanguageSaved(true);
+        setTimeout(() => setLanguageSaved(false), 2600);
+      } finally {
+        setLanguageSaving(false);
+      }
+    };
+
+    return (
+      <>
+      <Section>
+        <SectionTitle>
+          <SectionIcon>
+            <SlidersHorizontal size={17} />
+          </SectionIcon>
+          Appearance & Language
+        </SectionTitle>
+        <SectionDescription>
+          Keep your workspace simple and readable with focused defaults.
+        </SectionDescription>
+
+        <GridTwo>
+          <FormGroup>
+            <Label>Theme</Label>
+            <Select
+              value={appearance?.theme ?? "system"}
+              disabled={!hasData || appearanceSaving}
+              onChange={(e) => onChange("theme", e.target.value)}
+            >
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </Select>
+          </FormGroup>
+
+          <FormGroup>
+            <Label>File view</Label>
+            <Select
+              value={appearance?.fileView ?? "grid"}
+              disabled={!hasData || appearanceSaving}
+              onChange={(e) => onChange("fileView", e.target.value)}
+            >
+              <option value="grid">Grid</option>
+              <option value="list">List</option>
+              <option value="compact">Compact</option>
+            </Select>
+          </FormGroup>
+        </GridTwo>
+
+        <FormGroup>
+          <Label>Thumbnail quality</Label>
+          <Select
+            value={appearance?.thumbnailQuality ?? "medium"}
+            disabled={!hasData || appearanceSaving}
+            onChange={(e) => onChange("thumbnailQuality", e.target.value)}
+          >
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </Select>
+        </FormGroup>
+
+        {appearanceSaved && (
+          <InfoCard>
+            <InfoText>
+              <CheckCircle2 size={14} style={{ marginRight: 6 }} />
+              Appearance preferences saved.
+            </InfoText>
+          </InfoCard>
+        )}
+      </Section>
+      <Section>
+        <SectionTitle>Region & Time</SectionTitle>
+        <SectionDescription>
+          Configure date and timezone behavior for consistent timestamps.
+        </SectionDescription>
+
+        <GridTwo>
+          <FormGroup>
+            <Label>Display language</Label>
+            <Select
+              value={language?.displayLanguage ?? "en"}
+              disabled={!hasLanguage || languageSaving}
+              onChange={(e) => onLanguageChange("displayLanguage", e.target.value)}
+            >
+              <option value="en">English</option>
+              <option value="hr">Croatian</option>
+              <option value="de">German</option>
+              <option value="fr">French</option>
+            </Select>
+          </FormGroup>
+
+          <FormGroup>
+            <Label>Date format</Label>
+            <Select
+              value={language?.dateFormat ?? "MM/DD/YYYY"}
+              disabled={!hasLanguage || languageSaving}
+              onChange={(e) => onLanguageChange("dateFormat", e.target.value)}
+            >
+              <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+              <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+              <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+            </Select>
+          </FormGroup>
+        </GridTwo>
+
+        <GridTwo>
+          <FormGroup>
+            <Label>Time format</Label>
+            <Select
+              value={language?.timeFormat ?? "24-hour"}
+              disabled={!hasLanguage || languageSaving}
+              onChange={(e) => onLanguageChange("timeFormat", e.target.value)}
+            >
+              <option value="24-hour">24-hour</option>
+              <option value="12-hour">12-hour</option>
+            </Select>
+          </FormGroup>
+
+          <FormGroup>
+            <Label>Timezone</Label>
+            <Select
+              value={language?.timezone ?? "UTC"}
+              disabled={!hasLanguage || languageSaving}
+              onChange={(e) => onLanguageChange("timezone", e.target.value)}
+            >
+              <option value="UTC">UTC</option>
+              <option value="Europe/Zagreb">Europe/Zagreb</option>
+              <option value="Europe/Berlin">Europe/Berlin</option>
+              <option value="America/New_York">America/New_York</option>
+            </Select>
+          </FormGroup>
+        </GridTwo>
+
+        <SaveRow>
+          <SmallText>
+            Changes are applied immediately for your account.
+          </SmallText>
+        </SaveRow>
+
+        {languageSaved && (
+          <InfoCard>
+            <InfoText>
+              <CheckCircle2 size={14} style={{ marginRight: 6 }} />
+              Language and region preferences saved.
+            </InfoText>
+          </InfoCard>
+        )}
+      </Section>
+      </>
+    );
+  };
+
   const renderContent = () => {
     if (loading && !settings) {
-      return (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "3rem",
-            color: "#536471",
-          }}
-        >
-          Loading settings...
-        </div>
-      );
+      return <CenterContent>Loading settings...</CenterContent>;
     }
 
     if (error) {
       return (
-        <div
-          style={{
-            padding: "1.5rem",
-            background: "#fee2e2",
-            color: "#dc2626",
-            borderRadius: "12px",
-            textAlign: "center",
-          }}
-        >
-          <strong>Error:</strong> {error}
-        </div>
+        <InfoCard style={{ background: "#fff3f3", borderColor: "#ffd0d0" }}>
+          <InfoText style={{ color: "#b42323" }}>
+            <strong>Error:</strong> {error}
+          </InfoText>
+        </InfoCard>
       );
     }
 
@@ -116,35 +313,10 @@ const Settings = () => {
         );
 
       case "storage":
-        return settings ? (
-          <StorageSection settings={settings} updateStorage={updateStorage} />
-        ) : null;
+        return settings ? <StorageSection /> : null;
 
-      case "appearance":
-        return (
-          <ComingSoonCard>
-            <ComingSoonIcon>
-              <Palette size={40} strokeWidth={1.2} />
-            </ComingSoonIcon>
-            <ComingSoonTitle>Appearance</ComingSoonTitle>
-            <ComingSoonText>
-              Theme, file view, and display options are coming soon.
-            </ComingSoonText>
-          </ComingSoonCard>
-        );
-
-      case "language":
-        return (
-          <ComingSoonCard>
-            <ComingSoonIcon>
-              <Globe size={40} strokeWidth={1.2} />
-            </ComingSoonIcon>
-            <ComingSoonTitle>Language & region</ComingSoonTitle>
-            <ComingSoonText>
-              Display language, date and time format are coming soon.
-            </ComingSoonText>
-          </ComingSoonCard>
-        );
+      case "preferences":
+        return renderPreferences();
 
       case "sharing":
         return <SharingSection />;
@@ -158,11 +330,14 @@ const Settings = () => {
     <PageWrapper>
       <Container>
         <Header>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <HeaderRow>
             <SidebarToggle />
             <Title>Settings</Title>
-          </div>
-          <Subtitle>Manage your account settings and preferences</Subtitle>
+          </HeaderRow>
+          <Subtitle>
+            Manage your account, security, sharing, storage, and interface
+            preferences in one consistent workspace.
+          </Subtitle>
         </Header>
 
         <TabsWrapper>
@@ -172,7 +347,7 @@ const Settings = () => {
               return (
                 <TabButton
                   key={tab.id}
-                  active={activeTab === tab.id}
+                  $active={activeTab === tab.id}
                   onClick={() => setActiveTab(tab.id)}
                 >
                   <Icon size={18} />
@@ -183,7 +358,19 @@ const Settings = () => {
           </TabsList>
         </TabsWrapper>
 
-        <MainContent>{renderContent()}</MainContent>
+        <MainContent>
+          <AnimatePresence mode="wait" initial={false}>
+            <MotionContent
+              key={activeTab}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.16, ease: "easeOut" }}
+            >
+              {renderContent()}
+            </MotionContent>
+          </AnimatePresence>
+        </MainContent>
       </Container>
     </PageWrapper>
   );

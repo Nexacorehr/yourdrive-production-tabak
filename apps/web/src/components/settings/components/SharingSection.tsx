@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Lock, Calendar, Download, Share2 } from "lucide-react";
+import styled from "styled-components";
 import {
   Section,
   SectionTitle,
@@ -111,9 +112,7 @@ export const SharingSection: React.FC = () => {
     return (
       <Section>
         <SectionTitle>Default sharing options</SectionTitle>
-        <div style={{ padding: "2rem", color: "#536471", textAlign: "center" }}>
-          Loading…
-        </div>
+        <SectionDescription>Loading default sharing options...</SectionDescription>
       </Section>
     );
   }
@@ -130,11 +129,11 @@ export const SharingSection: React.FC = () => {
 
       <form onSubmit={handleSubmit} noValidate>
         {/* A11y: optional username for password form */}
-        <div aria-hidden="true" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)" }}>
+        <VisuallyHidden aria-hidden="true">
           <input type="text" name="username" autoComplete="username" tabIndex={-1} readOnly defaultValue=" " />
-        </div>
+        </VisuallyHidden>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", maxWidth: "32rem" }}>
+        <FormStack>
           <ToggleWrapper style={{ marginBottom: 0 }}>
             <ToggleInfo>
               <ToggleTitle>Require password for new links</ToggleTitle>
@@ -144,15 +143,17 @@ export const SharingSection: React.FC = () => {
             </ToggleInfo>
             <Toggle
               type="button"
-              active={form.requirePasswordForLinks}
+              $active={form.requirePasswordForLinks}
               onClick={() => setField("requirePasswordForLinks", !form.requirePasswordForLinks)}
               disabled={saving}
             />
           </ToggleWrapper>
 
-          <FormGroup style={{ marginTop: 0 }}>
+          <FormGroup>
             <Label htmlFor="sharing-default-password">
-              <Lock size={16} style={{ display: "inline", marginRight: "0.5rem" }} />
+              <InlineIcon>
+                <Lock size={16} />
+              </InlineIcon>
               Default password (optional)
             </Label>
             <Input
@@ -165,14 +166,16 @@ export const SharingSection: React.FC = () => {
               onChange={(e) => setField("defaultPassword", e.target.value)}
               disabled={saving}
             />
-            <SmallText style={{ marginTop: "0.5rem", color: "#536471" }}>
+            <SmallText>
               Used for new links when &quot;Require password&quot; is on. Empty = choose each time.
             </SmallText>
           </FormGroup>
 
-          <FormGroup style={{ marginTop: 0 }}>
+          <FormGroup>
             <Label htmlFor="sharing-expiration">
-              <Calendar size={16} style={{ display: "inline", marginRight: "0.5rem" }} />
+              <InlineIcon>
+                <Calendar size={16} />
+              </InlineIcon>
               Default link expiration (days)
             </Label>
             <Select
@@ -189,14 +192,16 @@ export const SharingSection: React.FC = () => {
               <option value="30">30 days</option>
               <option value="90">90 days</option>
             </Select>
-            <SmallText style={{ marginTop: "0.5rem", color: "#536471" }}>
+            <SmallText>
               New shared links expire after this many days.
             </SmallText>
           </FormGroup>
 
-          <FormGroup style={{ marginTop: 0 }}>
+          <FormGroup>
             <Label htmlFor="sharing-download-limit">
-              <Download size={16} style={{ display: "inline", marginRight: "0.5rem" }} />
+              <InlineIcon>
+                <Download size={16} />
+              </InlineIcon>
               Default download limit
             </Label>
             <Input
@@ -210,31 +215,52 @@ export const SharingSection: React.FC = () => {
               }
               disabled={saving}
             />
-            <SmallText style={{ marginTop: "0.5rem", color: "#536471" }}>
+            <SmallText>
               Max downloads per link for new shares.
             </SmallText>
           </FormGroup>
 
           {feedback && (
-            <div
-              role="alert"
-              style={{
-                padding: "0.75rem 1rem",
-                borderRadius: "8px",
-                backgroundColor: feedback.type === "success" ? "#dcfce7" : "#fee2e2",
-                color: feedback.type === "success" ? "#15803d" : "#dc2626",
-                fontSize: "0.875rem",
-              }}
-            >
+            <Feedback role="alert" $type={feedback.type}>
               {feedback.text}
-            </div>
+            </Feedback>
           )}
 
-          <Button type="submit" variant="primary" disabled={saving} style={{ alignSelf: "flex-start" }}>
+          <Button type="submit" $variant="primary" disabled={saving}>
             {saving ? "Saving…" : "Save default sharing options"}
           </Button>
-        </div>
+        </FormStack>
       </form>
     </Section>
   );
 };
+
+const FormStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 34rem;
+`;
+
+const InlineIcon = styled.span`
+  display: inline-flex;
+  margin-right: 0.45rem;
+  vertical-align: middle;
+`;
+
+const Feedback = styled.div<{ $type: "success" | "error" }>`
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  border: 1px solid ${(props) => (props.$type === "success" ? "#b8efc9" : "#ffd1d1")};
+  background: ${(props) => (props.$type === "success" ? "#eafff0" : "#fff4f4")};
+  color: ${(props) => (props.$type === "success" ? "#15803d" : "#dc2626")};
+  font-size: 0.875rem;
+`;
+
+const VisuallyHidden = styled.div`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+`;

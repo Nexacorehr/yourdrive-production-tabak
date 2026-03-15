@@ -1,6 +1,16 @@
+import crypto from "crypto";
 import { s3Client } from "../routes/files.routes";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner/";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+
+/** 8-char alphanumeric id for short share links (e.g. /s/abc12XY) */
+export function generateShortId(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const bytes = crypto.randomBytes(8);
+  let id = "";
+  for (let i = 0; i < 8; i++) id += chars[bytes[i]! % chars.length];
+  return id;
+}
 
 export async function trackFileActivity(
   fileId: number,

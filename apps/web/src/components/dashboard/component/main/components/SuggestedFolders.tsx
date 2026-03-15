@@ -11,9 +11,6 @@ import {
   FolderMeta,
   LoadingState,
   ErrorState,
-  EmptyState,
-  EmptyText,
-  EmptySubtext,
 } from "../styles/suggestedFolders.styles";
 import FilesIcon from "../../../../shared/icons/files";
 import FolderPreviewModal from "./FolderPreviewModal";
@@ -86,17 +83,7 @@ const SuggestedFolders: React.FC = () => {
   }
 
   if (folders.length === 0) {
-    return (
-      <Container>
-        <Header>
-          <Title>Suggested Folders</Title>
-        </Header>
-        <EmptyState>
-          <EmptyText>No folders yet</EmptyText>
-          <EmptySubtext>Upload a folder to get started</EmptySubtext>
-        </EmptyState>
-      </Container>
-    );
+    return null;
   }
 
   return (

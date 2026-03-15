@@ -42,7 +42,8 @@ export interface StorageStats {
 export const settingsService = {
   async getSettings(): Promise<UserSettings> {
     const response = await api.get("/settings");
-    return response.data;
+    const payload = response.data;
+    return payload?.settings ?? payload;
   },
 
   async updateProfile(data: UpdateProfileRequest): Promise<void> {

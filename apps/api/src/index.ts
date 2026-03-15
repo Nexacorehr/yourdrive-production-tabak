@@ -42,13 +42,27 @@ app.use((_req, res, next) => {
   res.removeHeader("Permissions-Policy");
   next();
 });
-// CORS disabled / fully permissive (insecure – allow any origin).
+// CORS: reflect request origin so cross-origin (e.g. frontend at 192.168.1.2:5173, API at :3000) works.
+// In development, allow any http(s) origin so register works from any device on the network.
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  res.setHeader("Access-Control-Allow-Origin", origin || "*");
-  if (origin) res.setHeader("Access-Control-Allow-Credentials", "true");
+  const origin = (req.headers.origin || "").trim();
+  const frontendUrl = (process.env.FRONTEND_URL || "").trim();
+
+  let allowOrigin: string;
+  if (origin) {
+    allowOrigin = origin;
+  } else if (frontendUrl) {
+    allowOrigin = frontendUrl;
+  } else {
+    allowOrigin = "*";
+  }
+
+  res.setHeader("Access-Control-Allow-Origin", allowOrigin);
+  if (allowOrigin !== "*") {
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "*");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin");
   res.setHeader("Access-Control-Expose-Headers", "ETag");
   if (req.method === "OPTIONS") return res.status(204).end();
   next();
@@ -109,6 +123,12 @@ const server = app.listen(PORT, HOST, () => {
   );
 });
 
-server.timeout = 120000;
-server.keepAliveTimeout = 65000;
-server.headersTimeout = 66000;
+const TEN_MINUTES_MS = 10 * 60 * 1000;
+const ONE_MINUTE_MS = 60 * 1000;
+
+// Upload-related routes (including anonymous tryout uploads) can take longer on slower networks.
+// Keep long request timeout to avoid premature socket termination during large file processing.
+server.timeout = TEN_MINUTES_MS;
+server.requestTimeout = TEN_MINUTES_MS;
+server.keepAliveTimeout = ONE_MINUTE_MS;
+server.headersTimeout = ONE_MINUTE_MS + 1000;
