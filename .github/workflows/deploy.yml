@@ -18,7 +18,7 @@ jobs:
           cd /opt/yourdrive
           git fetch origin
           git reset --hard origin/main
-          npm ci
+          npm install
           npm run db:generate
           (cd apps/api && npx prisma migrate deploy)
           npm run build
