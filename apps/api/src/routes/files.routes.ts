@@ -117,33 +117,6 @@ const chunkUpload = multer({
 
 filesRoutes.use("/favorites", favoritesRoutes);
 
-/** @deprecated Prefer POST /api/storage/ensure-welcome-readme — kept for older clients. */
-filesRoutes.post(
-  "/ensure-welcome-readme",
-  authMiddleware,
-  async (req: AuthRequest, res) => {
-    try {
-      if (!req.userId || !BUCKET_NAME) {
-        return res
-          .status(401)
-          .json({ success: false, error: "Unauthorized" });
-      }
-      const result = await ensureWelcomeReadme(
-        req.userId,
-        s3Client,
-        BUCKET_NAME,
-      );
-      return res.json({ success: true, ...result });
-    } catch (err) {
-      console.error("ensure-welcome-readme (files) error:", err);
-      return res.status(500).json({
-        success: false,
-        error: "Failed to ensure welcome README",
-      });
-    }
-  },
-);
-
 // Anonymous upload endpoint (for Tryout feature)
 filesRoutes.post(
   "/anonymous-upload",
@@ -401,8 +374,16 @@ filesRoutes.get("/", authMiddleware, async (req: AuthRequest, res) => {
       });
     }
 
-      const filesResult = await pool.query(
-        `SELECT 
+    if (BUCKET_NAME) {
+      void ensureWelcomeReadme(req.userId, s3Client, BUCKET_NAME).catch(
+        (err) => {
+          console.warn("[files] ensureWelcomeReadme:", err);
+        },
+      );
+    }
+
+    const filesResult = await pool.query(
+      `SELECT 
         uf.id, 
         uf.original_name, 
         uf.s3_key, 
@@ -418,8 +399,8 @@ filesRoutes.get("/", authMiddleware, async (req: AuthRequest, res) => {
        LEFT JOIN favorited_files ff ON ff.file_id = uf.id AND ff.user_id = $1
        WHERE uf.user_id = $1 AND (uf.original_name != '.metadata' OR uf.is_folder = true)
        ORDER BY uf.is_folder DESC, uf.created_at DESC`,
-        [req.userId],
-      );
+      [req.userId],
+    );
 
     const transformedFiles = filesResult.rows.map((row) => ({
       id: row.id,

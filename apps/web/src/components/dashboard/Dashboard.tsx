@@ -5,8 +5,6 @@ import { Container } from "../shared/styles/general";
 import Application from "./component/Application";
 import { DashboardSpotlightTour } from "./spotlight/DashboardSpotlightTour";
 import { useAuthStore } from "../../store/authStore";
-import { useStorageStore } from "../../store/storageStore";
-import api from "../../lib/axios";
 import { settingsService } from "../settings/service/settingsService";
 import {
   useUserUiPreferencesStore,
@@ -28,16 +26,6 @@ const Dashboard = () => {
     return () => {
       cancelled = true;
     };
-  }, [accessToken]);
-
-  useEffect(() => {
-    if (!accessToken) return;
-    api
-      .post("/files/ensure-welcome-readme")
-      .then(() => {
-        useStorageStore.getState().refreshStorage();
-      })
-      .catch(() => {});
   }, [accessToken]);
 
   useEffect(() => {
