@@ -1,6 +1,9 @@
+import { PLANS } from "@yourdrive/plans";
 import { Pool } from "pg";
 import { UAParser } from "ua-parser-js";
 import { randomUUID } from "crypto";
+
+import { BigIntHelper } from "../lib/bigint-helper";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -56,11 +59,21 @@ export class DeviceService {
     } else {
       deviceId = randomUUID();
 
+      const defaultLimitStr = BigIntHelper.gbToBytes(
+        PLANS.free.storageGb,
+      ).toString();
+
       await pool.query(
         `INSERT INTO user_devices 
-          (id, user_id, device_name, device_type, browser, os, ip_address, user_agent, is_current)
+          (id, user_id, device_name, device_type, browser, os, ip_address, user_agent, is_current, storage_limit)
          VALUES 
-          ($1, $2, $3, $4, $5, $6, $7, $8, true)`,
+          ($1, $2, $3, $4, $5, $6, $7, $8, true,
+           COALESCE(
+             (SELECT ud.storage_limit FROM user_devices ud
+              WHERE ud.user_id = $2 AND ud.device_name = 'Primary Device'
+              LIMIT 1),
+             $9::bigint
+           ))`,
         [
           deviceId,
           userId,
@@ -70,6 +83,7 @@ export class DeviceService {
           os,
           deviceInfo.ip,
           deviceInfo.userAgent,
+          defaultLimitStr,
         ],
       );
 

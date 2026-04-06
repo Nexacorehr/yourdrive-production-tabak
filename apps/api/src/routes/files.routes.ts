@@ -20,6 +20,7 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { trackFileActivity, generateShortId } from "../lib/helper";
+import { resolveFrontendBase } from "../lib/frontend-base";
 import { buildContentDisposition } from "../lib/contentDisposition";
 import favoritesRoutes from "./favorite.routes";
 
@@ -55,54 +56,6 @@ export const s3Client = new S3Client({
 });
 
 const BUCKET_NAME = process.env.B2_BUCKET_NAME;
-
-function isLocalOrPrivateHost(hostname: string): boolean {
-  const host = hostname.toLowerCase();
-  return (
-    host === "localhost" ||
-    host === "127.0.0.1" ||
-    host.endsWith(".local") ||
-    host.startsWith("10.") ||
-    host.startsWith("192.168.") ||
-    /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
-  );
-}
-
-function normalizeFrontendBase(rawBase: string): string {
-  try {
-    const url = new URL(rawBase);
-    if (url.protocol === "https:" && isLocalOrPrivateHost(url.hostname)) {
-      url.protocol = "http:";
-    }
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return "http://localhost:5173";
-  }
-}
-
-function resolveFrontendBase(req: Request): string {
-  const envBase = (process.env.FRONTEND_URL || "").trim();
-  if (process.env.NODE_ENV === "production" && envBase) {
-    return normalizeFrontendBase(envBase);
-  }
-
-  const origin = String(req.headers.origin || "").trim();
-  if (origin) return normalizeFrontendBase(origin);
-
-  const forwardedProto = String(req.headers["x-forwarded-proto"] || "")
-    .split(",")[0]
-    .trim();
-  const forwardedHost = String(req.headers["x-forwarded-host"] || "")
-    .split(",")[0]
-    .trim();
-  if (forwardedProto && forwardedHost) {
-    return normalizeFrontendBase(`${forwardedProto}://${forwardedHost}`);
-  }
-
-  if (envBase) return normalizeFrontendBase(envBase);
-
-  return "http://localhost:5173";
-}
 
 function inferMimeTypeFromName(fileName: string): string | undefined {
   const ext = fileName.split(".").pop()?.toLowerCase();

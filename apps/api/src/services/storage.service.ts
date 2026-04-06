@@ -12,6 +12,7 @@ export class StorageService {
       userId,
       isCurrent: true,
     },
+    orderBy: { lastActive: "desc" },
     select: {
       id: true,
       storageLimit: true,

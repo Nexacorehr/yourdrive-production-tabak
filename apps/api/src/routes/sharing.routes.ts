@@ -9,59 +9,10 @@ import { emailService } from "../lib/email.service";
 import { s3Client } from "./files.routes";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { SettingsService } from "../services/settings.service";
+import { resolveFrontendBase } from "../lib/frontend-base";
 
 const sharingRoutes = express.Router();
 const prisma = new PrismaClient();
-
-function isLocalOrPrivateHost(hostname: string): boolean {
-  const host = hostname.toLowerCase();
-  return (
-    host === "localhost" ||
-    host === "127.0.0.1" ||
-    host.endsWith(".local") ||
-    host.startsWith("10.") ||
-    host.startsWith("192.168.") ||
-    /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
-  );
-}
-
-function normalizeFrontendBase(rawBase: string): string {
-  try {
-    const url = new URL(rawBase);
-    if (url.protocol === "https:" && isLocalOrPrivateHost(url.hostname)) {
-      url.protocol = "http:";
-    }
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return "http://localhost:5173";
-  }
-}
-
-function resolveFrontendBase(req: express.Request): string {
-  const envBase = (process.env.FRONTEND_URL || "").trim();
-  // In production, always use canonical URL from env so share links match your real host
-  // (avoids *.trycloudflare.com or old tunnel URLs when Origin reflects a temporary tunnel).
-  if (process.env.NODE_ENV === "production" && envBase) {
-    return normalizeFrontendBase(envBase);
-  }
-
-  const origin = String(req.headers.origin || "").trim();
-  if (origin) return normalizeFrontendBase(origin);
-
-  const forwardedProto = String(req.headers["x-forwarded-proto"] || "")
-    .split(",")[0]
-    .trim();
-  const forwardedHost = String(req.headers["x-forwarded-host"] || "")
-    .split(",")[0]
-    .trim();
-  if (forwardedProto && forwardedHost) {
-    return normalizeFrontendBase(`${forwardedProto}://${forwardedHost}`);
-  }
-
-  if (envBase) return normalizeFrontendBase(envBase);
-
-  return "http://localhost:5173";
-}
 
 const addCommentSchema = z.object({
   text: z.string().min(1).max(1000),

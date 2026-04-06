@@ -31,7 +31,12 @@ function getStorageTierLabel(
   inGB: number,
   hasEducationalBonus: boolean,
 ): string {
+  const freeGb = PLANS.free.storageGb;
   const r = Math.round(inGB);
+  // Treat values within ~0.5 GB of the configured free tier as "current free" (float noise from BigInt→number).
+  const isCurrentFreeTier =
+    !hasEducationalBonus && Math.abs(inGB - freeGb) < 0.51;
+
   if (hasEducationalBonus && r >= 100) {
     return "100GB Educational Plan (50GB + 50GB School Bonus — legacy)";
   }
@@ -41,7 +46,7 @@ function getStorageTierLabel(
   if (r >= 150) return "150GB (Pro Plan)";
   if (r >= 100) return "100GB (Plus Plan)";
   if (r === 50 && !hasEducationalBonus) return "50GB (Free Plan — legacy)";
-  if (r === 30) return "30GB (Free Plan)";
+  if (isCurrentFreeTier || r === freeGb) return `${freeGb}GB (Free Plan)`;
   return `${r}GB`;
 }
 
