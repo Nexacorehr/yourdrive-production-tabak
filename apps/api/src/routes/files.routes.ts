@@ -375,11 +375,11 @@ filesRoutes.get("/", authMiddleware, async (req: AuthRequest, res) => {
     }
 
     if (BUCKET_NAME) {
-      void ensureWelcomeReadme(req.userId, s3Client, BUCKET_NAME).catch(
-        (err) => {
-          console.warn("[files] ensureWelcomeReadme:", err);
-        },
-      );
+      try {
+        await ensureWelcomeReadme(req.userId, s3Client, BUCKET_NAME);
+      } catch (err) {
+        console.warn("[files] ensureWelcomeReadme:", err);
+      }
     }
 
     const filesResult = await pool.query(
@@ -868,8 +868,7 @@ filesRoutes.get("/usage", authMiddleware, async (req: AuthRequest, res) => {
         COALESCE(SUM(size), 0) as total_size
        FROM user_files
        WHERE user_id = $1
-         AND deleted_at IS NULL
-         AND is_system_readme = false`,
+         AND deleted_at IS NULL`,
       [req.userId],
     );
 

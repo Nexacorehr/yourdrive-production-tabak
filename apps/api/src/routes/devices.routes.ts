@@ -23,7 +23,6 @@ devicesRoutes.get("/", authMiddleware, async (req: AuthRequest, res) => {
         COUNT(uf.id)::bigint as total_files
       FROM user_files uf
       WHERE uf.user_id = $1 AND uf.deleted_at IS NULL AND uf.original_name != '.metadata'
-        AND uf.is_system_readme = false
       `,
       [req.userId],
     );

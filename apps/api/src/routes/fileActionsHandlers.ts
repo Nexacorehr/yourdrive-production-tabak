@@ -52,6 +52,18 @@ export async function getFileDetails(
   return result.rows[0] || null;
 }
 
+function isProtectedWelcomeReadme(file: {
+  original_name?: string | null;
+  folder_path?: string | null;
+  is_folder?: boolean | null;
+}): boolean {
+  return (
+    file.is_folder !== true &&
+    (file.original_name || "").toLowerCase() === "readme.md" &&
+    (file.folder_path || "") === ""
+  );
+}
+
 export async function downloadFromS3(s3Key: string): Promise<Buffer> {
   const command = new GetObjectCommand({
     Bucket: BUCKET_NAME,
@@ -245,7 +257,7 @@ export class FileActionsHandlers {
             continue;
           }
 
-          if (file.is_system_readme) {
+          if (isProtectedWelcomeReadme(file)) {
             await client.query("ROLLBACK");
             return res.status(403).json({
               success: false,
@@ -255,8 +267,8 @@ export class FileActionsHandlers {
 
           await client.query(
             `INSERT INTO recycle_bin 
-             (user_id, file_id, original_name, s3_key, user_email, mime_type, size, folder_path, is_system_readme, deleted_at, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, NOW(), $9)
+             (user_id, file_id, original_name, s3_key, user_email, mime_type, size, folder_path, deleted_at, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9)
              ON CONFLICT (user_id, file_id) 
              DO UPDATE SET deleted_at = NOW()`,
             [
@@ -346,7 +358,7 @@ export class FileActionsHandlers {
 
           const file = recycleResult.rows[0];
 
-          if (file.is_system_readme) {
+          if (isProtectedWelcomeReadme(file)) {
             await client.query("ROLLBACK");
             return res.status(403).json({
               success: false,
@@ -592,11 +604,12 @@ export class FileActionsHandlers {
       }
 
       const meta = await client.query(
-        `SELECT is_system_readme FROM user_files WHERE id = $1 AND user_id = $2`,
+        `SELECT original_name, folder_path, is_folder FROM user_files WHERE id = $1 AND user_id = $2`,
         [parseInt(fileId), userId],
       );
       if (
-        meta.rows[0]?.is_system_readme &&
+        meta.rows[0] &&
+        isProtectedWelcomeReadme(meta.rows[0]) &&
         newName.trim().toLowerCase() !== "readme.md"
       ) {
         await client.query("ROLLBACK");
@@ -781,7 +794,11 @@ export class FileActionsHandlers {
 
       const readmeCheck = await client.query(
         `SELECT id FROM user_files 
-         WHERE id = ANY($1) AND user_id = $2 AND is_system_readme = true`,
+         WHERE id = ANY($1)
+           AND user_id = $2
+           AND is_folder = false
+           AND original_name = 'README.md'
+           AND folder_path = ''`,
         [fileIds.map((id) => parseInt(id)), userId],
       );
       if (

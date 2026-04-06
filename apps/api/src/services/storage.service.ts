@@ -31,7 +31,6 @@ export class StorageService {
     where: {
       userId,
       deletedAt: null,
-      isSystemReadme: false,
     },
     _sum: {
       size: true,
@@ -138,7 +137,6 @@ export class StorageService {
       userId,
       deletedAt: null,
       isFolder: false,
-      isSystemReadme: false,
     },
     _sum: {
       size: true,
@@ -154,7 +152,6 @@ export class StorageService {
       userId,
       deletedAt: null,
       isFolder: false,
-      isSystemReadme: false,
     },
     orderBy: {
       size: 'desc',
@@ -215,7 +212,6 @@ export class StorageService {
         deletedAt: null,
         fileHash: { not: null },
         isFolder: false,
-        isSystemReadme: false,
       },
       having: {
         fileHash: {

@@ -34,24 +34,27 @@ export async function ensureWelcomeReadme(
   s3: S3Client,
   bucket: string,
 ): Promise<{ created: boolean; fileId?: number }> {
-  const existing = await prisma.userFile.findFirst({
-    where: {
-      userId,
-      folderPath: "",
-      deletedAt: null,
-      originalName: { equals: "README.md", mode: "insensitive" },
-    },
-    select: { id: true },
-  });
+  const existing = await prisma.$queryRaw<Array<{ id: number }>>`
+    SELECT id
+    FROM user_files
+    WHERE user_id = ${userId}
+      AND folder_path = ''
+      AND deleted_at IS NULL
+      AND LOWER(original_name) = LOWER('README.md')
+    LIMIT 1
+  `;
 
-  if (existing) {
-    return { created: false, fileId: existing.id };
+  if (existing[0]) {
+    return { created: false, fileId: existing[0].id };
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { email: true },
-  });
+  const userRows = await prisma.$queryRaw<Array<{ email: string }>>`
+    SELECT email
+    FROM "User"
+    WHERE id = ${userId}
+    LIMIT 1
+  `;
+  const user = userRows[0];
 
   if (!user?.email) {
     throw new Error("User email not found");
@@ -69,20 +72,13 @@ export async function ensureWelcomeReadme(
     }),
   );
 
-  const row = await prisma.userFile.create({
-    data: {
-      userId,
-      userEmail: user.email,
-      originalName: "README.md",
-      s3Key,
-      folderPath: "",
-      size: BigInt(body.length),
-      mimeType: "text/markdown; charset=utf-8",
-      isFolder: false,
-      isSystemReadme: true,
-    },
-    select: { id: true },
-  });
+  const row = await prisma.$queryRaw<Array<{ id: number }>>`
+    INSERT INTO user_files
+      (user_id, user_email, original_name, s3_key, folder_path, size, mime_type, is_folder, is_locked, created_at, updated_at)
+    VALUES
+      (${userId}, ${user.email}, 'README.md', ${s3Key}, '', ${BigInt(0)}, 'text/markdown; charset=utf-8', false, false, NOW(), NOW())
+    RETURNING id
+  `;
 
-  return { created: true, fileId: row.id };
+  return { created: true, fileId: row[0]?.id };
 }

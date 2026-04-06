@@ -98,7 +98,6 @@ model UserFile {
   mimeType          String       @map("mime_type")
   isFolder          Boolean      @default(false) @map("is_folder")
   isLocked          Boolean      @default(false) @map("is_locked")
-  isSystemReadme    Boolean      @default(false) @map("is_system_readme")
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
   deletedAt         DateTime?    @map("deleted_at")
@@ -267,7 +266,6 @@ model RecycleBin {
   mimeType         String   @map("mime_type")
   size             BigInt
   folderPath       String   @default("") @map("folder_path")
-  isSystemReadme   Boolean  @default(false) @map("is_system_readme")
   deletedAt        DateTime @default(now()) @map("deleted_at")
   createdAt        DateTime @default(now()) @map("created_at")
 
