@@ -7,8 +7,12 @@ import { useStorageStore } from "../../../../store/storageStore";
 import { useEffect } from "react";
 import { useAuthStore } from "../../../../store/authStore";
 import { useSidebarStore } from "../../../../store/sidebarStore";
+import { useMediaQuery } from "../../../../hooks/useMediaQuery";
+
+const MOBILE_SIDEBAR_MQ = "(max-width: 768px)";
 
 const Sidebar = () => {
+  const isMobile = useMediaQuery(MOBILE_SIDEBAR_MQ);
   const usedFormatted = useStorageStore((s) => s.getUsedFormatted());
   const totalFormatted = useStorageStore((s) => s.getTotalFormatted());
   const percentage = useStorageStore((s) => s.getPercentage());
@@ -31,7 +35,7 @@ const Sidebar = () => {
   }, [accessToken]);
 
   return (
-    <SidebarWrapper $isOpen={isOpen}>
+    <SidebarWrapper $isOpen={isOpen} $isMobile={isMobile}>
       {/* <SidebarToggle /> */}
       {user && (
         <UserInfo

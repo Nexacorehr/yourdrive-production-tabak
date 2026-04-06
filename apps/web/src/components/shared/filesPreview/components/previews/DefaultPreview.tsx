@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import styled from "styled-components";
 import { Download, File, AlertCircle, ExternalLink, Archive } from "lucide-react";
 import { type FileTypeInfo } from "../../utils/FileTypeDetector";
 import api from "../../../../../lib/axios";
+import MarkdownDocumentView from "./MarkdownDocumentView";
 
 interface DefaultPreviewProps {
   url: string;
@@ -23,7 +24,7 @@ const DefaultPreview: React.FC<DefaultPreviewProps> = ({
   headers,
 }) => {
   const [fileSize, setFileSize] = useState<number | null>(null);
-  const [viewMode, setViewMode] = useState<"info" | "text">("info");
+  const [viewMode, setViewMode] = useState<"info" | "text" | "markdown">("info");
   const [textLoading, setTextLoading] = useState(false);
   const [textError, setTextError] = useState<string | null>(null);
   const [textContent, setTextContent] = useState<string>("");
@@ -53,8 +54,11 @@ const DefaultPreview: React.FC<DefaultPreviewProps> = ({
     fetchFileSize();
   }, [url, headers]);
 
-  const canTryTextView = (): boolean => {
-    // Only allow text fallback for reasonably small files (< 512KB)
+  const isMarkdownFile =
+    fileTypeInfo.extension.toLowerCase() === "md" ||
+    (fileTypeInfo.mimeType || "").toLowerCase().includes("markdown");
+
+  const canTryTextView = useCallback((): boolean => {
     if (fileSize && fileSize > 512 * 1024) return false;
 
     const mime = (fileTypeInfo.mimeType || "").toLowerCase();
@@ -67,7 +71,6 @@ const DefaultPreview: React.FC<DefaultPreviewProps> = ({
       return true;
     }
 
-    // If mime is missing or generic but extension looks text-like, allow
     const ext = fileTypeInfo.extension.toLowerCase();
     const textLikeExt = [
       "txt",
@@ -83,36 +86,69 @@ const DefaultPreview: React.FC<DefaultPreviewProps> = ({
       "yaml",
     ];
     return textLikeExt.includes(ext);
-  };
+  }, [fileSize, fileTypeInfo.mimeType, fileTypeInfo.extension]);
+
+  const fetchRawText = useCallback(async (): Promise<string> => {
+    const isAbsoluteUrl =
+      url.startsWith("http://") || url.startsWith("https://");
+
+    if (isAbsoluteUrl) {
+      const fetchResponse = await fetch(url, { headers });
+      if (!fetchResponse.ok) {
+        throw new Error(`HTTP ${fetchResponse.status}`);
+      }
+      const buf = await fetchResponse.arrayBuffer();
+      return new TextDecoder("utf-8").decode(buf);
+    }
+
+    const res = await api.get(url, {
+      responseType: "arraybuffer",
+      headers: headers,
+    });
+    const buf = res.data as ArrayBuffer;
+    return new TextDecoder("utf-8").decode(buf);
+  }, [url, headers]);
+
+  useEffect(() => {
+    if (!isMarkdownFile || viewMode !== "info") return;
+    if (fileSize === null) return;
+    if (!canTryTextView()) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        setTextLoading(true);
+        setTextError(null);
+        const decoded = await fetchRawText();
+        if (cancelled) return;
+        setTextContent(decoded);
+        setViewMode("markdown");
+      } catch (e) {
+        const msg =
+          e instanceof Error ? e.message : "Failed to load file as text.";
+        if (!cancelled) {
+          setTextError(msg);
+          onError?.(msg);
+        }
+      } finally {
+        if (!cancelled) setTextLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // onError omitted: optional parent callback; stable dependency list avoids duplicate loads
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
+  }, [isMarkdownFile, fileSize, viewMode, fetchRawText, canTryTextView]);
 
   const loadAsText = async () => {
     try {
       setTextLoading(true);
       setTextError(null);
-
-      // Check if URL is absolute (external) or relative (needs baseURL)
-      const isAbsoluteUrl = url.startsWith('http://') || url.startsWith('https://');
-      
-      let buf: ArrayBuffer;
-      
-      if (isAbsoluteUrl) {
-        // For absolute URLs (signed S3 URLs), use fetch directly
-        const fetchResponse = await fetch(url, { headers });
-        if (!fetchResponse.ok) {
-          throw new Error(`HTTP ${fetchResponse.status}`);
-        }
-        buf = await fetchResponse.arrayBuffer();
-      } else {
-        // For relative URLs, use axios API instance to ensure authentication headers
-        const res = await api.get(url, {
-          responseType: 'arraybuffer',
-          headers: headers,
-        });
-        buf = res.data;
-      }
-      const decoded = new TextDecoder("utf-8").decode(buf);
+      const decoded = await fetchRawText();
       setTextContent(decoded);
-      setViewMode("text");
+      setViewMode(isMarkdownFile ? "markdown" : "text");
     } catch (e) {
       const msg =
         e instanceof Error
@@ -192,9 +228,12 @@ const DefaultPreview: React.FC<DefaultPreviewProps> = ({
 
   return (
     <Container>
-      <Content>
+      <Content $wide={viewMode === "markdown" || viewMode === "text"}>
         {viewMode === "info" && (
           <>
+            {isMarkdownFile && textLoading && (
+              <LoadingHint>Loading document…</LoadingHint>
+            )}
             <FileIcon>{getFileIcon()}</FileIcon>
 
             <FileName>{fileName}</FileName>
@@ -261,7 +300,11 @@ const DefaultPreview: React.FC<DefaultPreviewProps> = ({
                   disabled={textLoading}
                   style={{ width: "100%", justifyContent: "center" }}
                 >
-                  {textLoading ? "Loading as text…" : "View as text"}
+                  {textLoading
+                    ? "Loading…"
+                    : isMarkdownFile
+                      ? "View as document"
+                      : "View as text"}
                 </ActionButton>
                 {textError && (
                   <p
@@ -315,6 +358,26 @@ const DefaultPreview: React.FC<DefaultPreviewProps> = ({
             <TextArea readOnly value={textContent} />
           </TextViewContainer>
         )}
+
+        {viewMode === "markdown" && (
+          <TextViewContainer>
+            <TextViewHeader>
+              <span>{fileName}</span>
+              <TextViewActions>
+                <TextViewButton onClick={() => setViewMode("info")}>
+                  Back to info
+                </TextViewButton>
+                {onDownload && (
+                  <TextViewButton $primary onClick={onDownload}>
+                    <Download size={14} />
+                    Download
+                  </TextViewButton>
+                )}
+              </TextViewActions>
+            </TextViewHeader>
+            <MarkdownDocumentView markdown={textContent} />
+          </TextViewContainer>
+        )}
       </Content>
     </Container>
   );
@@ -331,14 +394,20 @@ const Container = styled.div`
   padding: 32px;
 `;
 
-const Content = styled.div`
+const Content = styled.div<{ $wide?: boolean }>`
   background: white;
   border-radius: 12px;
   padding: 32px;
-  max-width: 520px;
+  max-width: ${({ $wide }) => ($wide ? "min(720px, 100%)" : "520px")};
   width: 100%;
   text-align: center;
   box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+`;
+
+const LoadingHint = styled.p`
+  font-size: 0.875rem;
+  color: #4b5563;
+  margin: 0 0 12px;
 `;
 
 const FileIcon = styled.div`

@@ -1,50 +1,70 @@
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 
 import { motion } from "framer-motion";
 import { DASHBOARD_NAV_HEIGHT_PX } from "./application";
 
-interface SidebarWrapperProps {
+const MOBILE_DRAWER_WIDTH = "min(280px, 88vw)";
+
+export interface SidebarWrapperProps {
   $isOpen: boolean;
+  /** When true, drawer uses fixed overlay + translateX (no flex "peek"). */
+  $isMobile: boolean;
 }
 
 export const SidebarWrapper = styled(motion.aside).attrs<SidebarWrapperProps>(
-  ({ $isOpen }) => ({
-    initial: false,
-    animate: {
-      width: $isOpen ? "180px" : "0px",
-      opacity: $isOpen ? 1 : 0,
-      marginRight: $isOpen ? "20px" : "0px",
-    },
-    transition: {
-      duration: 0.3,
-      ease: [0.4, 0, 0.2, 1],
-    },
-  }),
+  ({ $isMobile }) => {
+    if ($isMobile) {
+      return {
+        initial: { x: "-100%" },
+        animate: { x: 0 },
+        transition: { duration: 0.28, ease: [0.4, 0, 0.2, 1] as const },
+      };
+    }
+    return {
+      initial: { width: 0, opacity: 0, marginRight: 0 },
+      animate: {
+        width: "180px",
+        opacity: 1,
+        marginRight: "20px",
+      },
+      transition: { duration: 0.28, ease: [0.4, 0, 0.2, 1] as const },
+    };
+  },
 )<SidebarWrapperProps>`
-  min-width: 100px;
-  background: transparent;
-  position: relative;
+  box-sizing: border-box;
+  pointer-events: auto;
+  z-index: 30;
   overflow: hidden;
-  height: 100%;
-  pointer-events: ${({ $isOpen }) => ($isOpen ? "auto" : "none")};
-  z-index: 20;
 
-  @media (max-width: 768px) {
-    position: fixed;
-    top: ${DASHBOARD_NAV_HEIGHT_PX}px;
-    left: 0;
-    bottom: 0;
-    margin-right: 0;
-    height: calc(100dvh - ${DASHBOARD_NAV_HEIGHT_PX}px);
-    max-height: calc(100dvh - ${DASHBOARD_NAV_HEIGHT_PX}px);
-    background: rgba(248, 249, 250, 0.98);
-    box-shadow: 2px 0 16px rgba(15, 23, 42, 0.25);
-  }
+  ${({ $isMobile }) =>
+    $isMobile
+      ? css`
+          position: fixed;
+          top: ${DASHBOARD_NAV_HEIGHT_PX}px;
+          left: 0;
+          bottom: 0;
+          width: ${MOBILE_DRAWER_WIDTH};
+          min-width: 0;
+          max-width: 100%;
+          height: calc(100dvh - ${DASHBOARD_NAV_HEIGHT_PX}px);
+          max-height: calc(100dvh - ${DASHBOARD_NAV_HEIGHT_PX}px);
+          margin-right: 0;
+          background: rgba(248, 249, 250, 0.98);
+          box-shadow: 2px 0 12px rgba(15, 23, 42, 0.12);
+          overflow-x: hidden;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+        `
+      : css`
+          position: relative;
+          min-width: 0;
+          height: 100%;
+          background: transparent;
+        `}
 
   & > *:not(button) {
-    opacity: ${({ $isOpen }) => ($isOpen ? 1 : 0)};
+    opacity: 1;
     transition: opacity 0.2s ease;
-    transition-delay: ${({ $isOpen }) => ($isOpen ? "0.1s" : "0s")};
   }
 `;
 

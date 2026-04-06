@@ -37,13 +37,14 @@ export const Subtitle = styled.p`
   line-height: 1.5;
 `;
 
-export const TabsWrapper = styled.div`
+export const TabsWrapper = styled.div<{ $layout?: "horizontal" | "vertical" }>`
   margin-bottom: 1rem;
   padding: 0.25rem;
   border: 1px solid #dbe7f4;
   border-radius: 14px;
   background: #f3f7fc;
-  overflow-x: auto;
+  overflow-x: ${({ $layout }) =>
+    $layout === "vertical" ? "visible" : "auto"};
 
   &::-webkit-scrollbar {
     height: 0;
@@ -54,6 +55,13 @@ export const TabsList = styled.div`
   display: flex;
   gap: 0.375rem;
   min-width: max-content;
+`;
+
+export const MobileTabsList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
 `;
 
 export const TabButton = styled.button<{ $active: boolean }>`
@@ -80,6 +88,15 @@ export const TabButton = styled.button<{ $active: boolean }>`
   svg {
     flex-shrink: 0;
   }
+`;
+
+export const MobileTabButton = styled(TabButton)`
+  width: 100%;
+  min-height: 44px;
+  justify-content: flex-start;
+  padding: 0.75rem 1rem;
+  white-space: normal;
+  text-align: left;
 `;
 
 export const MainContent = styled.div`

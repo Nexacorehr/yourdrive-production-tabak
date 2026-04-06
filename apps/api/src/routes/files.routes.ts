@@ -28,6 +28,7 @@ import fs from "fs";
 import path from "path";
 import { promisify } from "util";
 import { FileActionsHandlers } from "./fileActionsHandlers";
+import { ensureWelcomeReadme } from "../services/welcomeReadme.service";
 import { Readable } from "stream";
 import crypto from "crypto";
 
@@ -128,6 +129,28 @@ const chunkUpload = multer({
 });
 
 filesRoutes.use("/favorites", favoritesRoutes);
+
+filesRoutes.post(
+  "/ensure-welcome-readme",
+  authMiddleware,
+  async (req: AuthRequest, res) => {
+    try {
+      if (!req.userId || !BUCKET_NAME) {
+        return res
+          .status(401)
+          .json({ success: false, error: "Unauthorized" });
+      }
+      const result = await ensureWelcomeReadme(req.userId, s3Client, BUCKET_NAME);
+      return res.json({ success: true, ...result });
+    } catch (err) {
+      console.error("ensure-welcome-readme error:", err);
+      return res.status(500).json({
+        success: false,
+        error: "Failed to ensure welcome README",
+      });
+    }
+  },
+);
 
 // Anonymous upload endpoint (for Tryout feature)
 filesRoutes.post(
@@ -842,41 +865,17 @@ filesRoutes.post(
   },
 );
 
-// Delete to recycle bin
+// Delete to recycle bin (same behavior as batch delete)
 filesRoutes.delete(
   "/soft/:fileId",
   authMiddleware,
   async (req: AuthRequest, res) => {
-    try {
-      if (!req.userId)
-        return res.status(401).json({ success: false, error: "Unauthorized" });
-
-      const { fileId } = req.params;
-
-      const file = await pool.query(
-        `SELECT id FROM user_files WHERE id = $1 AND user_id = $2`,
-        [fileId, req.userId],
-      );
-
-      if (file.rows.length === 0)
-        return res
-          .status(404)
-          .json({ success: false, error: "File not found" });
-
-      // Insert into recycle bin
-      await pool.query(
-        `INSERT INTO recycle_bin (user_id, file_id, deleted_at)
-       VALUES ($1, $2, NOW())`,
-        [req.userId, fileId],
-      );
-
-      return res.json({ success: true, message: "Moved to Recycle Bin" });
-    } catch (err) {
-      console.error("Soft delete error:", err);
-      return res
-        .status(500)
-        .json({ success: false, error: "Failed to soft delete file" });
+    if (!req.userId) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
     }
+    const { fileId } = req.params;
+    const fileActions = new FileActionsHandlers(pool);
+    return fileActions.handleDelete([fileId], req.userId, req, res);
   },
 );
 
@@ -895,7 +894,9 @@ filesRoutes.get("/usage", authMiddleware, async (req: AuthRequest, res) => {
         COUNT(*) as total_files,
         COALESCE(SUM(size), 0) as total_size
        FROM user_files
-       WHERE user_id = $1`,
+       WHERE user_id = $1
+         AND deleted_at IS NULL
+         AND is_system_readme = false`,
       [req.userId],
     );
 

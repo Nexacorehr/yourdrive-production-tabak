@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
 interface SidebarState {
   isOpen: boolean;
@@ -7,16 +6,12 @@ interface SidebarState {
   setOpen: (open: boolean) => void;
 }
 
-export const useSidebarStore = create<SidebarState>()(
-  persist(
-    (set) => ({
-      // Start closed by default so it never overlaps content on mobile
-      isOpen: false,
-      toggle: () => set((state) => ({ isOpen: !state.isOpen })),
-      setOpen: (open) => set({ isOpen: open }),
-    }),
-    {
-      name: "sidebar-storage",
-    },
-  ),
-);
+/**
+ * Not persisted: persisting `isOpen` caused desktop "open" state to reopen the
+ * drawer on mobile after navigation. Sidebar always starts closed on load.
+ */
+export const useSidebarStore = create<SidebarState>((set) => ({
+  isOpen: false,
+  toggle: () => set((state) => ({ isOpen: !state.isOpen })),
+  setOpen: (open) => set({ isOpen: open }),
+}));

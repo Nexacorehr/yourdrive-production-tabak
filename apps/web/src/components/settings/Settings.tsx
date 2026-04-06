@@ -18,6 +18,7 @@ import { StorageSection } from "./components/StorageSection";
 import { SharingSection } from "./components/SharingSection";
 import { PreferencesNotificationsPrivacy } from "./components/PreferencesNotificationsPrivacy";
 
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import {
   PageWrapper,
   Container,
@@ -26,7 +27,9 @@ import {
   Subtitle,
   TabsWrapper,
   TabsList,
+  MobileTabsList,
   TabButton,
+  MobileTabButton,
   MainContent,
   Section,
   SectionTitle,
@@ -68,7 +71,10 @@ const MotionContent = styled(motion.div)`
   width: 100%;
 `;
 
+const SETTINGS_NAV_MQ = "(max-width: 768px)";
+
 const Settings = () => {
+  const isMobileSettingsNav = useMediaQuery(SETTINGS_NAV_MQ);
   const [activeTab, setActiveTab] = useState("account");
   const {
     settings,
@@ -358,22 +364,44 @@ const Settings = () => {
           </Subtitle>
         </Header>
 
-        <TabsWrapper>
-          <TabsList>
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <TabButton
-                  key={tab.id}
-                  $active={activeTab === tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  <Icon size={18} />
-                  <span>{tab.label}</span>
-                </TabButton>
-              );
-            })}
-          </TabsList>
+        <TabsWrapper
+          $layout={isMobileSettingsNav ? "vertical" : "horizontal"}
+        >
+          {isMobileSettingsNav ? (
+            <MobileTabsList>
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <MobileTabButton
+                    key={tab.id}
+                    type="button"
+                    $active={activeTab === tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                  >
+                    <Icon size={18} />
+                    <span>{tab.label}</span>
+                  </MobileTabButton>
+                );
+              })}
+            </MobileTabsList>
+          ) : (
+            <TabsList>
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <TabButton
+                    key={tab.id}
+                    type="button"
+                    $active={activeTab === tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                  >
+                    <Icon size={18} />
+                    <span>{tab.label}</span>
+                  </TabButton>
+                );
+              })}
+            </TabsList>
+          )}
         </TabsWrapper>
 
         <MainContent>

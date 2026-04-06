@@ -38,6 +38,7 @@
     "@types/multer": "^2.0.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "@types/styled-components": "^5.1.36"
+    "@types/styled-components": "^5.1.36",
+    "typescript": "~5.9.3"
   }
 }

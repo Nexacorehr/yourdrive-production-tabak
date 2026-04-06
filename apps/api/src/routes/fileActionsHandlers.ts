@@ -245,10 +245,18 @@ export class FileActionsHandlers {
             continue;
           }
 
+          if (file.is_system_readme) {
+            await client.query("ROLLBACK");
+            return res.status(403).json({
+              success: false,
+              error: "The welcome README cannot be deleted.",
+            });
+          }
+
           await client.query(
             `INSERT INTO recycle_bin 
-             (user_id, file_id, original_name, s3_key, user_email, mime_type, size, folder_path, deleted_at, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9)
+             (user_id, file_id, original_name, s3_key, user_email, mime_type, size, folder_path, is_system_readme, deleted_at, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, NOW(), $9)
              ON CONFLICT (user_id, file_id) 
              DO UPDATE SET deleted_at = NOW()`,
             [
@@ -337,6 +345,14 @@ export class FileActionsHandlers {
           }
 
           const file = recycleResult.rows[0];
+
+          if (file.is_system_readme) {
+            await client.query("ROLLBACK");
+            return res.status(403).json({
+              success: false,
+              error: "The welcome README cannot be permanently deleted.",
+            });
+          }
 
           try {
             await s3Client.send(
@@ -575,6 +591,21 @@ export class FileActionsHandlers {
         });
       }
 
+      const meta = await client.query(
+        `SELECT is_system_readme FROM user_files WHERE id = $1 AND user_id = $2`,
+        [parseInt(fileId), userId],
+      );
+      if (
+        meta.rows[0]?.is_system_readme &&
+        newName.trim().toLowerCase() !== "readme.md"
+      ) {
+        await client.query("ROLLBACK");
+        return res.status(403).json({
+          success: false,
+          error: "The welcome README must stay named README.md.",
+        });
+      }
+
       const result = await client.query(
         `UPDATE user_files 
          SET original_name = $1, updated_at = NOW()
@@ -745,6 +776,23 @@ export class FileActionsHandlers {
         return res.status(403).json({
           success: false,
           error: "One or more files are locked and cannot be moved",
+        });
+      }
+
+      const readmeCheck = await client.query(
+        `SELECT id FROM user_files 
+         WHERE id = ANY($1) AND user_id = $2 AND is_system_readme = true`,
+        [fileIds.map((id) => parseInt(id)), userId],
+      );
+      if (
+        readmeCheck.rows.length > 0 &&
+        targetFolderPath !== undefined &&
+        targetFolderPath !== ""
+      ) {
+        await client.query("ROLLBACK");
+        return res.status(403).json({
+          success: false,
+          error: "The welcome README must stay in the root folder.",
         });
       }
 

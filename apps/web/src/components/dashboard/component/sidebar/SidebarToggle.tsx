@@ -11,13 +11,7 @@ const SidebarToggle: FC = () => {
     <ToggleButton
       data-tour="tour-sidebar-toggle"
       onClick={toggle}
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
-      transition={{
-        type: "spring",
-        stiffness: 400,
-        damping: 17,
-      }}
+      transition={{ duration: 0.2 }}
       aria-label={isOpen ? "Close sidebar" : "Open sidebar"}
     >
       <motion.svg
@@ -96,8 +90,10 @@ const SidebarToggle: FC = () => {
 export default SidebarToggle;
 
 const ToggleButton = styled(motion.button)`
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 8px;
   background: rgba(233, 238, 246, 0.5);
   border: none;

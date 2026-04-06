@@ -4,6 +4,12 @@ import styled from "styled-components";
 export const DASHBOARD_NAV_HEIGHT_PX = 90;
 
 export const Root = styled.div`
+  --dashboard-space-1: 8px;
+  --dashboard-space-2: 12px;
+  --dashboard-space-3: 16px;
+  --dashboard-space-4: 24px;
+  --dashboard-tap-min: 44px;
+
   width: 100%;
   min-width: 0;
   height: calc(100dvh - ${DASHBOARD_NAV_HEIGHT_PX}px);
@@ -33,6 +39,6 @@ export const SidebarBackdrop = styled.div`
     right: 0;
     bottom: 0;
     background: rgba(15, 23, 42, 0.45);
-    z-index: 10;
+    z-index: 15;
   }
 `;
