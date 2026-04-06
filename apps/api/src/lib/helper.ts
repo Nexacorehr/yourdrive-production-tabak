@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { s3Client } from "../routes/files.routes";
+import { s3Client } from "./s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner/";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 

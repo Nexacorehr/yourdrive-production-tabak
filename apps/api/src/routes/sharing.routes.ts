@@ -6,7 +6,7 @@ import crypto from "crypto";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { uploadToS3, generateSignedUrl, generateShortId } from "../lib/helper";
 import { emailService } from "../lib/email.service";
-import { s3Client } from "./files.routes";
+import { s3Client } from "../lib/s3";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { SettingsService } from "../services/settings.service";
 import { resolveFrontendBase } from "../lib/frontend-base";

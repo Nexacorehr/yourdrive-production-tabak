@@ -7,7 +7,6 @@ import { Pool } from "pg";
 
 import { Upload } from "@aws-sdk/lib-storage";
 import {
-  S3Client,
   GetObjectCommand,
   AbortMultipartUploadCommand,
 } from "@aws-sdk/client-s3";
@@ -29,6 +28,7 @@ import path from "path";
 import { promisify } from "util";
 import { FileActionsHandlers } from "./fileActionsHandlers";
 import { ensureWelcomeReadme } from "../services/welcomeReadme.service";
+import { s3Client, BUCKET_NAME } from "../lib/s3";
 import { Readable } from "stream";
 import crypto from "crypto";
 
@@ -44,19 +44,6 @@ const pool = new Pool({
 });
 
 const CHUNKS_DIR = path.join(process.cwd(), "temp", "chunks");
-
-export const s3Client = new S3Client({
-  endpoint: process.env.B2_ENDPOINT,
-  region: "eu-central-003",
-  forcePathStyle: true,
-  useArnRegion: false,
-  credentials: {
-    accessKeyId: process.env.B2_KEY_ID ?? "",
-    secretAccessKey: process.env.B2_APPLICATION_KEY ?? "",
-  },
-});
-
-const BUCKET_NAME = process.env.B2_BUCKET_NAME;
 
 function inferMimeTypeFromName(fileName: string): string | undefined {
   const ext = fileName.split(".").pop()?.toLowerCase();

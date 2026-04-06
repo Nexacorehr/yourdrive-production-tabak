@@ -4,29 +4,14 @@ import bcrypt from "bcrypt";
 
 import { StorageService } from "./storage.service";
 
-import {
-  S3Client,
-  PutObjectCommand,
-  DeleteObjectCommand,
-} from "@aws-sdk/client-s3";
+import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import sharp from "sharp";
+
+import { s3Client, BUCKET_NAME } from "../lib/s3";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
-
-const s3Client = new S3Client({
-  endpoint: process.env.B2_ENDPOINT,
-  region: "eu-central-003",
-  forcePathStyle: true,
-  useArnRegion: false,
-  credentials: {
-    accessKeyId: process.env.B2_KEY_ID ?? "",
-    secretAccessKey: process.env.B2_APPLICATION_KEY ?? "",
-  },
-});
-
-const BUCKET_NAME = process.env.B2_BUCKET_NAME;
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || "12");
 
 export class SettingsService {

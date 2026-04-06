@@ -3,13 +3,12 @@ import helmet from "helmet";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 
-import storageRoutes from "./routes/storage.routes";
-
 import { Pool } from "pg";
 import { prisma } from "./lib/prisma";
 
 import authRoutes from "./routes/auth.routes";
 import filesRoutes from "./routes/files.routes";
+import storageRoutes from "./routes/storage.routes";
 import settingsRoutes from "./routes/settings.routes";
 import sharingRoutes from "./routes/sharing.routes";
 import devicesRoutes from "./routes/devices.routes";

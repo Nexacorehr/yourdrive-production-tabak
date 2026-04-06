@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { Pool } from "pg";
-import { s3Client } from "./files.routes";
+import { s3Client } from "../lib/s3";
 import {
   GetObjectCommand,
   CopyObjectCommand,

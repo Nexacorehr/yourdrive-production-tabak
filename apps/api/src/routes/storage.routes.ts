@@ -2,9 +2,7 @@ import express from "express";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { StorageService } from "../services/storage.service";
 import { ensureWelcomeReadme } from "../services/welcomeReadme.service";
-import { s3Client } from "./files.routes";
-
-const BUCKET_NAME = process.env.B2_BUCKET_NAME;
+import { s3Client, BUCKET_NAME } from "../lib/s3";
 
 const storageRoutes = express.Router();
 
