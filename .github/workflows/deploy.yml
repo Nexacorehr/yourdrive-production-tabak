@@ -1,0 +1,25 @@
+# Runs on your Raspberry Pi (self-hosted runner). On each push to main, pulls the repo,
+# installs deps, migrates DB, builds, restarts the API. Change the cd path if your app is not in /opt/yourdrive.
+
+name: Deploy to Pi
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Deploy
+        run: |
+          set -euo pipefail
+          cd /opt/yourdrive
+          git fetch origin
+          git reset --hard origin/main
+          npm ci
+          npm run db:generate
+          (cd apps/api && npx prisma migrate deploy)
+          npm run build
+          pm2 restart yourdrive-api || pm2 start apps/api/dist/index.js --name yourdrive-api
+          pm2 save
