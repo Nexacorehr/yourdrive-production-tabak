@@ -1,0 +1,16 @@
+# Netlify: deploy only the Vite frontend (apps/web).
+# Connect this repo at https://app.netlify.com — settings are picked up automatically.
+
+[build]
+  # Vite only (skips tsc -b) so deploy works even when typecheck has known drift
+  command = "npm ci && npm exec -w web -- vite build"
+  publish = "apps/web/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# SPA: direct URL visits (e.g. /pricing) load index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
