@@ -1,0 +1,49 @@
+# Render Blueprint: PostgreSQL + Node API for YourDrive.
+# Deploy: Render Dashboard → New → Blueprint → connect this repo.
+# Then set B2_* and URLs in the API service Environment (see docs/DEPLOY-NETLIFY-RENDER.md).
+
+databases:
+  - name: yourdrive-db
+    databaseName: yourdrive
+    user: yourdrive
+    plan: free
+
+services:
+  - type: web
+    name: yourdrive-api
+    runtime: node
+    plan: free
+    buildCommand: >-
+      npm ci &&
+      npm run build:deploy -w api &&
+      cd apps/api &&
+      npx prisma migrate deploy
+    startCommand: node apps/api/dist/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: yourdrive-db
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false
+      - key: BACKEND_URL
+        sync: false
+      - key: B2_KEY_ID
+        sync: false
+      - key: B2_APPLICATION_KEY
+        sync: false
+      - key: B2_BUCKET_NAME
+        sync: false
+      - key: B2_ENDPOINT
+        sync: false
+      - key: B2_REGION
+        sync: false
+      - key: B2_PUBLIC_URL
+        sync: false

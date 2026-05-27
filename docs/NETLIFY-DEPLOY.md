@@ -15,4 +15,4 @@ Push to the connected branch; Netlify rebuilds automatically.
 
 ## Login / API
 
-The static frontend deploys without the Node API. Sign-in and the dashboard need `apps/api` hosted elsewhere and `VITE_API_URL` in Netlify environment variables (optional).
+The static frontend alone cannot run login or file storage. Use **[DEPLOY-NETLIFY-RENDER.md](./DEPLOY-NETLIFY-RENDER.md)** to add Render (API + Postgres) and connect Netlify with `NETLIFY_API_PROXY_URL`.

@@ -9,8 +9,5 @@
   NODE_VERSION = "20"
   NPM_FLAGS = "--include=optional"
 
-# SPA: client-side routes + deep links
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+# /api proxy + SPA fallback: generated in apps/web/public/_redirects by scripts/prepare-netlify.mjs
+# (requires NETLIFY_API_PROXY_URL in Netlify env when using Render API)
