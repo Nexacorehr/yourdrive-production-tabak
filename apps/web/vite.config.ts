@@ -1,9 +1,31 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import fs from "fs";
 import path from "path";
+import { defineConfig, type Plugin } from "vite";
+import react from "@vitejs/plugin-react";
+
+/** Netlify serves 404.html for missing paths; copy index.html so the SPA boots. */
+function netlifySpaFallback(): Plugin {
+  let outDir = path.resolve(__dirname, "dist");
+
+  return {
+    name: "netlify-spa-fallback",
+    apply: "build",
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir);
+    },
+    closeBundle() {
+      const indexHtml = path.join(outDir, "index.html");
+      const fallbackHtml = path.join(outDir, "404.html");
+      if (fs.existsSync(indexHtml)) {
+        fs.copyFileSync(indexHtml, fallbackHtml);
+      }
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [react()],
+  base: "/",
+  plugins: [react(), netlifySpaFallback()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -13,6 +35,10 @@ export default defineConfig({
         "../../packages/plans/src/index.ts",
       ),
     },
+  },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
   },
   server: {
     host: "0.0.0.0",

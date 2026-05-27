@@ -19,6 +19,7 @@
     "vert:stop": "docker-compose -f docker-compose.dev.yml down",
     "vert:logs": "docker-compose -f docker-compose.dev.yml logs -f vert",
     "build": "npm run build --workspaces --if-present",
+    "build:netlify": "npm run build:netlify -w web",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules"
   },
   "dependencies": {
