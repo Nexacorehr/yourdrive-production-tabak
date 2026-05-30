@@ -33,8 +33,7 @@ services:
         generateValue: true
       - key: FRONTEND_URL
         sync: false
-      - key: BACKEND_URL
-        sync: false
+      # BACKEND_URL optional on Render — RENDER_EXTERNAL_URL is set automatically
       - key: B2_KEY_ID
         sync: false
       - key: B2_APPLICATION_KEY

@@ -3,13 +3,16 @@ import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { Strategy as GitHubStrategy } from "passport-github2";
 import { Strategy as FacebookStrategy } from "passport-facebook";
 import { AuthService } from "../services/auth.service";
+import { getBackendUrl } from "../lib/backend-url";
+
+const backendUrl = getBackendUrl();
 
 passport.use(
   new GoogleStrategy(
     {
       clientID: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      callbackURL: `${process.env.BACKEND_URL}/auth/oauth/google/callback`,
+      callbackURL: `${backendUrl}/auth/oauth/google/callback`,
     },
     async (accessToken: string, refreshToken: string, profile: any, done: (err: any, user?: any) => void) => {
       try {
@@ -44,7 +47,7 @@ passport.use(
     {
       clientID: process.env.GITHUB_CLIENT_ID!,
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-      callbackURL: `${process.env.BACKEND_URL}/auth/oauth/github/callback`,
+      callbackURL: `${backendUrl}/auth/oauth/github/callback`,
       scope: ["user:email"],
     },
     async (accessToken: string, refreshToken: string, profile: any, done: (err: any, user?: any) => void) => {
@@ -77,7 +80,7 @@ passport.use(
     {
       clientID: process.env.FACEBOOK_APP_ID!,
       clientSecret: process.env.FACEBOOK_APP_SECRET!,
-      callbackURL: `${process.env.BACKEND_URL}/auth/oauth/facebook/callback`,
+      callbackURL: `${backendUrl}/auth/oauth/facebook/callback`,
       profileFields: ["id", "emails", "name", "picture"],
     },
     async (accessToken: string, refreshToken: string, profile: any, done: (err: any, user?: any) => void) => {

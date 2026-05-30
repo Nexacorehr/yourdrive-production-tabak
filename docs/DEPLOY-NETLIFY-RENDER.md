@@ -6,37 +6,38 @@ Netlify only hosts static files. Login, files, and uploads need the **API** on R
 
 ## Part A — API on Render (~15 min)
 
-### 1. Create the backend
+### 1. Run the blueprint (leave most fields blank)
 
 1. [dashboard.render.com](https://dashboard.render.com) → **New** → **Blueprint**.
-2. Connect the **same GitHub repo** (or fork) as Netlify.
-3. Apply the blueprint (`render.yaml` creates **yourdrive-db** + **yourdrive-api**).
-4. Wait until the API deploy finishes (first build runs Prisma migrations).
+2. Connect your GitHub repo (same fork Netlify uses).
+3. Render shows optional env vars (`FRONTEND_URL`, `B2_*`, …). **You can leave them all empty** for now and click **Apply**.
+4. Render creates:
+   - **yourdrive-db** (Postgres)
+   - **yourdrive-api** (Node service)
 
-### 2. Copy the API URL
+Render assigns the API URL when the service is created — you do **not** need it before this step.
 
-Open the **yourdrive-api** service → copy the public URL, e.g. `https://yourdrive-api.onrender.com`.
+### 2. Copy the API URL (now it exists)
 
-Test: open `https://YOUR-API.onrender.com/api/health` — should return `{"status":"OK"}`.
+1. Open the **yourdrive-api** service in Render.
+2. At the top you’ll see something like **`https://yourdrive-api.onrender.com`** (from the service name in `render.yaml`).
+3. Test: `https://yourdrive-api.onrender.com/api/health` → `{"status":"OK"}`.
 
-### 3. Required environment variables (Render → yourdrive-api → Environment)
+That URL is what you use in **Step 3 (Netlify)** as `NETLIFY_API_PROXY_URL`.
 
-| Variable | Example | Notes |
-|----------|---------|--------|
-| `FRONTEND_URL` | `https://your-site.netlify.app` | Your Netlify URL, no trailing slash |
-| `BACKEND_URL` | `https://yourdrive-api.onrender.com` | Same as Render service URL |
-| `B2_KEY_ID` | from Backblaze | S3-compatible storage |
-| `B2_APPLICATION_KEY` | from Backblaze | |
-| `B2_BUCKET_NAME` | your bucket | |
-| `B2_ENDPOINT` | `https://s3…backblazeb2.com` | |
-| `B2_REGION` | e.g. `eu-central-003` | |
-| `B2_PUBLIC_URL` | public bucket URL if used | optional for avatars |
+### 3. Set env vars on Render (second pass)
 
-`DATABASE_URL`, `JWT_ACCESS_SECRET`, and `JWT_REFRESH_SECRET` are set by the blueprint.
+**yourdrive-api** → **Environment** → add only what you have ready:
 
-**Save** → Render redeploys the API.
+| Variable | Required when | Value |
+|----------|----------------|--------|
+| `FRONTEND_URL` | Before login from Netlify | `https://your-site.netlify.app` |
+| `B2_*` | Before file uploads | From Backblaze |
+| `BACKEND_URL` | **Optional on Render** | Render sets `RENDER_EXTERNAL_URL` automatically |
 
-### 4. Backblaze B2 (storage)
+**Save** → Render redeploys.
+
+### 4. Backblaze B2 (storage — needed for uploads, not for login)
 
 1. [backblaze.com/b2](https://www.backblaze.com/b2/cloud-storage.html) → create a bucket.
 2. **Application keys** → create key with read/write on that bucket.
@@ -76,8 +77,7 @@ If Netlify builds from a fork, **Sync fork** on GitHub so it has `render.yaml`, 
 
 - [ ] `https://YOUR-API.onrender.com/api/health` → OK  
 - [ ] Render `FRONTEND_URL` = Netlify URL  
-- [ ] Render `BACKEND_URL` = Render API URL  
-- [ ] B2 variables set on Render  
+- [ ] B2 variables set on Render (for uploads)  
 - [ ] Netlify `NETLIFY_API_PROXY_URL` = Render URL (no `/api`)  
 - [ ] Netlify redeployed after setting env vars  
 - [ ] Register / login on the Netlify site works  
