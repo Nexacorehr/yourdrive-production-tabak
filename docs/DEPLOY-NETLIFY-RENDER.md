@@ -49,9 +49,19 @@ Without B2, auth may work but **uploads will fail**.
 
 For verification emails, set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` on Render.
 
----
+### Render build command (must match repo)
 
-## Part B — Connect Netlify to the API (~2 min)
+If deploy logs show an old command like `npm ci && npm run build:deploy...`, update it manually:
+
+**yourdrive-api** → **Settings** → **Build & Deploy** → **Build Command**:
+
+```bash
+bash scripts/render-build.sh
+```
+
+Or use **Clear build cache & deploy** after syncing the latest `main`.
+
+---
 
 1. Netlify → your site → **Site configuration** → **Environment variables**.
 2. Add:

@@ -13,11 +13,7 @@ services:
     name: yourdrive-api
     runtime: node
     plan: free
-    buildCommand: >-
-      npm ci --ignore-scripts &&
-      npm run build:deploy -w api &&
-      cd apps/api &&
-      npx prisma migrate deploy
+    buildCommand: bash scripts/render-build.sh
     startCommand: node apps/api/dist/index.js
     healthCheckPath: /api/health
     envVars:

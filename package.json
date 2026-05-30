@@ -20,6 +20,7 @@
     "vert:logs": "docker-compose -f docker-compose.dev.yml logs -f vert",
     "build": "npm run build --workspaces --if-present",
     "build:netlify": "node scripts/prepare-netlify.mjs && npm run build:netlify -w web",
+    "build:render": "bash scripts/render-build.sh",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules"
   },
   "dependencies": {
