@@ -14,7 +14,7 @@ services:
     runtime: node
     plan: free
     buildCommand: >-
-      npm ci &&
+      npm ci --ignore-scripts &&
       npm run build:deploy -w api &&
       cd apps/api &&
       npx prisma migrate deploy
