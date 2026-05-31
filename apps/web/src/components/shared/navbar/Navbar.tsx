@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import {
   RightSection,
   NavbarContainer,
@@ -22,12 +22,23 @@ const Navbar = () => {
   const uploadRefDesktop = React.useRef<HTMLButtonElement>(null);
   const uploadRefMobile = React.useRef<HTMLButtonElement>(null);
   const notificationRef = React.useRef<HTMLButtonElement>(null);
+  const loggingOutRef = useRef(false);
 
   const activateUploadPopup = usePopupStore((state) => state.toggleUploadPopup);
 
   const logout = useAuthStore((state) => state.logout);
 
   const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    if (loggingOutRef.current) return;
+    loggingOutRef.current = true;
+    try {
+      await logout();
+    } finally {
+      loggingOutRef.current = false;
+    }
+  };
 
   return (
     <NavbarContainer>
@@ -44,6 +55,7 @@ const Navbar = () => {
           onClick={activateUploadPopup}
           className="desktop-only"
           data-tour="tour-upload"
+          aria-label="Add files or folders"
         >
           <PlusIcon size={16} />
         </NavButton>
@@ -55,16 +67,18 @@ const Navbar = () => {
           onClick={activateUploadPopup}
           className="mobile-only"
           data-tour="tour-upload"
+          aria-label="Add files or folders"
         >
           <PlusIcon size={16} />
         </NavButton>
         <NavButton
           onClick={() => navigate({ to: ROUTES.SETTINGS })}
           data-tour="tour-settings"
+          aria-label="Open settings"
         >
           <SettingsIcon size={16} />
         </NavButton>
-        <NavButton onClick={logout}>
+        <NavButton onClick={handleLogout} aria-label="Log out">
           <LogOutIcon size={16} />
         </NavButton>
       </RightSection>

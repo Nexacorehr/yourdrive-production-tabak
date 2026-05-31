@@ -162,9 +162,11 @@ const LeftSection = styled.div`
   display: flex;
   align-items: center;
   flex: 0 0 auto;
+  margin-right: 12px;
 
   @media (max-width: 768px) {
     order: 1;
+    margin-right: 10px;
   }
 `;
 

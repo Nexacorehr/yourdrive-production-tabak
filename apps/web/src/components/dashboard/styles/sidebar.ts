@@ -48,9 +48,10 @@ export const SidebarWrapper = styled(motion.aside).attrs<SidebarWrapperProps>(
           height: calc(100dvh - ${DASHBOARD_NAV_HEIGHT_PX}px);
           max-height: calc(100dvh - ${DASHBOARD_NAV_HEIGHT_PX}px);
           margin-right: 0;
+          padding: 16px 14px max(20px, env(safe-area-inset-bottom, 0px));
           background: ${T.bgSurface};
           border-right: 1px solid ${T.borderSubtle};
-          box-shadow: ${T.shadowSm};
+          box-shadow: ${T.shadowElevated};
           overflow-x: hidden;
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
@@ -91,24 +92,24 @@ export const Navigation = styled.ul`
   list-style: none;
   padding: 0;
   width: 100%;
-  max-width: 190px;
-  margin-top: 22px;
-  margin-bottom: 22px;
+  max-width: 100%;
+  margin-top: 18px;
+  margin-bottom: 18px;
 `;
 
-export const NavItem = styled.li<{ isActive: boolean; color: string }>`
+export const NavItem = styled.li<{ isActive: boolean }>`
   padding: 8px 10px;
   margin-bottom: 4px;
   border-radius: ${T.rMd};
   background: ${({ isActive }) => (isActive ? T.accent : "transparent")};
-  transition: background ${T.tFast};
+  transition: background ${T.tFast}, color ${T.tFast};
 
   a {
     display: flex;
     align-items: center;
     gap: 8px;
     text-decoration: none;
-    color: ${({ isActive, color }) => (isActive ? T.textInvert : color)};
+    color: ${({ isActive }) => (isActive ? T.textInvert : T.textSecondary)};
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -123,9 +124,24 @@ export const NavItem = styled.li<{ isActive: boolean; color: string }>`
     font-family: ${T.fontUI};
   }
 
-  &:not([data-active="true"]):hover {
-    background: ${T.bgHover};
-  }
+  ${({ isActive }) =>
+    !isActive
+      ? `
+    &:hover {
+      background: ${T.bgHover};
+    }
+    &:hover a {
+      color: ${T.textPrimary};
+    }
+  `
+      : `
+    &:hover {
+      background: ${T.accentHover};
+    }
+    &:hover a {
+      color: ${T.textInvert};
+    }
+  `}
 `;
 
 export const UpgradeWrapper = styled.div`

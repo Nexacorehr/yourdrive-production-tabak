@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import styled from "styled-components";
 import { toast, type ToastOptions } from "../../services/toast.service";
 import Toast from "./Toast.tsx";
+import { T } from "../../theme/tokens";
 
 interface ToastItem extends ToastOptions {
   id: string;
@@ -74,9 +75,21 @@ const Container = styled.div`
   position: fixed;
   top: 24px;
   right: 24px;
-  z-index: 10000;
+  z-index: ${T.zToast};
   display: flex;
   flex-direction: column;
   gap: 12px;
   pointer-events: none;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px));
+
+  & > * {
+    pointer-events: auto;
+  }
+
+  @media (max-width: 768px) {
+    top: max(16px, env(safe-area-inset-top, 0px));
+    left: 16px;
+    right: 16px;
+    align-items: stretch;
+  }
 `;

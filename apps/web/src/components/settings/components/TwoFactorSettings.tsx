@@ -3,6 +3,8 @@ import styled from "styled-components";
 import { ShieldIcon as Shield, CopyIcon as Copy, DownloadIcon as Download, AlertCircleIcon as AlertCircle, CheckCircle2Icon as CheckCircle2 } from "../../shared/icons/index";
 import { useAuthStore } from "../../../store/authStore";
 import api from "../../../lib/axios";
+import { toast } from "../../../services/toast.service";
+import { T } from "../../../theme/tokens";
 import {
   Section,
   SectionTitle,
@@ -18,9 +20,9 @@ import {
 } from "../styles/settings.styles";
 
 const StatusBanner = styled.div<{ $enabled: boolean }>`
-  border: 1px solid ${(props) => (props.$enabled ? "#b8efc9" : "#ffd1d1")};
-  background: ${(props) => (props.$enabled ? "#eafff0" : "#fff4f4")};
-  color: ${(props) => (props.$enabled ? "#0f7c3a" : "#c23232")};
+  border: 1px solid ${(props) => (props.$enabled ? T.successText : T.dangerText)};
+  background: ${(props) => (props.$enabled ? T.successFaint : T.dangerFaint)};
+  color: ${(props) => (props.$enabled ? T.successText : T.dangerText)};
   border-radius: 12px;
   padding: 0.85rem 0.95rem;
   display: flex;
@@ -31,10 +33,10 @@ const StatusBanner = styled.div<{ $enabled: boolean }>`
 
 const QRWrapper = styled.div`
   display: inline-flex;
-  border: 1px solid #dbe9f7;
+  border: 1px solid ${T.borderSubtle};
   border-radius: 14px;
   padding: 0.75rem;
-  background: #ffffff;
+  background: ${T.bgSurface};
   margin: 0.8rem 0 0.5rem;
 `;
 
@@ -47,10 +49,10 @@ const SecretRow = styled.div`
 `;
 
 const SecretCode = styled.code`
-  font-family: "SF Mono", "Consolas", "Roboto Mono", monospace;
+  font-family: ${T.fontMono};
   letter-spacing: 1.5px;
   font-size: 0.9rem;
-  color: #17324c;
+  color: ${T.textPrimary};
   word-break: break-all;
 `;
 
@@ -62,14 +64,14 @@ const RecoveryCodesGrid = styled.div`
 `;
 
 const RecoveryCode = styled.div`
-  border: 1px solid #deebf8;
+  border: 1px solid ${T.borderSubtle};
   border-radius: 10px;
-  background: #f7fbff;
+  background: ${T.bgElevated};
   padding: 0.55rem 0.6rem;
   text-align: center;
-  font-family: "SF Mono", "Consolas", "Roboto Mono", monospace;
+  font-family: ${T.fontMono};
   font-size: 0.82rem;
-  color: #18344f;
+  color: ${T.textPrimary};
 `;
 
 interface SetupData {
@@ -79,7 +81,8 @@ interface SetupData {
 }
 
 export default function TwoFactorSettings() {
-  useAuthStore();
+  const refreshUser = useAuthStore((s) => s.refreshUser);
+  const user = useAuthStore((s) => s.user);
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [setupData, setSetupData] = useState<SetupData | null>(null);
@@ -89,16 +92,23 @@ export default function TwoFactorSettings() {
   const [copySuccess, setCopySuccess] = useState(false);
 
   useEffect(() => {
-    // Check if 2FA is already enabled for the user
     fetchTwoFactorStatus();
   }, []);
 
+  useEffect(() => {
+    if (user) {
+      setIsEnabled(Boolean(user.totpEnabled));
+    }
+  }, [user?.totpEnabled]);
+
   const fetchTwoFactorStatus = async () => {
     try {
-      const response = await api.get("/auth/me/protected");
-      setIsEnabled(response.data.user.totpEnabled || false);
+      await refreshUser();
+      const latestUser = useAuthStore.getState().user;
+      setIsEnabled(Boolean(latestUser?.totpEnabled));
     } catch (error) {
       console.error("Failed to fetch 2FA status:", error);
+      toast.error("Could not load two-factor authentication status.");
     }
   };
 
@@ -110,7 +120,13 @@ export default function TwoFactorSettings() {
       const response = await api.post("/auth/totp/setup");
       setSetupData(response.data);
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || "Failed to setup two-factor authentication");
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to setup two-factor authentication";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -135,6 +151,8 @@ export default function TwoFactorSettings() {
       setIsEnabled(true);
       setSetupData(null);
       setVerificationCode("");
+      await refreshUser();
+      toast.success("Two-factor authentication enabled.");
     } catch (err: any) {
       const msg =
         err.response?.data?.error ??
@@ -142,6 +160,7 @@ export default function TwoFactorSettings() {
         err.message ??
         "Failed to verify code";
       setError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -159,8 +178,16 @@ export default function TwoFactorSettings() {
       await api.post("/auth/totp/disable");
       setIsEnabled(false);
       setRecoveryCodes([]);
+      await refreshUser();
+      toast.success("Two-factor authentication disabled.");
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || "Failed to disable two-factor authentication");
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        err.message ||
+        "Failed to disable two-factor authentication";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -170,6 +197,7 @@ export default function TwoFactorSettings() {
     if (setupData?.secret) {
       navigator.clipboard.writeText(setupData.secret);
       setCopySuccess(true);
+      toast.success("Secret key copied.");
       setTimeout(() => setCopySuccess(false), 2000);
     }
   };
@@ -185,6 +213,7 @@ export default function TwoFactorSettings() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    toast.success("Recovery codes downloaded.");
   };
 
   const handleCancelSetup = () => {
@@ -217,8 +246,8 @@ export default function TwoFactorSettings() {
       </StatusBanner>
 
       {error && (
-        <InfoCard style={{ background: "#fff4f4", borderColor: "#ffd1d1" }}>
-          <InfoText style={{ color: "#c23232" }}>{error}</InfoText>
+        <InfoCard style={{ background: T.dangerFaint, borderColor: T.dangerText }}>
+          <InfoText style={{ color: T.dangerText }}>{error}</InfoText>
         </InfoCard>
       )}
 

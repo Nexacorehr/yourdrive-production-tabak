@@ -4,7 +4,9 @@ import { useUserUiPreferencesStore } from "../../../store/userUiPreferencesStore
 import { T } from "../../../theme/tokens";
 import FileTypeIcon from "./FileTypeIcon";
 import FolderSmallIcon from "../icons/smallFolder";
-import { UploadIcon as Upload, ChevronRightIcon as ChevronRight, ChevronDownIcon as ChevronDown, FolderIcon as Folder } from "../icons/index";
+import { UploadIcon as Upload, ChevronRightIcon as ChevronRight, ChevronDownIcon as ChevronDown, FolderIcon as Folder, FilesIcon as Files } from "../icons/index";
+import { TableSkeleton } from "../ui/TableSkeleton";
+import { EmptyState as EmptyStatePanel } from "../ui/EmptyState";
 
 export interface FileItem {
   id: string;
@@ -469,10 +471,10 @@ const FilesTable: React.FC<FilesTableProps> = ({
   if (loading) {
     return (
       <TableContainer style={tableDensityStyle}>
-        <LoadingState>
-          <LoadingSpinner />
-          <span>Loading files...</span>
-        </LoadingState>
+        <TableSkeleton
+          rows={6}
+          variant={fileView === "grid" ? "grid" : "list"}
+        />
       </TableContainer>
     );
   }
@@ -487,8 +489,8 @@ const FilesTable: React.FC<FilesTableProps> = ({
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
-        <EmptyState $isDragging={isDragging}>
-          {isDragging ? (
+        {isDragging ? (
+          <EmptyState $isDragging={isDragging}>
             <DragOverlayContent>
               <UploadIconWrapper>
                 <Upload size={48} />
@@ -496,16 +498,18 @@ const FilesTable: React.FC<FilesTableProps> = ({
               <EmptyText>Drop files or folders here</EmptyText>
               <EmptySubtext>Release to upload</EmptySubtext>
             </DragOverlayContent>
-          ) : (
-            <>
-              <EmptyText>{emptyMessage}</EmptyText>
-              <EmptySubtext>{emptySubtext}</EmptySubtext>
-              {onFilesUpload && (
-                <DragHint>or drag and drop files here</DragHint>
-              )}
-            </>
-          )}
-        </EmptyState>
+          </EmptyState>
+        ) : (
+          <EmptyStatePanel
+            icon={<Files />}
+            title={emptyMessage}
+            description={
+              onFilesUpload
+                ? `${emptySubtext} or drag and drop files here.`
+                : emptySubtext
+            }
+          />
+        )}
       </TableContainer>
     );
   }
@@ -1024,32 +1028,6 @@ const OwnerName = styled.span`
   font-size: 13px;
 `;
 
-const LoadingState = styled.div`
-  padding: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  font-size: 14px;
-  color: ${T.textSecondary};
-  font-family: ${T.fontUI};
-`;
-
-const LoadingSpinner = styled.div`
-  width: 20px;
-  height: 20px;
-  border: 2px solid ${T.borderSubtle};
-  border-top-color: ${T.accent};
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-`;
-
 const EmptyState = styled.div<{ $isDragging?: boolean }>`
   padding: 48px;
   text-align: center;
@@ -1072,14 +1050,6 @@ const EmptySubtext = styled.div`
   margin-top: 4px;
   font-size: 13px;
   color: ${T.textMuted};
-  font-family: ${T.fontUI};
-`;
-
-const DragHint = styled.div`
-  margin-top: 8px;
-  font-size: 12px;
-  color: ${T.accent};
-  font-weight: 500;
   font-family: ${T.fontUI};
 `;
 

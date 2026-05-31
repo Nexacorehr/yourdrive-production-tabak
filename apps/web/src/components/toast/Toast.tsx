@@ -87,10 +87,12 @@ const ToastContainer = styled.div<{
   $isExiting: boolean;
 }>`
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
-  min-width: 320px;
+  width: min(420px, calc(100vw - 32px));
+  min-width: 0;
   padding: 14px 16px;
+  box-sizing: border-box;
   background: ${T.bgSurface};
   border-radius: ${T.rLg};
   border: 1px solid ${T.borderSubtle};

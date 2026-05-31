@@ -354,7 +354,7 @@ filesRoutes.get("/", authMiddleware, async (req: AuthRequest, res) => {
         CASE WHEN ff.id IS NOT NULL THEN true ELSE false END AS is_favorited
        FROM user_files uf
        LEFT JOIN favorited_files ff ON ff.file_id = uf.id AND ff.user_id = $1
-       WHERE uf.user_id = $1 AND (uf.original_name != '.metadata' OR uf.is_folder = true)
+       WHERE uf.user_id = $1 AND (uf.is_folder = true OR uf.original_name != '.metadata')
        ORDER BY uf.is_folder DESC, uf.created_at DESC`,
       [req.userId],
     );

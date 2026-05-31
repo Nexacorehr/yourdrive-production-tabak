@@ -33,8 +33,6 @@ import {
   normalizeFolderPath,
   resolveFolderOpenPath,
 } from "../../../../lib/folderNavigation";
-import FolderBreadcrumbs from "../../../shared/folders/FolderBreadcrumbs";
-import CreateFolderModal from "../../../shared/folders/CreateFolderModal";
 import { useFolderBrowseStore } from "../../../../store/folderBrowseStore";
 import type {
   EnhancedFileItem,
@@ -134,7 +132,6 @@ const YourFiles: React.FC = () => {
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [cmdOpen, setCmdOpen] = useState(false);
   const [currentFolderPath, setCurrentFolderPath] = useState("");
-  const [createFolderOpen, setCreateFolderOpen] = useState(false);
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const actionHandlerRef = useRef<
@@ -159,10 +156,6 @@ const YourFiles: React.FC = () => {
 
   const handleFolderOpen = useCallback((folder: EnhancedFileItem) => {
     setCurrentFolderPath(resolveFolderOpenPath(folder as FileItem));
-  }, []);
-
-  const handleFolderNavigate = useCallback((path: string) => {
-    setCurrentFolderPath(normalizeFolderPath(path));
   }, []);
 
   const navigableFiles =
@@ -605,15 +598,6 @@ const YourFiles: React.FC = () => {
           </FilterIndicator>
         )}
 
-        {!hasActiveFilters && (
-          <FolderBreadcrumbs
-            currentPath={currentFolderPath}
-            onNavigate={handleFolderNavigate}
-            onCreateFolder={() => setCreateFolderOpen(true)}
-            createDisabled={loading}
-          />
-        )}
-
         <EnhancedFilesTable
           files={browseFiles as EnhancedFileItem[]}
           loading={loading}
@@ -644,15 +628,6 @@ const YourFiles: React.FC = () => {
           onRefresh={fetchFiles}
           onActionHandlerReady={(handler) => {
             actionHandlerRef.current = handler;
-          }}
-        />
-
-        <CreateFolderModal
-          isOpen={createFolderOpen}
-          parentPath={currentFolderPath}
-          onClose={() => setCreateFolderOpen(false)}
-          onCreated={() => {
-            eventBus.emit(FILES_REFRESH_EVENT);
           }}
         />
 

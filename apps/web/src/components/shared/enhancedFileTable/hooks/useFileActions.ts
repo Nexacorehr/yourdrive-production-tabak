@@ -29,6 +29,7 @@ import {
   apiRestore,
 } from "../utils/fileActions";
 import { usePopupStore } from "../../popups/popup.store";
+import { useStorageStore } from "../../../../store/storageStore";
 
 export function useFileActions(options: UseFileActionsOptions) {
   const {
@@ -290,6 +291,7 @@ async function dispatch(
 
     case "delete":
       await apiDelete(ids);
+      await useStorageStore.getState().refreshStorage();
       toast.success(
         ids.length === 1
           ? `"${files[0].name}" moved to trash`
@@ -299,6 +301,7 @@ async function dispatch(
 
     case "deletePermanently":
       await apiDeletePermanently(ids);
+      await useStorageStore.getState().refreshStorage();
       toast.success(
         ids.length === 1
           ? `"${files[0].name}" deleted permanently`
@@ -308,6 +311,7 @@ async function dispatch(
 
     case "restore":
       await apiRestore(ids);
+      await useStorageStore.getState().refreshStorage();
       toast.success(
         ids.length === 1
           ? `"${files[0].name}" restored`

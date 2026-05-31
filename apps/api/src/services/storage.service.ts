@@ -31,6 +31,8 @@ export class StorageService {
     where: {
       userId,
       deletedAt: null,
+      isFolder: false,
+      originalName: { not: ".metadata" },
     },
     _sum: {
       size: true,

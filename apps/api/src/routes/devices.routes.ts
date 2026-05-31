@@ -1,6 +1,7 @@
 import express from "express";
-import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { Pool } from "pg";
+import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
+import { seedDefaultDeviceGroups } from "../services/device-groups.service";
 import { logDeviceAction } from "../lib/helper";
 
 const devicesRoutes = express.Router();
@@ -73,24 +74,7 @@ devicesRoutes.get("/groups", authMiddleware, async (req: AuthRequest, res) => {
       return res.status(401).json({ success: false, error: "Unauthorized" });
     }
 
-    // Check if device_groups table exists
-    const tableExists = await pool.query(
-      `
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = 'device_groups'
-      );
-      `,
-    );
-
-    if (!tableExists.rows[0]?.exists) {
-      // Table doesn't exist, return empty array
-      return res.json({
-        success: true,
-        groups: [],
-      });
-    }
+    await seedDefaultDeviceGroups(pool, req.userId);
 
     const groups = await pool.query(
       `

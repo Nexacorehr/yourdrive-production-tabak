@@ -19,6 +19,7 @@ import { SharingSection } from "./components/SharingSection";
 import { PreferencesNotificationsPrivacy } from "./components/PreferencesNotificationsPrivacy";
 
 import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { TableSkeleton } from "../shared/ui/TableSkeleton";
 import {
   PageWrapper,
   Container,
@@ -303,7 +304,11 @@ const Settings = () => {
 
   const renderContent = () => {
     if (loading && !settings) {
-      return <CenterContent>Loading settings...</CenterContent>;
+      return (
+        <CenterContent aria-busy="true">
+          <TableSkeleton rows={4} variant="list" />
+        </CenterContent>
+      );
     }
 
     if (error) {

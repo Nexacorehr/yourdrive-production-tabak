@@ -74,6 +74,31 @@ function isProtectedWelcomeReadme(file: {
   );
 }
 
+function recycleBinDisplayName(file: {
+  original_name?: string | null;
+  folder_path?: string | null;
+  s3_key?: string | null;
+}): string {
+  if (
+    file.original_name === ".metadata" ||
+    String(file.s3_key || "").endsWith("/.metadata")
+  ) {
+    const parts = (file.folder_path || "").split("/").filter(Boolean);
+    return parts[parts.length - 1] || "Folder";
+  }
+  return file.original_name || "Untitled";
+}
+
+function isFolderRecycleEntry(file: {
+  original_name?: string | null;
+  s3_key?: string | null;
+}): boolean {
+  return (
+    file.original_name === ".metadata" ||
+    String(file.s3_key || "").endsWith("/.metadata")
+  );
+}
+
 export async function downloadFromS3(s3Key: string): Promise<Buffer> {
   const command = new GetObjectCommand({
     Bucket: BUCKET_NAME,
@@ -260,24 +285,16 @@ export class FileActionsHandlers {
             continue;
           }
 
-          if (isProtectedWelcomeReadme(file)) {
-            await client.query("ROLLBACK");
-            return res.status(403).json({
-              success: false,
-              error: "The welcome README cannot be deleted.",
-            });
-          }
-
           await client.query(
             `INSERT INTO recycle_bin 
              (user_id, file_id, original_name, s3_key, user_email, mime_type, size, folder_path, deleted_at, created_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9)
              ON CONFLICT (user_id, file_id) 
-             DO UPDATE SET deleted_at = NOW()`,
+             DO UPDATE SET deleted_at = NOW(), original_name = EXCLUDED.original_name`,
             [
               userId,
               file.id,
-              file.original_name,
+              recycleBinDisplayName(file),
               file.s3_key,
               file.user_email,
               file.mime_type,
@@ -361,14 +378,6 @@ export class FileActionsHandlers {
 
           const file = recycleResult.rows[0];
 
-          if (isProtectedWelcomeReadme(file)) {
-            await client.query("ROLLBACK");
-            return res.status(403).json({
-              success: false,
-              error: "The welcome README cannot be permanently deleted.",
-            });
-          }
-
           try {
             await s3Client.send(
               new DeleteObjectCommand({
@@ -442,13 +451,19 @@ export class FileActionsHandlers {
           created_at
          FROM recycle_bin 
          WHERE user_id = $1 
+           AND original_name != '.metadata'
          ORDER BY deleted_at DESC`,
         [userId],
       );
 
+      const files = result.rows.map((row) => ({
+        ...row,
+        type: String(row.s3_key || "").endsWith("/.metadata") ? "folder" : "file",
+      }));
+
       res.json({
         success: true,
-        files: result.rows,
+        files,
       });
     } catch (err) {
       console.error("Get recycle bin error:", err);
@@ -518,12 +533,12 @@ export class FileActionsHandlers {
               file.file_id,
               userId,
               file.user_email,
-              file.original_name,
+              isFolderRecycleEntry(file) ? ".metadata" : file.original_name,
               file.s3_key,
               file.folder_path || "",
               file.size,
               file.mime_type,
-              file.original_name === ".metadata",
+              isFolderRecycleEntry(file),
               file.created_at || new Date(),
             ],
           );

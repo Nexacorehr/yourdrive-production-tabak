@@ -545,19 +545,28 @@ export const Divider = styled.div`
 
 export const InfoCard = styled.div`
   padding: 0.9rem 1rem;
-  background: #f6f9fd;
-  border: 1px solid #cce4fd;
-  border-radius: 12px;
+  background: ${T.bgElevated};
+  border: 1px solid ${T.borderSubtle};
+  border-radius: ${T.rLg};
   margin-bottom: 1rem;
 `;
 
 export const InfoText = styled.p`
+  margin: 0;
   font-size: 0.875rem;
-  color: #17324c;
+  color: ${T.textPrimary};
   line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
 
   strong {
     font-weight: 600;
+  }
+
+  svg {
+    flex-shrink: 0;
+    margin-top: 2px;
   }
 `;
 

@@ -78,6 +78,7 @@ interface AuthStore {
 }
 
 let isCheckingAuth = false;
+let isLoggingOut = false;
 
 // Resolved when persisted auth state has been rehydrated from localStorage (so router sees correct isAuthenticated).
 let resolveRehydrated: () => void;
@@ -103,11 +104,23 @@ export const useAuthStore = create<AuthStore>()(
 
       refreshUser: async () => {
         try {
+          const token = get().accessToken;
+          if (token) {
+            try {
+              const res = await api.get("/auth/me/protected");
+              if (res.data?.user) {
+                set({ user: res.data.user, isAuthenticated: true });
+                return;
+              }
+            } catch {
+              // Fall through to cookie-based /me
+            }
+          }
+
           const res = await api.get("/auth/me");
-          set({
-            user: res.data.user,
-            isAuthenticated: true,
-          });
+          if (res.data?.authenticated && res.data?.user) {
+            set({ user: res.data.user, isAuthenticated: true });
+          }
         } catch (error) {
           console.error("Failed to refresh user:", error);
         }
@@ -224,6 +237,8 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       logout: async () => {
+        if (isLoggingOut) return;
+        isLoggingOut = true;
         try {
           await api.post("/auth/logout");
         } catch {

@@ -8,11 +8,13 @@ import StarIcon from "../../../shared/icons/starred";
 import HelpCenterIcon from "../../../shared/icons/helpCenter";
 import { Navigation, NavItem } from "../../styles/sidebar";
 import { ROUTES } from "../../../../router/router";
-
-type NavProps = { color: string; isActive: boolean };
+import { Link, useRouterState } from "@tanstack/react-router";
+import { T } from "../../../theme/tokens";
 
 const NavigationMenu = () => {
-  const DEFAULT_COLOR = "#363840";
+  const currentPath = useRouterState({
+    select: (s) => s.location.pathname,
+  });
 
   const navigationItems = [
     { label: "Home", link: ROUTES.DASHBOARD, Icon: HomeIcon },
@@ -33,25 +35,22 @@ const NavigationMenu = () => {
     { label: "Help Center", link: ROUTES.HELPCENTER, Icon: HelpCenterIcon },
   ];
 
-  const currentPath =
-    typeof window !== "undefined" ? window.location.pathname : "/";
-
   return (
     <Navigation data-tour="tour-sidebar-nav">
       {navigationItems.map(({ label, link, Icon }) => {
-        const isActive = currentPath === link;
-
-        const navProps: NavProps = {
-          color: isActive ? "#fff" : DEFAULT_COLOR,
-          isActive,
-        };
+        const isActive =
+          currentPath === link ||
+          (link !== ROUTES.DASHBOARD && currentPath.startsWith(`${link}/`));
 
         return (
-          <NavItem key={label} {...navProps}>
-            <a href={link}>
-              <Icon color={navProps.color} size={16} />
+          <NavItem key={label} isActive={isActive} data-active={isActive}>
+            <Link to={link}>
+              <Icon
+                color={isActive ? T.textInvert : T.textSecondary}
+                size={16}
+              />
               <span>{label}</span>
-            </a>
+            </Link>
           </NavItem>
         );
       })}
