@@ -1,5 +1,6 @@
 import { useRef, type RefObject, useState, useEffect } from "react";
 import styled, { keyframes } from "styled-components";
+import { useRouter } from "@tanstack/react-router";
 import { usePopupStore } from "../popup.store";
 import { useClickOutside } from "../../hooks/useOutsideClick";
 import { usePopupPosition } from "../../hooks/usePopupPosition";
@@ -7,6 +8,8 @@ import { eventBus } from "../../../../events/eventBus";
 import { FILES_REFRESH_EVENT } from "../../../../events/fileEvents";
 import api from "../../../../lib/axios";
 import { toast } from "../../../../services/toast.service";
+import { useFolderBrowseStore } from "../../../../store/folderBrowseStore";
+import { joinFolderPath } from "../../../../lib/folderNavigation";
 
 import { PopupIcon, PopupText } from "../styles/general";
 import {
@@ -31,6 +34,7 @@ const UploadPopup: React.FC<UploadPopupProps> = ({
 }) => {
   const isOpen = usePopupStore((s) => s.isUploadPopupOpen);
   const closeUploadPopup = usePopupStore((s) => s.closeUploadPopup);
+  const router = useRouter();
 
   const popupRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -106,8 +110,15 @@ const UploadPopup: React.FC<UploadPopupProps> = ({
 
     setIsCreatingFolder(true);
     try {
+      const pathname = router.state.location.pathname;
+      const parentPath =
+        pathname.includes("/your-files")
+          ? useFolderBrowseStore.getState().yourFilesPath
+          : "";
+      const folderPath = joinFolderPath(parentPath, folderName.trim());
+
       await api.post("/files/folders/create", {
-        folderPath: folderName.trim(),
+        folderPath,
       });
 
       eventBus.emit(FILES_REFRESH_EVENT);

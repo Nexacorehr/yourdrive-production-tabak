@@ -1,4 +1,5 @@
 import React, { forwardRef, useEffect } from "react";
+import { T } from "../../../theme/tokens";
 
 type Variant = "primary" | "secondary" | "ghost";
 type Size = "sm" | "md" | "lg";
@@ -22,25 +23,25 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>((props, ref) => {
   } = props;
 
   const sizeStyles: Record<Size, React.CSSProperties> = {
-    sm: { padding: "4px 8px", fontSize: 12 },
-    md: { padding: "8px 12px", fontSize: 14 },
-    lg: { padding: "12px 18px", fontSize: 16 },
+    sm: { padding: "4px 10px", fontSize: 12 },
+    md: { padding: "8px 14px", fontSize: 14 },
+    lg: { padding: "12px 20px", fontSize: 16 },
   };
 
   const variantStyles: Record<Variant, React.CSSProperties> = {
     primary: {
-      backgroundColor: "#0366d6",
-      color: "#EFF3FD",
-      border: "1px solid rgba(0,0,0,0.1)",
+      backgroundColor: T.accent,
+      color: T.textInvert,
+      border: `1px solid ${T.borderFaint}`,
     },
     secondary: {
-      backgroundColor: "#EFF3FD",
-      color: "#111",
-      border: "1px solid rgba(0,0,0,0.08)",
+      backgroundColor: T.bgHover,
+      color: T.textPrimary,
+      border: `1px solid ${T.borderSubtle}`,
     },
     ghost: {
       backgroundColor: "transparent",
-      color: "#0366d6",
+      color: T.accent,
       border: "1px solid transparent",
     },
   };
@@ -48,9 +49,12 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>((props, ref) => {
   const combinedStyle: React.CSSProperties = {
     display: "inline-flex",
     alignItems: "center",
-    borderRadius: 6,
+    fontFamily: T.fontUI,
+    fontWeight: 500,
+    borderRadius: T.rMd,
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.6 : 1,
+    transition: `background ${T.tFast}, border-color ${T.tFast}, color ${T.tFast}`,
     ...sizeStyles[size],
     ...variantStyles[variant],
     ...style,
@@ -59,13 +63,8 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>((props, ref) => {
   useEffect(() => {
     if (import.meta.env.VITE_DEBUG_MODE === "true") {
       console.log(`Button mounted with variant: ${variant} and size: ${size}`);
-      console.log(combinedStyle);
-
-      return () => {
-        console.log("Button unmounted");
-      };
     }
-  }, [variant, sizeStyles]);
+  }, [variant, size]);
 
   return (
     <button

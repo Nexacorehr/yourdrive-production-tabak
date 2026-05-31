@@ -18,7 +18,9 @@ const redirectsPath = path.join(root, "apps/web/public/_redirects");
 const rawProxy = (process.env.NETLIFY_API_PROXY_URL || "").trim();
 const proxyBase = rawProxy.replace(/\/+$/, "");
 
-const lines = [];
+const lines = [
+  "# API proxy line is injected at Netlify build time by scripts/prepare-netlify.mjs (NETLIFY_API_PROXY_URL).",
+];
 
 if (proxyBase) {
   if (!/^https?:\/\//i.test(proxyBase)) {

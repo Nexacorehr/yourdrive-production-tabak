@@ -11,6 +11,11 @@ import {
 } from "../icons/index";
 import { useParams } from "@tanstack/react-router";
 import api, { getApiBaseURL } from "../../../lib/axios";
+import SharedFolderBrowse from "./SharedFolderBrowse";
+
+const ArchivePreview = React.lazy(
+  () => import("../filesPreview/components/previews/ArchivePreview"),
+);
 
 interface SharedFile {
   id: string;
@@ -24,6 +29,8 @@ interface SharedFile {
   maxDownloads: number | null;
   downloadCount: number;
   is_locked: boolean;
+  isFolder?: boolean;
+  folderPath?: string | null;
 }
 
 interface Comment {
@@ -65,6 +72,7 @@ const SharedViewer: React.FC = () => {
   const [newComment, setNewComment] = useState("");
   const [saving, setSaving] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
+  const [isFolderAccess, setIsFolderAccess] = useState(false);
 
   const getFileExtension = (fileName: string): string => {
     const parts = fileName.split(".");
@@ -128,7 +136,12 @@ const SharedViewer: React.FC = () => {
       setPasswordRequired(data.share.hasPassword);
 
       if (!data.share.hasPassword) {
-        await handleAccess("");
+        if (data.share.isFolder) {
+          setIsFolderAccess(true);
+          setLoading(false);
+        } else {
+          await handleAccess("");
+        }
       } else {
         setLoading(false);
       }
@@ -159,6 +172,13 @@ const SharedViewer: React.FC = () => {
       if (!data.success) {
         setError(data.error || "Failed to access file");
         setAuthenticating(false);
+        return;
+      }
+
+      if (data.isFolder) {
+        setIsFolderAccess(true);
+        setPasswordRequired(false);
+        setLoading(false);
         return;
       }
 
@@ -568,8 +588,22 @@ const SharedViewer: React.FC = () => {
       );
     }
 
-    // Archive files - not previewable
-    if (["zip", "rar", "7z", "tar", "gz"].includes(extension)) {
+    if (extension === "zip" && fileUrl) {
+      return (
+        <ArchivePreviewWrap>
+          <React.Suspense fallback={<InfoText>Loading archive…</InfoText>}>
+            <ArchivePreview
+              url={fileUrl}
+              fileName={file.fileName}
+              mimeType={file.mimeType}
+              onDownload={handleDownload}
+            />
+          </React.Suspense>
+        </ArchivePreviewWrap>
+      );
+    }
+
+    if (["rar", "7z", "tar", "gz"].includes(extension)) {
       return (
         <CenteredContainer>
           <DownloadButton onClick={handleDownload}>
@@ -577,7 +611,8 @@ const SharedViewer: React.FC = () => {
             Download {file.fileName}
           </DownloadButton>
           <InfoText>
-            Archive files cannot be previewed. Please download to extract.
+            Only .zip archives can be browsed here. Download this file to extract
+            locally.
           </InfoText>
         </CenteredContainer>
       );
@@ -685,6 +720,19 @@ const SharedViewer: React.FC = () => {
           {error && <ErrorMessage>{error}</ErrorMessage>}
         </PasswordContainer>
       </Container>
+    );
+  }
+
+  if (file?.isFolder && isFolderAccess && token) {
+    return (
+      <SharedFolderBrowse
+        token={token}
+        sharedRoot={file.folderPath || ""}
+        folderName={file.fileName}
+        ownerName={file.ownerName}
+        permission={file.permission}
+        canDownload={canDownload()}
+      />
     );
   }
 
@@ -843,6 +891,14 @@ const Container = styled.div`
   align-items: center;
   justify-content: center;
   padding: 24px;
+`;
+
+const ArchivePreviewWrap = styled.div`
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
 `;
 
 const CenteredContainer = styled.div`

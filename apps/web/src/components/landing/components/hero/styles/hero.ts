@@ -4,7 +4,7 @@ export const HeroContainer = styled.div`
   width: 100%;
   max-width: 100vw;
   height: 650px;
-  background-color: #dde2ee;
+  background-color: var(--app-marketing-hero-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -56,7 +56,7 @@ export const GrayHeroText = styled.div`
   font-family: "Forma DJR Display", sans-serif;
   font-weight: 500;
   font-size: 96px;
-  color: #363840;
+  color: var(--app-marketing-muted);
   line-height: 1.1;
 
   @media (max-width: 1400px) {
@@ -86,7 +86,7 @@ export const BlueHeroText = styled.div`
   font-family: "Forma DJR Display", sans-serif;
   font-weight: 500;
   font-size: 96px;
-  color: #1f9afe;
+  color: var(--ed-accent);
   line-height: 1.1;
 
   @media (max-width: 1400px) {
@@ -114,10 +114,10 @@ export const BlueHeroText = styled.div`
 
 export const ShortDesc = styled.div`
   flex: 1;
-  font-family:
-    "Poppins", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif";
+  font-family: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
   font-size: 23px;
-  color: rgba(0, 0, 0, 0.7);
+  color: var(--ed-textSecondary);
   line-height: 1.5;
   margin-top: 10px;
 
@@ -162,13 +162,12 @@ export const HeroContGrad = styled.div`
   height: 234px;
   background: linear-gradient(
     180deg,
-    rgba(221, 226, 238, 1) 0%,
-    rgba(221, 226, 238, 0.96) 20%,
-    rgba(221, 226, 238, 0.82) 40%,
-    rgba(221, 226, 238, 0.58) 60%,
-    rgba(221, 226, 238, 0.25) 80%,
-    rgba(221, 226, 238, 0.1) 90%,
-    rgba(221, 226, 238, 0) 100%
+    var(--app-marketing-hero-bg) 0%,
+    color-mix(in srgb, var(--app-marketing-hero-bg) 96%, transparent) 20%,
+    color-mix(in srgb, var(--app-marketing-hero-bg) 82%, transparent) 40%,
+    color-mix(in srgb, var(--app-marketing-hero-bg) 58%, transparent) 60%,
+    color-mix(in srgb, var(--app-marketing-hero-bg) 25%, transparent) 80%,
+    transparent 100%
   );
 
   @media (max-width: 968px) {
@@ -186,13 +185,12 @@ export const HeroContGradTop = styled.div`
   height: 0px;
   background: linear-gradient(
     180deg,
-    rgba(221, 226, 238, 1) 0%,
-    rgba(221, 226, 238, 0.96) 20%,
-    rgba(221, 226, 238, 0.82) 40%,
-    rgba(221, 226, 238, 0.58) 60%,
-    rgba(221, 226, 238, 0.25) 80%,
-    rgba(221, 226, 238, 0.1) 90%,
-    rgba(221, 226, 238, 0) 100%
+    var(--app-marketing-hero-bg) 0%,
+    color-mix(in srgb, var(--app-marketing-hero-bg) 96%, transparent) 20%,
+    color-mix(in srgb, var(--app-marketing-hero-bg) 82%, transparent) 40%,
+    color-mix(in srgb, var(--app-marketing-hero-bg) 58%, transparent) 60%,
+    color-mix(in srgb, var(--app-marketing-hero-bg) 25%, transparent) 80%,
+    transparent 100%
   );
 
   @media (max-width: 968px) {

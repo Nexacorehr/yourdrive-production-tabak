@@ -233,7 +233,7 @@ export const ActiveSessionsSchema = {
 // Default Settings
 export const defaultSettings: Partial<UserSettings> = {
   appearance: {
-    theme: "system",
+    theme: "light",
     fileView: "grid",
     thumbnailQuality: "medium",
   },

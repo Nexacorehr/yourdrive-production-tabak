@@ -3,6 +3,12 @@ import styled, { keyframes } from "styled-components";
 import { XIcon as X, FolderIcon as Folder, ChevronRightIcon as ChevronRight, HomeIcon as Home, SearchIcon as Search, CheckIcon as Check } from "../../icons/index";
 import type { EnhancedFileItem } from "../types/fileActions";
 import api from "../../../../lib/axios";
+import { T } from "../../../../theme/tokens";
+import {
+  isDirectChildFolder,
+  isPathUnder,
+  normalizeFolderPath,
+} from "../../../../lib/folderNavigation";
 
 export interface MoveFolderOption {
   id: string;
@@ -40,44 +46,45 @@ const ModalOverlay = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: ${T.bgOverlay};
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: ${T.zModal};
   animation: ${fadeIn} 0.2s ease-out;
-  backdrop-filter: blur(4px);
 `;
 
 const ModalContent = styled.div`
-  background: white;
-  border-radius: 16px;
+  background: ${T.bgSurface};
+  border: 1px solid ${T.borderSubtle};
+  border-radius: ${T.rLg};
   padding: 0;
   width: min(500px, calc(100vw - 24px));
   max-width: 100%;
   max-height: min(80vh, 100dvh - 24px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: ${T.shadowElevated};
   animation: ${slideUp} 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
+  font-family: ${T.fontUI};
 `;
 
 const ModalHeader = styled.div`
   padding: 24px 24px 16px;
-  border-bottom: 1px solid #e8eaed;
+  border-bottom: 1px solid ${T.borderFaint};
 `;
 
 const ModalTitle = styled.h2`
   margin: 0 0 8px;
   font-size: 20px;
   font-weight: 600;
-  color: #202124;
+  color: ${T.textPrimary};
 `;
 
 const ModalSubtitle = styled.p`
   margin: 0;
   font-size: 14px;
-  color: #5f6368;
+  color: ${T.textSecondary};
 `;
 
 const CloseButton = styled.button`
@@ -92,36 +99,38 @@ const CloseButton = styled.button`
   background: transparent;
   border: none;
   border-radius: 50%;
-  color: #5f6368;
+  color: ${T.textSecondary};
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all ${T.tFast};
 
   &:hover {
-    background: #f1f3f4;
-    color: #202124;
+    background: ${T.bgHover};
+    color: ${T.textPrimary};
   }
 `;
 
 const SearchBar = styled.div`
   padding: 16px 24px;
-  border-bottom: 1px solid #e8eaed;
+  border-bottom: 1px solid ${T.borderFaint};
 `;
 
 const SearchInput = styled.input`
   width: 100%;
   padding: 10px 16px;
   padding-left: 40px;
-  border: 1px solid #dadce0;
-  border-radius: 8px;
+  border: 1px solid ${T.borderSubtle};
+  border-radius: ${T.rMd};
   font-size: 14px;
-  font-family: inherit;
-  transition: all 0.15s ease;
+  font-family: ${T.fontUI};
+  background: ${T.bgInput};
+  color: ${T.textPrimary};
+  transition: all ${T.tFast};
   box-sizing: border-box;
 
   &:focus {
     outline: none;
-    border-color: #1a73e8;
-    box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+    border-color: ${T.accent};
+    box-shadow: ${T.accentGlow};
   }
 `;
 
@@ -130,7 +139,7 @@ const SearchIcon = styled.div`
   left: 32px;
   top: 50%;
   transform: translateY(-50%);
-  color: #9aa0a6;
+  color: ${T.textMuted};
 `;
 
 const FolderList = styled.div`
@@ -356,14 +365,36 @@ export const MoveModal: React.FC<MoveModalProps> = ({
       const query = searchQuery.toLowerCase();
       const filtered = list.filter(
         (folder) =>
-          folder.name.toLowerCase().includes(query) ||
-          (folder.path && folder.path.toLowerCase().includes(query)),
+          folder.id !== "root" &&
+          (folder.name.toLowerCase().includes(query) ||
+            (folder.path && folder.path.toLowerCase().includes(query))),
       );
       setFilteredFolders(filtered);
-    } else {
-      setFilteredFolders(list);
+      return;
     }
-  }, [searchQuery, folders, foldersProp]);
+
+    const parent = normalizeFolderPath(currentPath);
+    const movingFolderPaths = files
+      .filter((f) => f.isFolder || f.type === "folder")
+      .map((f) =>
+        normalizeFolderPath(f.folderPath ?? f.path ?? f.location ?? f.name),
+      );
+    const visible = list.filter((folder) => {
+      if (folder.id === "root") return parent === "";
+      if (
+        movingFolderPaths.some(
+          (src) =>
+            folder.path === src ||
+            isPathUnder(folder.path, src) ||
+            isPathUnder(src, folder.path),
+        )
+      ) {
+        return false;
+      }
+      return isDirectChildFolder(folder.path, parent);
+    });
+    setFilteredFolders(visible);
+  }, [searchQuery, folders, foldersProp, currentPath, files]);
 
   if (!isOpen) return null;
 
@@ -372,7 +403,12 @@ export const MoveModal: React.FC<MoveModalProps> = ({
     setError(null);
 
     try {
-      const targetPath = selectedFolderPath === "root" ? "" : selectedFolderPath;
+      const targetPath =
+        selectedFolderPath === "root"
+          ? normalizeFolderPath(currentPath)
+          : selectedFolderPath === ""
+            ? normalizeFolderPath(currentPath)
+            : selectedFolderPath;
       await onMove(
         files.map((f) => f.id),
         targetPath,
@@ -400,8 +436,19 @@ export const MoveModal: React.FC<MoveModalProps> = ({
     return folder?.name || selectedFolderPath || "Select folder";
   };
 
-  const pathSegments = currentPath ? currentPath.split("/").filter(Boolean) : [];
+  const pathSegments = currentPath
+    ? normalizeFolderPath(currentPath).split("/").filter(Boolean)
+    : [];
   const displayedFolders = filteredFolders;
+
+  const openSubfolder = (folder: MoveFolderOption) => {
+    if (folder.id === "root") {
+      setCurrentPath("");
+      return;
+    }
+    setCurrentPath(normalizeFolderPath(folder.path));
+    setSelectedFolderPath(folder.path);
+  };
 
   return (
     <ModalOverlay onClick={onClose}>
@@ -437,11 +484,11 @@ export const MoveModal: React.FC<MoveModalProps> = ({
         </SearchBar>
 
         <Breadcrumbs>
-          <BreadcrumbItem onClick={() => setCurrentPath("/")}>
+          <BreadcrumbItem onClick={() => setCurrentPath("")}>
             <Home size={14} />
           </BreadcrumbItem>
           {pathSegments.map((segment, index) => {
-            const path = "/" + pathSegments.slice(0, index + 1).join("/");
+            const path = pathSegments.slice(0, index + 1).join("/");
             return (
               <React.Fragment key={path}>
                 <ChevronRight size={14} />
@@ -470,6 +517,7 @@ export const MoveModal: React.FC<MoveModalProps> = ({
                   key={folder.id}
                   $selected={isSelected}
                   onClick={() => setSelectedFolderPath(value)}
+                  onDoubleClick={() => openSubfolder(folder)}
                 >
                   <FolderIcon $selected={isSelected}>
                     <Folder size={16} />

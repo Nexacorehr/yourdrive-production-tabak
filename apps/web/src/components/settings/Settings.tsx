@@ -164,7 +164,7 @@ const Settings = () => {
           <FormGroup>
             <Label>Theme</Label>
             <Select
-              value={appearance?.theme ?? "system"}
+              value={appearance?.theme ?? "light"}
               disabled={!hasData || appearanceSaving}
               onChange={(e) => onChange("theme", e.target.value)}
             >

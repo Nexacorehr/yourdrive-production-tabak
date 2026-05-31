@@ -18,6 +18,7 @@ import {
   Edit3Icon as Edit3,
   MoveIcon as Move,
   ImageIcon as Image,
+  ZapIcon as Zap,
 } from "../../icons/index";
 
 import type {
@@ -41,6 +42,17 @@ const isArchiveFile = (file: EnhancedFileItem): boolean =>
   ["zip", "rar", "7z", "tar", "gz", "bz2"].includes(
     file.extension?.toLowerCase() ?? "",
   );
+
+const isZipArchive = (file: EnhancedFileItem): boolean =>
+  file.extension?.toLowerCase() === "zip" ||
+  (file.mimeType || "").toLowerCase().includes("zip");
+
+const CONVERTIBLE_MIMES = new Set([
+  "application/pdf",
+  "text/plain",
+  "image/png",
+  "image/jpeg",
+]);
 
 const registry: Record<FileActionId, FileActionDefinition> = {
   preview: {
@@ -102,13 +114,33 @@ const registry: Record<FileActionId, FileActionDefinition> = {
         "sh",
         "bat",
         "ps1",
+        "ini",
+        "conf",
+        "env",
+        "lock",
+        "scss",
+        "php",
+        "rb",
+        "go",
+        "rs",
+        "cs",
+        "sql",
       ];
 
       const isTextMime =
         mime.startsWith("text/") ||
         mime === "application/json" ||
         mime === "application/xml" ||
-        mime === "application/javascript";
+        mime === "application/javascript" ||
+        mime === "text/javascript" ||
+        mime === "application/typescript" ||
+        mime === "application/x-yaml" ||
+        mime === "application/sql" ||
+        mime === "application/x-sh" ||
+        mime === "application/x-bat" ||
+        mime === "application/x-powershell" ||
+        mime === "application/x-httpd-php" ||
+        mime === "application/x-ruby";
 
       return isTextMime || textExt.includes(ext);
     },
@@ -140,7 +172,8 @@ const registry: Record<FileActionId, FileActionDefinition> = {
     icon: Copy,
     shortcut: "Alt+K D",
     available: (ctx: ActionContext) =>
-      !ctx.selectedFiles.some((f) => f.isLocked) && !ctx.isRecycleBin,
+      !ctx.selectedFiles.some((f) => f.isLocked || f.isFolder || f.type === "folder") &&
+      !ctx.isRecycleBin,
   },
 
   move: {
@@ -171,9 +204,23 @@ const registry: Record<FileActionId, FileActionDefinition> = {
     shortcut: "Alt+K E",
     available: (ctx: ActionContext) =>
       ctx.selectionCount === 1 &&
-      isArchiveFile(ctx.selectedFiles[0]) &&
+      isZipArchive(ctx.selectedFiles[0]) &&
       !ctx.selectedFiles[0].isLocked &&
       !ctx.isRecycleBin,
+  },
+
+  convert: {
+    id: "convert",
+    label: "Convert",
+    icon: Zap,
+    shortcut: "",
+    available: (ctx: ActionContext) => {
+      if (ctx.selectionCount !== 1 || ctx.isRecycleBin) return false;
+      const file = ctx.selectedFiles[0];
+      if (file.isFolder) return false;
+      const mime = (file.mimeType || "").toLowerCase();
+      return CONVERTIBLE_MIMES.has(mime);
+    },
   },
 
   lock: {
@@ -294,7 +341,7 @@ const CONTEXT_MENU_GROUPS: readonly (readonly FileActionId[])[] = [
   ["preview", "edit", "details"],
   ["rename", "duplicate", "move"],
   ["share", "getLink"],
-  ["compress", "extract", "optimize", "watermark", "generatePdf"],
+  ["compress", "extract", "convert", "optimize", "watermark", "generatePdf"],
   ["lock", "unlock", "star", "unstar"],
   ["delete", "deletePermanently", "restore"],
 ] as const;

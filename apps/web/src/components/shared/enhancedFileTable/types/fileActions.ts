@@ -18,6 +18,7 @@ export interface EnhancedFileItem {
   isLocked?: boolean;
   owner?: FileOwner;
   path?: string;
+  folderPath?: string;
   createdAt?: string;
   updatedAt?: string;
   thumbnailUrl?: string;
@@ -41,6 +42,7 @@ export type FileActionId =
   | "move"
   | "compress"
   | "extract"
+  | "convert"
   | "lock"
   | "unlock"
   | "optimize"

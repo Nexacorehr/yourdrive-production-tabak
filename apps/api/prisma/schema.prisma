@@ -137,7 +137,7 @@ model UserSettings {
   userId      String   @unique @map("user_id")
   profile     Json     @default("{\"email\": \"\", \"avatarUrl\": null, \"firstName\": \"\"}")
   security    Json     @default("{\"twoFactorEnabled\": false, \"offlineModeEnabled\": false, \"clientSideEncryption\": false}")
-  appearance  Json     @default("{\"theme\": \"system\", \"fileView\": \"grid\", \"thumbnailQuality\": \"medium\"}")
+  appearance  Json     @default("{\"theme\": \"light\", \"fileView\": \"grid\", \"thumbnailQuality\": \"medium\"}")
   language    Json     @default("{\"timezone\": \"UTC\", \"dateFormat\": \"MM/DD/YYYY\", \"timeFormat\": \"12-hour\", \"displayLanguage\": \"en\"}")
   storage     Json     @default("{\"autoSync\": true, \"fileVersioning\": true, \"maxVersionsToKeep\": 10}")
   sharing     Json     @default("{\"allowDownload\": true, \"notifyOnShare\": true, \"allowPublicSharing\": true, \"linkExpirationDays\": null, \"defaultLinkPermission\": \"view\", \"requirePasswordForLinks\": false}")

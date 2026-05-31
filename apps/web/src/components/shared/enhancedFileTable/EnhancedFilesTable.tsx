@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useMemo, useLayoutEffect, useEffect } from "react";
 import styled, { keyframes } from "styled-components";
+import { T } from "../../../theme/tokens";
 import { MoreVerticalIcon as MoreVertical, XIcon as X, StarIcon as Star } from "../icons/index";
 import { useRouter } from "@tanstack/react-router";
 
@@ -19,6 +20,7 @@ import type {
   FileActionDefinition,
 } from "./types/fileActions";
 import SharePopup from "../popups/share/SharePopup";
+import { ConversionModal } from "../popups/conversion/ConversionPopup";
 import { usePopupStore } from "../popups/popup.store";
 
 interface EnhancedFilesTableProps {
@@ -41,6 +43,8 @@ interface EnhancedFilesTableProps {
   onRefresh?: () => void;
   onRestoreFile?: (fileId: string) => Promise<void>;
   onDeletePermanently?: (fileId: string) => Promise<void>;
+  /** Double-click / open folder in browse mode */
+  onFolderOpen?: (folder: EnhancedFileItem) => void;
   /** Called once on mount with a stable handle to execute any file action. */
   onActionHandlerReady?: (
     handler: (actionId: FileActionId, files?: EnhancedFileItem[]) => Promise<void>,
@@ -67,6 +71,7 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
   onRefresh,
   onRestoreFile,
   onDeletePermanently,
+  onFolderOpen,
   onActionHandlerReady,
 }) => {
   const [internalSelectedFiles, setInternalSelectedFiles] = useState<
@@ -79,6 +84,7 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
   const isSharingPopupOpen = usePopupStore((state) => state.isSharingPopupOpen);
 
   const [shareFile, setShareFile] = useState<EnhancedFileItem | null>(null);
+  const [convertFile, setConvertFile] = useState<EnhancedFileItem | null>(null);
 
   const toggleSharingPopup = usePopupStore((state) => state.toggleSharingPopup);
 
@@ -206,6 +212,9 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
             });
           }
           return;
+        case "convert":
+          setConvertFile(targetFiles[0]);
+          return;
       }
 
       await executeAction(actionId, filesAsFileItems);
@@ -299,8 +308,6 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
 
   const handleFileClick = useCallback(
     (file: FileItem) => {
-      if (file.type === "folder") return;
-
       if (onFileSelect) {
         onFileSelect?.(file as EnhancedFileItem, !selectedFiles.has(file.id));
       } else {
@@ -317,9 +324,13 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
 
   const handleFileDoubleClick = useCallback(
     (file: FileItem) => {
+      if (file.type === "folder") {
+        onFolderOpen?.(file as EnhancedFileItem);
+        return;
+      }
       onFilePreview?.(file);
     },
-    [onFilePreview],
+    [onFilePreview, onFolderOpen],
   );
 
   const renderRowActions = useCallback(
@@ -563,6 +574,15 @@ const EnhancedFilesTable: React.FC<EnhancedFilesTableProps> = ({
           }}
         />
       )}
+
+      {convertFile && (
+        <ConversionModal
+          fileId={convertFile.id}
+          fileName={convertFile.name}
+          mimeType={convertFile.mimeType || "application/octet-stream"}
+          onClose={() => setConvertFile(null)}
+        />
+      )}
     </Container>
   );
 };
@@ -589,12 +609,11 @@ const SelectionBar = styled.div`
   column-gap: 8px;
   justify-content: space-between;
   padding: clamp(10px, 2.5vw, 12px) clamp(12px, 3vw, 20px);
-  background: #fff;
-  border-radius: 16px;
-  box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.06),
-    0 4px 12px rgba(0, 0, 0, 0.04);
-  border: 1px solid #e8eaed;
+  background: ${T.bgSurface};
+  border-radius: ${T.rLg};
+  box-shadow: ${T.shadowCard};
+  border: 1px solid ${T.borderSubtle};
+  font-family: ${T.fontUI};
 
   @media (min-width: 900px) {
     flex-wrap: nowrap;
@@ -677,13 +696,8 @@ const RightSection = styled.div`
 const SelectionCount = styled.span`
   font-size: 14px;
   font-weight: 500;
-  color: #202124;
-  font-family:
-    "Inter",
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  color: ${T.textPrimary};
+  font-family: ${T.fontUI};
 `;
 
 const ClearButton = styled.button`
@@ -696,12 +710,12 @@ const ClearButton = styled.button`
   background: transparent;
   border: none;
   border-radius: 50%;
-  color: #5f6368;
+  color: ${T.textSecondary};
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all ${T.tFast};
   &:hover {
-    background: #f1f3f4;
-    color: #202124;
+    background: ${T.bgHover};
+    color: ${T.textPrimary};
   }
 `;
 
@@ -717,12 +731,12 @@ const IconButton = styled.button<{ $danger?: boolean }>`
   background: transparent;
   border: none;
   border-radius: 50%;
-  color: ${(p) => (p.$danger ? "#d93025" : "#5f6368")};
+  color: ${(p) => (p.$danger ? T.dangerText : T.textSecondary)};
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all ${T.tFast};
   &:hover:not(:disabled) {
-    background: ${(p) => (p.$danger ? "#fce8e6" : "#f1f3f4")};
-    color: ${(p) => (p.$danger ? "#d93025" : "#202124")};
+    background: ${(p) => (p.$danger ? T.dangerFaint : T.bgHover)};
+    color: ${(p) => (p.$danger ? T.dangerText : T.textPrimary)};
   }
   &:disabled {
     opacity: 0.5;
@@ -737,7 +751,7 @@ const VerticalDivider = styled.div`
   width: 1px;
   height: 24px;
   flex-shrink: 0;
-  background: #dadce0;
+  background: ${T.borderSubtle};
   margin: 0 4px;
 
   @media (min-width: 900px) {
@@ -749,26 +763,21 @@ const TextButton = styled.button`
   padding: 8px 12px;
   background: transparent;
   border: none;
-  border-radius: 20px;
+  border-radius: ${T.rFull};
   font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
+  font-family: ${T.fontUI};
 
   @media (min-width: 900px) {
     padding: 8px 16px;
     font-size: 14px;
   }
-  font-family:
-    "Inter",
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-  color: #1a73e8;
+  color: ${T.accent};
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all ${T.tFast};
   &:hover {
-    background: #e8f0fe;
+    background: ${T.accentFaint};
   }
 `;
 
@@ -790,14 +799,14 @@ const QuickActionsButton = styled.button<{ $active?: boolean }>`
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: ${(p) => (p.$active ? "#f1f3f4" : "transparent")};
+  background: ${(p) => (p.$active ? T.bgHover : "transparent")};
   border: none;
   border-radius: 50%;
   cursor: pointer;
-  transition: background 0.15s ease;
-  color: #5f6368;
+  transition: background ${T.tFast};
+  color: ${T.textSecondary};
   &:hover {
-    background: #f1f3f4;
+    background: ${T.bgHover};
   }
 `;
 
@@ -807,13 +816,13 @@ const QuickActionsMenu = styled.div`
   top: 100%;
   margin-top: 4px;
   min-width: 220px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow:
-    0 2px 8px rgba(60, 64, 67, 0.15),
-    0 6px 20px 4px rgba(60, 64, 67, 0.1);
+  background: ${T.bgSurface};
+  border: 1px solid ${T.borderSubtle};
+  border-radius: ${T.rLg};
+  box-shadow: ${T.shadowElevated};
   padding: 8px 0;
-  z-index: 1000;
+  z-index: ${T.zDropdown};
+  font-family: ${T.fontUI};
 `;
 
 const QuickAction = styled.button<{ $danger?: boolean }>`
@@ -825,12 +834,13 @@ const QuickAction = styled.button<{ $danger?: boolean }>`
   background: transparent;
   border: none;
   font-size: 14px;
-  color: ${(p) => (p.$danger ? "#d93025" : "#202124")};
+  color: ${(p) => (p.$danger ? T.dangerText : T.textPrimary)};
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background ${T.tFast};
   text-align: left;
+  font-family: ${T.fontUI};
   &:hover:not(:disabled) {
-    background: ${(p) => (p.$danger ? "#fce8e6" : "#f1f3f4")};
+    background: ${(p) => (p.$danger ? T.dangerFaint : T.bgHover)};
   }
   &:disabled {
     opacity: 0.5;
@@ -838,7 +848,7 @@ const QuickAction = styled.button<{ $danger?: boolean }>`
   }
   svg {
     flex-shrink: 0;
-    color: ${(p) => (p.$danger ? "#d93025" : "#5f6368")};
+    color: ${(p) => (p.$danger ? T.dangerText : T.textSecondary)};
   }
   span {
     flex: 1;
@@ -847,16 +857,16 @@ const QuickAction = styled.button<{ $danger?: boolean }>`
 
 const QuickShortcut = styled.span`
   font-size: 11px;
-  color: #5f6368;
-  background: #f1f3f4;
+  color: ${T.textMuted};
+  background: ${T.bgHover};
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: ${T.rSm};
   font-weight: 600;
 `;
 
 const QuickActionDivider = styled.div`
   height: 1px;
-  background: #e8eaed;
+  background: ${T.borderFaint};
   margin: 8px 0;
 `;
 

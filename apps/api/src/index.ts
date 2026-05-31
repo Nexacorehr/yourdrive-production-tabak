@@ -69,6 +69,7 @@ app.use("/api/sharing", sharingRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/devices", devicesRoutes);
 app.use("/api/file-actions", fileActionsRoutes);
+app.use("/api/conversion", conversionRoutes);
 app.use("/api/storage", storageRoutes);
 app.use("/api/support", supportRoutes);
 

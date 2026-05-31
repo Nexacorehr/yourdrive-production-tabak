@@ -1,8 +1,8 @@
 import styled from "styled-components";
+import { T } from "../../../../theme/tokens";
 import { useMatches } from "@tanstack/react-router";
 import { type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useUserUiPreferencesStore } from "../../../../store/userUiPreferencesStore";
 
 interface MainProps {
   children?: ReactNode;
@@ -11,10 +11,9 @@ interface MainProps {
 const Main = ({ children }: MainProps) => {
   const matches = useMatches();
   const currentPath = matches[matches.length - 1]?.pathname || "";
-  const resolvedTheme = useUserUiPreferencesStore((s) => s.resolvedTheme);
 
   return (
-    <MainContainer $themeMode={resolvedTheme} data-dashboard-scroll="true">
+    <MainContainer data-dashboard-scroll="true">
       <AnimatePresence mode="wait">
         <motion.div
           key={currentPath}
@@ -39,19 +38,20 @@ const Main = ({ children }: MainProps) => {
 
 export default Main;
 
-const MainContainer = styled.main<{ $themeMode: "light" | "dark" }>`
+const MainContainer = styled.main`
   flex: 1;
   min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
   position: relative;
-  background: ${(p) => (p.$themeMode === "dark" ? "#121418" : "#f8f9fa")};
-  color: ${(p) => (p.$themeMode === "dark" ? "#e8eaed" : "inherit")};
-  border-radius: 10px;
+  background: ${T.bgElevated};
+  color: ${T.textPrimary};
+  border-radius: ${T.rMd};
   padding: clamp(12px, 3vw, 20px) clamp(12px, 3vw, 24px);
   padding-bottom: max(clamp(12px, 3vw, 20px), env(safe-area-inset-bottom, 0px));
   transition:
-    background 0.22s ease,
-    color 0.22s ease;
+    background ${T.tBase},
+    color ${T.tBase};
   -webkit-overflow-scrolling: touch;
+  font-family: ${T.fontUI};
 `;

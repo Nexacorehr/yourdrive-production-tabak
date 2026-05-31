@@ -212,8 +212,22 @@ const FilePreview: React.FC<FilePreviewProps> = ({
         return <AudioPreview {...commonProps} maxSize={maxSize} />;
       case "pdf":
         return <PDFPreview {...commonProps} />;
-      case "spreadsheet":
+      case "spreadsheet": {
+        const sheetExt = fileTypeInfo.extension?.toLowerCase() || "";
+        if (["xls", "ods", "xlsm"].includes(sheetExt)) {
+          return (
+            <OfficePreview
+              key={url}
+              url={url}
+              fileName={fileName}
+              fileType={sheetExt}
+              onClose={() => onClose?.()}
+              onDownload={handleDownload}
+            />
+          );
+        }
         return <SpreadsheetPreview {...commonProps} />;
+      }
       case "text":
         return <TextPreview {...commonProps} />;
       case "code":

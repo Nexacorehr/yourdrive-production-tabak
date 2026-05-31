@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import { T } from "../../../../theme/tokens";
 
 const Overlay = styled.div`
   position: fixed;
@@ -6,23 +7,24 @@ const Overlay = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: ${T.bgOverlay};
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
-  backdrop-filter: blur(4px);
+  z-index: ${T.zModal};
 `;
 
 const Container = styled.div`
   width: 95vw;
   height: 95vh;
-  background: #f8f9fa;
-  border-radius: 12px;
+  background: ${T.bgElevated};
+  border: 1px solid ${T.borderSubtle};
+  border-radius: ${T.rLg};
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  box-shadow: ${T.shadowElevated};
+  font-family: ${T.fontUI};
 `;
 
 const Header = styled.div`
@@ -30,8 +32,8 @@ const Header = styled.div`
   justify-content: space-between;
   align-items: center;
   padding: 16px 24px;
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
+  background: ${T.bgSurface};
+  border-bottom: 1px solid ${T.borderFaint};
   flex-shrink: 0;
 `;
 
@@ -45,12 +47,12 @@ const FileName = styled.h2`
   margin: 0;
   font-size: 18px;
   font-weight: 500;
-  color: #202124;
+  color: ${T.textPrimary};
 `;
 
 const FileCounter = styled.span`
   font-size: 14px;
-  color: #5f6368;
+  color: ${T.textSecondary};
 `;
 
 const ActionBar = styled.div`
@@ -62,7 +64,7 @@ const ActionBar = styled.div`
 const NavButton = styled.button`
   background: transparent;
   border: none;
-  color: #5f6368;
+  color: ${T.textSecondary};
   font-size: 24px;
   width: 36px;
   height: 36px;
@@ -71,11 +73,11 @@ const NavButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all ${T.tBase};
 
   &:hover:not(:disabled) {
-    background: #f1f3f4;
-    color: #202124;
+    background: ${T.bgHover};
+    color: ${T.textPrimary};
   }
 
   &:disabled {
@@ -87,7 +89,7 @@ const NavButton = styled.button`
 const ActionButton = styled.button`
   background: transparent;
   border: none;
-  color: #5f6368;
+  color: ${T.textSecondary};
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -95,11 +97,11 @@ const ActionButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: all ${T.tBase};
 
   &:hover {
-    background: #f1f3f4;
-    color: #1a73e8;
+    background: ${T.bgHover};
+    color: ${T.accent};
   }
 
   svg {
@@ -113,7 +115,7 @@ const MoreButton = styled(ActionButton)``;
 const CloseButton = styled.button`
   background: transparent;
   border: none;
-  color: #5f6368;
+  color: ${T.textSecondary};
   width: 36px;
   height: 36px;
   border-radius: 50%;

@@ -238,10 +238,10 @@ export async function apiShare(fileIds: string[]): Promise<boolean> {
 // Get link - GET method
 export async function apiGetLink(fileId: string): Promise<string | null> {
   try {
-    const res = await api.get<{ link: string }>(
+    const res = await api.get<{ link: string; shareableLink?: string; isFolder?: boolean }>(
       `/file-actions/get-link/${fileId}`,
     );
-    return res.data.link;
+    return res.data.shareableLink || res.data.link;
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Failed to get link";

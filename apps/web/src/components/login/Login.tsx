@@ -6,11 +6,12 @@ import { useAuthStore } from "../../store/authStore";
 import TwoFactorModal from "../auth/TwoFactorModal";
 import ForgotPasswordModal from "../auth/ForgotPasswordModal";
 import api from "../../lib/axios";
+import { T } from "../../theme/tokens";
 
 const Page = styled.div`
   min-height: 100vh;
   display: flex;
-  background: #a3b0bd;
+  background: ${T.bgShell};
   overflow-y: hidden;
   margin: 0;
   padding: 0;
@@ -24,7 +25,7 @@ const Left = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: ${T.bgSurface};
   padding: 32px 48px;
   position: relative;
 `;
@@ -41,22 +42,24 @@ const Logo = styled.h1`
   font-weight: 800;
   letter-spacing: 1px;
   margin: 0;
-  color: #1f9afe;
+  color: ${T.accent};
+  font-family: ${T.fontUI};
 `;
 
 const CloseButton = styled.button`
   background: none;
   border: none;
   cursor: pointer;
-  color: #64748b;
+  color: ${T.textSecondary};
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 14px;
   padding: 8px;
+  font-family: ${T.fontUI};
 
   &:hover {
-    color: #334155;
+    color: ${T.textPrimary};
   }
 `;
 
@@ -76,14 +79,16 @@ const Title = styled.h2`
   font-size: 32px;
   font-weight: 700;
   margin-bottom: 8px;
-  color: #000000;
+  color: ${T.textPrimary};
+  font-family: ${T.fontUI};
 `;
 
 const Subtitle = styled.p`
-  color: #64748b;
+  color: ${T.textSecondary};
   font-size: 14px;
   margin-top: 0;
   margin-bottom: 40px;
+  font-family: ${T.fontUI};
 `;
 
 const Form = styled.form`
@@ -101,7 +106,7 @@ const Icon = styled.div`
   top: 50%;
   left: 16px;
   transform: translateY(-50%);
-  color: #64748b;
+  color: ${T.textMuted};
   display: flex;
   align-items: center;
 `;
@@ -114,33 +119,35 @@ const ToggleIcon = styled.button`
   background: none;
   border: none;
   cursor: pointer;
-  color: #64748b;
+  color: ${T.textMuted};
   display: flex;
   align-items: center;
   padding: 0;
 
   &:hover {
-    color: #334155;
+    color: ${T.textPrimary};
   }
 `;
 
 const Input = styled.input`
   width: 100%;
   padding: 16px 16px 16px 48px;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
+  border-radius: ${T.rLg};
+  border: 1px solid ${T.borderSubtle};
+  background: ${T.bgInput};
   font-size: 14px;
-  color: #000000;
+  font-family: ${T.fontUI};
+  color: ${T.textPrimary};
   box-sizing: border-box;
 
   &::placeholder {
-    color: #94a3b8;
+    color: ${T.textMuted};
   }
 
   &:focus {
     outline: none;
-    border-color: #3b82f6;
+    border-color: ${T.accent};
+    box-shadow: ${T.accentGlow};
   }
 `;
 
@@ -151,31 +158,33 @@ const ForgotPassword = styled.div`
   button {
     background: none;
     border: none;
-    color: #3b82f6;
+    color: ${T.accent};
     font-size: 14px;
     cursor: pointer;
     padding: 0;
+    font-family: ${T.fontUI};
 
     &:hover {
-      text-decoration: underline;
+      color: ${T.accentHover};
     }
   }
 `;
 
 const Button = styled.button`
-  background: #3b82f6;
+  background: ${T.accent};
   border: none;
-  border-radius: 12px;
+  border-radius: ${T.rLg};
   padding: 16px;
-  color: white;
+  color: ${T.textInvert};
   font-weight: 600;
   font-size: 15px;
+  font-family: ${T.fontUI};
   cursor: pointer;
-  transition: 0.2s;
+  transition: background ${T.tBase};
   margin-top: 12px;
 
   &:hover {
-    background: #2563eb;
+    background: ${T.accentHover};
   }
 
   &:disabled {
@@ -188,25 +197,27 @@ const LinkRow = styled.div`
   margin-top: 24px;
   text-align: center;
   font-size: 14px;
-  color: #64748b;
+  color: ${T.textSecondary};
+  font-family: ${T.fontUI};
 
   button {
     border: none;
     background: none;
-    color: #3b82f6;
+    color: ${T.accent};
     font-weight: 600;
     cursor: pointer;
     padding: 0;
+    font-family: ${T.fontUI};
 
     &:hover {
-      text-decoration: underline;
+      color: ${T.accentHover};
     }
   }
 `;
 
 const Right = styled.div`
   flex: 1;
-  background: #1a1a1a;
+  background: #0d1526;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -219,8 +230,9 @@ const Right = styled.div`
 
 const RightContent = styled.div`
   text-align: center;
-  color: #ffffff;
+  color: #f0f4ff;
   max-width: 600px;
+  font-family: ${T.fontUI};
 
   h2 {
     font-size: 48px;
@@ -230,18 +242,19 @@ const RightContent = styled.div`
   }
 
   span {
-    color: #3b82f6;
+    color: ${T.accentHover};
   }
 `;
 
 const ErrorMessage = styled.div`
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
+  background: ${T.dangerFaint};
+  border: 1px solid ${T.dangerText};
+  border-radius: ${T.rMd};
   padding: 12px 16px;
-  color: #991b1b;
+  color: ${T.dangerText};
   font-size: 14px;
   margin-bottom: 16px;
+  font-family: ${T.fontUI};
 `;
 
 export default function LoginPage() {

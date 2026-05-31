@@ -40,7 +40,16 @@ const isTextMime = (mime?: string | null) => {
     m.startsWith("text/") ||
     m === "application/json" ||
     m === "application/xml" ||
-    m === "application/javascript"
+    m === "application/javascript" ||
+    m === "text/javascript" ||
+    m === "application/typescript" ||
+    m === "application/x-yaml" ||
+    m === "application/sql" ||
+    m === "application/x-sh" ||
+    m === "application/x-bat" ||
+    m === "application/x-powershell" ||
+    m === "application/x-httpd-php" ||
+    m === "application/x-ruby"
   );
 };
 

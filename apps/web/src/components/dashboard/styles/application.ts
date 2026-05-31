@@ -1,4 +1,5 @@
 import styled from "styled-components";
+import { T } from "../../../theme/tokens";
 
 /** Must match `NavbarContainer` height in `shared/navbar/styles/navbar.ts` (90px). */
 export const DASHBOARD_NAV_HEIGHT_PX = 90;
@@ -38,7 +39,7 @@ export const SidebarBackdrop = styled.div`
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(15, 23, 42, 0.45);
+    background: ${T.bgOverlay};
     z-index: 15;
   }
 `;

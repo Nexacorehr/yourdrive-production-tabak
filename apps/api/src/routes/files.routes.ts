@@ -21,6 +21,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { trackFileActivity, generateShortId } from "../lib/helper";
 import { resolveFrontendBase } from "../lib/frontend-base";
 import { buildContentDisposition } from "../lib/contentDisposition";
+import { isEditableMime, mimeFromFileName } from "../lib/extension-mime";
 import favoritesRoutes from "./favorite.routes";
 
 import fs from "fs";
@@ -46,51 +47,7 @@ const pool = new Pool({
 const CHUNKS_DIR = path.join(process.cwd(), "temp", "chunks");
 
 function inferMimeTypeFromName(fileName: string): string | undefined {
-  const ext = fileName.split(".").pop()?.toLowerCase();
-  if (!ext) return undefined;
-
-  // Minimal mapping for common previewable types
-  switch (ext) {
-    case "pdf":
-      return "application/pdf";
-    case "png":
-      return "image/png";
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "gif":
-      return "image/gif";
-    case "webp":
-      return "image/webp";
-    case "svg":
-      return "image/svg+xml";
-    case "txt":
-      return "text/plain; charset=utf-8";
-    case "md":
-      return "text/markdown; charset=utf-8";
-    case "json":
-      return "application/json; charset=utf-8";
-    case "csv":
-      return "text/csv; charset=utf-8";
-    case "mp4":
-      return "video/mp4";
-    case "webm":
-      return "video/webm";
-    case "mp3":
-      return "audio/mpeg";
-    case "wav":
-      return "audio/wav";
-    case "ogg":
-      return "audio/ogg";
-    case "docx":
-      return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-    case "xlsx":
-      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    case "pptx":
-      return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-    default:
-      return undefined;
-  }
+  return mimeFromFileName(fileName);
 }
 
 (async () => {
@@ -1251,11 +1208,10 @@ filesRoutes.post(
       };
 
       const mimeType = (file.mime_type || "").toLowerCase();
+      const inferred = inferMimeTypeFromName(file.original_name) || "";
       const isTextFile =
-        mimeType.startsWith("text/") ||
-        mimeType === "application/json" ||
-        mimeType === "application/xml" ||
-        mimeType === "application/javascript";
+        isEditableMime(mimeType) ||
+        (inferred ? isEditableMime(inferred) : false);
 
       if (!isTextFile) {
         return res.status(400).json({
@@ -1304,7 +1260,7 @@ filesRoutes.post(
   },
 );
 
-// Get folder contents
+// Get folder contents (direct children at path; empty path = root)
 filesRoutes.get(
   "/folder-contents",
   authMiddleware,
@@ -1317,60 +1273,68 @@ filesRoutes.get(
         });
       }
 
-      const { path } = req.query;
+      const rawPath = req.query.path;
+      const folderPath =
+        typeof rawPath === "string"
+          ? rawPath.trim().replace(/^\/+|\/+$/g, "")
+          : "";
 
-      if (!path || typeof path !== "string") {
-        return res.status(400).json({
-          success: false,
-          error: "Folder path is required",
-        });
-      }
-
-      // Get all files that match this folder path or are in subfolders
       const filesResult = await pool.query(
-        `SELECT id, original_name, s3_key, folder_path, size, mime_type, created_at
+        `SELECT id, original_name, s3_key, folder_path, size, mime_type, created_at, updated_at, is_folder
        FROM user_files
-       WHERE user_id = $1 AND folder_path LIKE $2 AND original_name != '.metadata'
+       WHERE user_id = $1
+         AND is_folder = false
+         AND original_name != '.metadata'
+         AND folder_path = $2
        ORDER BY original_name ASC`,
-        [req.userId, `${path}%`],
+        [req.userId, folderPath],
       );
 
-      const files: Array<{
-        name: string;
-        size: number;
-        path: string;
-        id: number;
-      }> = [];
-      const subfolders = new Set<string>();
+      const foldersResult = await pool.query(
+        `SELECT id, folder_path, created_at, updated_at
+       FROM user_files
+       WHERE user_id = $1 AND is_folder = true
+       ORDER BY folder_path ASC`,
+        [req.userId],
+      );
 
-      filesResult.rows.forEach((row) => {
-        const folderPath = row.folder_path || "";
-
-        // Check if file is directly in this folder (exact match)
-        if (folderPath === path) {
-          files.push({
-            id: row.id,
-            name: row.original_name,
-            size: parseInt(row.size, 10),
-            path: row.folder_path,
-          });
-        } else if (folderPath.startsWith(path + "/")) {
-          const relativePath = folderPath.substring(path.length + 1);
-          const nextFolder = relativePath.split("/")[0];
-
-          if (nextFolder) {
-            subfolders.add(nextFolder);
-          }
-        }
-      });
-
-      const folders = Array.from(subfolders).map((name) => ({
-        name,
-        path: `${path}/${name}`,
+      const files = filesResult.rows.map((row) => ({
+        id: row.id,
+        name: row.original_name,
+        size: parseInt(row.size, 10),
+        path: row.folder_path,
+        mimeType: row.mime_type,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        type: "file" as const,
       }));
+
+      const folders = foldersResult.rows
+        .filter((row) => {
+          const fullPath = (row.folder_path || "").trim();
+          if (!fullPath) return false;
+          if (!folderPath) {
+            return !fullPath.includes("/");
+          }
+          if (!fullPath.startsWith(`${folderPath}/`)) return false;
+          const rest = fullPath.slice(folderPath.length + 1);
+          return rest.length > 0 && !rest.includes("/");
+        })
+        .map((row) => {
+          const fullPath = row.folder_path as string;
+          return {
+            id: row.id,
+            name: fullPath.split("/").pop() || fullPath,
+            path: fullPath,
+            type: "folder" as const,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+          };
+        });
 
       res.json({
         success: true,
+        path: folderPath,
         content: {
           files,
           folders,

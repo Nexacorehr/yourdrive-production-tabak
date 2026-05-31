@@ -1,8 +1,9 @@
 import express from "express";
 import { z } from "zod";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type UserFile } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { Readable } from "stream";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { uploadToS3, generateSignedUrl, generateShortId } from "../lib/helper";
 import { emailService } from "../lib/email.service";
@@ -10,10 +11,55 @@ import { s3Client } from "../lib/s3";
 import { authMiddleware, AuthRequest } from "../middleware/auth.middleware";
 import { SettingsService } from "../services/settings.service";
 import { resolveFrontendBase } from "../lib/frontend-base";
+import {
+  getFolderBaseName,
+  isPathUnder,
+  normalizeFolderPath,
+} from "../lib/folder-path";
+import { buildFolderZipEntries } from "../services/folder.service";
+import { buildZipBuffer, uploadZipAndGetSignedUrl } from "../lib/zip-download";
+import { generateUniqueFilename } from "./fileActionsHandlers";
 
 const sharingRoutes = express.Router();
 const prisma = new PrismaClient();
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS ?? "12", 10);
+
+function resolveShareFileDisplay(file: UserFile) {
+  if (file.isFolder) {
+    const folderPath = normalizeFolderPath(file.folderPath);
+    return {
+      fileName: getFolderBaseName(folderPath) || "Folder",
+      mimeType: "application/x-directory",
+      isFolder: true as const,
+      folderPath,
+    };
+  }
+  return {
+    fileName: file.originalName,
+    mimeType: file.mimeType,
+    isFolder: false as const,
+    folderPath: null as string | null,
+  };
+}
+
+async function collectSharedFolderFileRows(userId: string, folderPath: string) {
+  const path = normalizeFolderPath(folderPath);
+  const files = await prisma.userFile.findMany({
+    where: {
+      userId,
+      isFolder: false,
+      originalName: { not: ".metadata" },
+      deletedAt: null,
+      OR: [{ folderPath: path }, { folderPath: { startsWith: `${path}/` } }],
+    },
+    select: { s3Key: true, originalName: true, folderPath: true },
+  });
+  return files.map((file) => ({
+    s3_key: file.s3Key,
+    original_name: file.originalName,
+    folder_path: file.folderPath,
+  }));
+}
 
 const addCommentSchema = z.object({
   text: z.string().min(1).max(1000),
@@ -556,13 +602,17 @@ sharingRoutes.get("/public/:token", async (req, res) => {
       });
     }
 
+    const display = resolveShareFileDisplay(file);
+
     res.json({
       success: true,
       share: {
         id: share.id,
-        fileName: file.originalName,
-        fileSize: Number(file.size),
-        mimeType: file.mimeType,
+        fileName: display.fileName,
+        fileSize: display.isFolder ? 0 : Number(file.size),
+        mimeType: display.mimeType,
+        isFolder: display.isFolder,
+        folderPath: display.folderPath,
         permission: share.permission,
         ownerName: share.owner.firstName || share.owner.email,
         hasPassword: !!share.password,
@@ -661,6 +711,25 @@ sharingRoutes.post("/access/:token", async (req, res) => {
       return res.status(404).json({
         success: false,
         error: "File not found",
+      });
+    }
+
+    const display = resolveShareFileDisplay(file);
+
+    if (display.isFolder) {
+      await prisma.shareActivity.create({
+        data: {
+          shareId: share.id,
+          action: "accessed",
+          ipAddress: req.ip || "unknown",
+          userAgent: req.headers["user-agent"] || "unknown",
+        },
+      });
+
+      return res.json({
+        success: true,
+        isFolder: true,
+        folderPath: display.folderPath,
       });
     }
 
@@ -1140,6 +1209,254 @@ sharingRoutes.post("/edit/:token", async (req, res) => {
       error: "Failed to edit file",
       details: err instanceof Error ? err.message : "Unknown error",
     });
+  }
+});
+
+// Browse a shared folder (public, token auth via share link)
+sharingRoutes.get("/public/:token/folder-contents", async (req, res) => {
+  try {
+    const { token } = req.params;
+    const share = await prisma.fileShare.findUnique({
+      where: { shareToken: token },
+    });
+
+    if (!share || !share.isActive) {
+      return res.status(404).json({ success: false, error: "Share not found" });
+    }
+
+    if (share.expiresAt && share.expiresAt < new Date()) {
+      return res.status(403).json({ success: false, error: "This share has expired" });
+    }
+
+    const sharedFile = await prisma.userFile.findUnique({
+      where: { id: share.fileId },
+    });
+
+    if (!sharedFile || sharedFile.deletedAt || !sharedFile.isFolder) {
+      return res.status(404).json({ success: false, error: "Shared folder not found" });
+    }
+
+    const sharedRoot = normalizeFolderPath(sharedFile.folderPath);
+    const rawPath = typeof req.query.path === "string" ? req.query.path : sharedRoot;
+    const browsePath = normalizeFolderPath(rawPath || sharedRoot);
+
+    if (!isPathUnder(browsePath, sharedRoot)) {
+      return res.status(403).json({ success: false, error: "Invalid folder path" });
+    }
+
+    const filesResult = await prisma.userFile.findMany({
+      where: {
+        userId: sharedFile.userId,
+        isFolder: false,
+        originalName: { not: ".metadata" },
+        deletedAt: null,
+        folderPath: browsePath,
+      },
+      orderBy: { originalName: "asc" },
+    });
+
+    const foldersResult = await prisma.userFile.findMany({
+      where: {
+        userId: sharedFile.userId,
+        isFolder: true,
+        deletedAt: null,
+      },
+      orderBy: { folderPath: "asc" },
+    });
+
+    const files = filesResult.map((row) => ({
+      id: row.id,
+      name: row.originalName,
+      size: Number(row.size),
+      path: row.folderPath,
+      mimeType: row.mimeType,
+      type: "file" as const,
+    }));
+
+    const folders = foldersResult
+      .filter((row) => {
+        const fullPath = normalizeFolderPath(row.folderPath);
+        if (!fullPath) return false;
+        if (!browsePath) {
+          return !fullPath.includes("/");
+        }
+        if (!fullPath.startsWith(`${browsePath}/`)) return false;
+        const rest = fullPath.slice(browsePath.length + 1);
+        return rest.length > 0 && !rest.includes("/");
+      })
+      .map((row) => {
+        const fullPath = normalizeFolderPath(row.folderPath);
+        return {
+          id: row.id,
+          name: getFolderBaseName(fullPath),
+          path: fullPath,
+          type: "folder" as const,
+        };
+      });
+
+    res.json({
+      success: true,
+      path: browsePath,
+      sharedRoot,
+      content: { files, folders },
+    });
+  } catch (err) {
+    console.error("Error fetching shared folder contents:", err);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch folder contents",
+    });
+  }
+});
+
+// Download a shared folder as zip
+sharingRoutes.get("/download-folder/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+    const share = await prisma.fileShare.findUnique({
+      where: { shareToken: token },
+    });
+
+    if (!share || !share.isActive) {
+      return res.status(404).json({ success: false, error: "Share not found" });
+    }
+
+    if (share.expiresAt && share.expiresAt < new Date()) {
+      return res.status(403).json({ success: false, error: "This share has expired" });
+    }
+
+    if (
+      share.permission !== "download" &&
+      share.permission !== "edit"
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: "Download not permitted for this share",
+      });
+    }
+
+    const sharedFile = await prisma.userFile.findUnique({
+      where: { id: share.fileId },
+    });
+
+    if (!sharedFile || sharedFile.deletedAt || !sharedFile.isFolder) {
+      return res.status(404).json({ success: false, error: "Shared folder not found" });
+    }
+
+    const folderPath = normalizeFolderPath(sharedFile.folderPath);
+    const folderName = getFolderBaseName(folderPath) || "folder";
+    const fileRows = await collectSharedFolderFileRows(
+      sharedFile.userId,
+      folderPath,
+    );
+    const entries = buildFolderZipEntries(folderPath, fileRows);
+    const zipName = `${folderName}.zip`;
+    const zipBuffer = await buildZipBuffer(entries);
+    const zipS3Key = generateUniqueFilename(sharedFile.userId, zipName);
+    const downloadUrl = await uploadZipAndGetSignedUrl(
+      zipBuffer,
+      zipName,
+      zipS3Key,
+    );
+
+    await prisma.fileShare.update({
+      where: { id: share.id },
+      data: { downloadCount: share.downloadCount + 1 },
+    });
+
+    res.json({
+      success: true,
+      downloadUrl,
+      fileName: zipName,
+    });
+  } catch (err) {
+    console.error("Error downloading shared folder:", err);
+    res.status(500).json({
+      success: false,
+      error: "Failed to download folder",
+    });
+  }
+});
+
+// Stream a file inside a shared folder
+sharingRoutes.get("/stream/:token/:fileId", async (req, res) => {
+  try {
+    const { token, fileId } = req.params;
+    const parsedFileId = parseInt(fileId, 10);
+    if (Number.isNaN(parsedFileId)) {
+      return res.status(400).json({ success: false, error: "Invalid file ID" });
+    }
+
+    const share = await prisma.fileShare.findUnique({
+      where: { shareToken: token },
+    });
+
+    if (!share || !share.isActive) {
+      return res.status(404).json({ success: false, error: "Share not found" });
+    }
+
+    if (share.expiresAt && share.expiresAt < new Date()) {
+      return res.status(403).json({ success: false, error: "This share has expired" });
+    }
+
+    const sharedFile = await prisma.userFile.findUnique({
+      where: { id: share.fileId },
+    });
+
+    if (!sharedFile || sharedFile.deletedAt || !sharedFile.isFolder) {
+      return res.status(404).json({ success: false, error: "Shared folder not found" });
+    }
+
+    const sharedRoot = normalizeFolderPath(sharedFile.folderPath);
+    const targetFile = await prisma.userFile.findUnique({
+      where: { id: parsedFileId },
+    });
+
+    if (
+      !targetFile ||
+      targetFile.deletedAt ||
+      targetFile.isFolder ||
+      targetFile.userId !== sharedFile.userId
+    ) {
+      return res.status(404).json({ success: false, error: "File not found" });
+    }
+
+    const fileFolderPath = normalizeFolderPath(targetFile.folderPath);
+    if (!isPathUnder(fileFolderPath, sharedRoot)) {
+      return res.status(403).json({ success: false, error: "File not in shared folder" });
+    }
+
+    const bucketName = process.env.B2_BUCKET_NAME;
+    if (!bucketName) {
+      return res.status(500).json({ success: false, error: "Server configuration error" });
+    }
+
+    const command = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: targetFile.s3Key,
+    });
+    const response = await s3Client.send(command);
+    const body = response.Body;
+    if (!body) {
+      return res.status(404).json({ success: false, error: "File content not found" });
+    }
+
+    res.setHeader("Content-Type", targetFile.mimeType || "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${encodeURIComponent(targetFile.originalName)}"`,
+    );
+
+    if (body instanceof Readable) {
+      body.pipe(res);
+      return;
+    }
+
+    const bytes = await body.transformToByteArray();
+    res.send(Buffer.from(bytes));
+  } catch (err) {
+    console.error("Error streaming shared folder file:", err);
+    res.status(500).json({ success: false, error: "Failed to stream file" });
   }
 });
 

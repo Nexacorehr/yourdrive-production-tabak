@@ -1,31 +1,55 @@
 /**
- * NEXA Core design system theme for styled-components.
- * Use via ThemeProvider and theme prop in styled components.
+ * Styled-components theme — references design tokens via CSS custom properties.
+ * Colours resolve at runtime through `--ed-*` vars set on `<html>`.
  */
+import { T } from "./tokens";
+
 export const theme = {
   colors: {
-    primary: "#2563eb",
-    primaryHover: "#1d4ed8",
-    secondary: "#f3f4f6",
-    secondaryHover: "#e5e7eb",
-    danger: "#dc2626",
-    dangerHover: "#b91c1c",
-    success: "#16a34a",
-    successHover: "#15803d",
+    primary: T.accent,
+    primaryHover: T.accentHover,
+    secondary: T.bgElevated,
+    secondaryHover: T.bgHover,
+    danger: T.danger,
+    dangerHover: T.dangerText,
+    success: T.success,
+    successHover: T.successText,
     text: {
-      primary: "#111827",
-      secondary: "#6b7280",
-      muted: "#9ca3af",
+      primary: T.textPrimary,
+      secondary: T.textSecondary,
+      muted: T.textMuted,
     },
     background: {
-      primary: "#ffffff",
-      secondary: "#f9fafb",
-      tertiary: "#f3f4f6",
+      primary: T.bgSurface,
+      secondary: T.bgElevated,
+      tertiary: T.bgShell,
+      hover: T.bgHover,
+      active: T.bgActive,
+      input: T.bgInput,
+      overlay: T.bgOverlay,
     },
     border: {
-      light: "#e5e7eb",
-      medium: "#d1d5db",
-      dark: "#9ca3af",
+      faint: T.borderFaint,
+      subtle: T.borderSubtle,
+      strong: T.borderStrong,
+      accent: T.borderAccent,
+    },
+    accent: {
+      base: T.accent,
+      hover: T.accentHover,
+      faint: T.accentFaint,
+      glow: T.accentGlow,
+    },
+    semantic: {
+      success: T.success,
+      successFaint: T.successFaint,
+      successText: T.successText,
+      danger: T.danger,
+      dangerFaint: T.dangerFaint,
+      dangerText: T.dangerText,
+      warning: T.warning,
+      warningFaint: T.warningFaint,
+      warningText: T.warningText,
     },
   },
   spacing: {
@@ -40,12 +64,12 @@ export const theme = {
   fontSize: {
     xs: "0.8125rem",
     sm: "0.9375rem",
-    base: "1.0625rem",
-    lg: "1.1875rem",
-    xl: "1.3125rem",
-    "2xl": "1.625rem",
-    "3xl": "1.9375rem",
-    "4xl": "2.375rem",
+    base: "1rem",
+    lg: "1.125rem",
+    xl: "1.25rem",
+    "2xl": "1.5rem",
+    "3xl": "1.875rem",
+    "4xl": "2.25rem",
   },
   fontWeight: {
     normal: 400,
@@ -53,24 +77,26 @@ export const theme = {
     semibold: 600,
     bold: 700,
   },
+  fontFamily: {
+    ui: T.fontUI,
+    mono: T.fontMono,
+  },
   borderRadius: {
-    sm: "0.25rem",
-    md: "0.375rem",
-    lg: "0.5rem",
-    xl: "0.75rem",
-    "2xl": "1rem",
-    full: "9999px",
+    sm: T.rSm,
+    md: T.rMd,
+    lg: T.rLg,
+    xl: T.rXl,
+    full: T.rFull,
   },
   shadows: {
-    sm: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
-    md: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-    lg: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
-    xl: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
+    sm: T.shadowSm,
+    card: T.shadowCard,
+    elevated: T.shadowElevated,
   },
   transitions: {
-    fast: "150ms ease-in-out",
-    base: "200ms ease-in-out",
-    slow: "300ms ease-in-out",
+    fast: T.tFast,
+    base: T.tBase,
+    slow: T.tSlow,
   },
   breakpoints: {
     sm: "640px",
@@ -78,6 +104,11 @@ export const theme = {
     lg: "1024px",
     xl: "1280px",
     "2xl": "1536px",
+  },
+  zIndex: {
+    dropdown: T.zDropdown,
+    modal: T.zModal,
+    toast: T.zToast,
   },
 } as const;
 

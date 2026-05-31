@@ -1,13 +1,12 @@
 import styled, { css } from "styled-components";
-
 import { motion } from "framer-motion";
+import { T } from "../../../theme/tokens";
 import { DASHBOARD_NAV_HEIGHT_PX } from "./application";
 
 const MOBILE_DRAWER_WIDTH = "min(280px, 88vw)";
 
 export interface SidebarWrapperProps {
   $isOpen: boolean;
-  /** When true, drawer uses fixed overlay + translateX (no flex "peek"). */
   $isMobile: boolean;
 }
 
@@ -49,8 +48,9 @@ export const SidebarWrapper = styled(motion.aside).attrs<SidebarWrapperProps>(
           height: calc(100dvh - ${DASHBOARD_NAV_HEIGHT_PX}px);
           max-height: calc(100dvh - ${DASHBOARD_NAV_HEIGHT_PX}px);
           margin-right: 0;
-          background: rgba(248, 249, 250, 0.98);
-          box-shadow: 2px 0 12px rgba(15, 23, 42, 0.12);
+          background: ${T.bgSurface};
+          border-right: 1px solid ${T.borderSubtle};
+          box-shadow: ${T.shadowSm};
           overflow-x: hidden;
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
@@ -74,14 +74,17 @@ export const UserName = styled.h1`
   line-height: 32px;
   margin-top: 0px;
   margin-bottom: 6px;
+  color: ${T.textPrimary};
+  font-family: ${T.fontUI};
 `;
 
 export const UserDevice = styled.h3`
   font-size: 12px;
   font-weight: 600;
   line-height: 15px;
-  color: #363840;
+  color: ${T.textSecondary};
   margin-top: 0px;
+  font-family: ${T.fontUI};
 `;
 
 export const Navigation = styled.ul`
@@ -89,7 +92,6 @@ export const Navigation = styled.ul`
   padding: 0;
   width: 100%;
   max-width: 190px;
-
   margin-top: 22px;
   margin-bottom: 22px;
 `;
@@ -97,15 +99,16 @@ export const Navigation = styled.ul`
 export const NavItem = styled.li<{ isActive: boolean; color: string }>`
   padding: 8px 10px;
   margin-bottom: 4px;
-  border-radius: 10px;
-  background: ${({ isActive }) => (isActive ? "#0F85FF" : "transparent")};
+  border-radius: ${T.rMd};
+  background: ${({ isActive }) => (isActive ? T.accent : "transparent")};
+  transition: background ${T.tFast};
 
   a {
     display: flex;
     align-items: center;
     gap: 8px;
     text-decoration: none;
-    color: ${({ color }) => color};
+    color: ${({ isActive, color }) => (isActive ? T.textInvert : color)};
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -117,6 +120,11 @@ export const NavItem = styled.li<{ isActive: boolean; color: string }>`
     line-height: 18px;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-family: ${T.fontUI};
+  }
+
+  &:not([data-active="true"]):hover {
+    background: ${T.bgHover};
   }
 `;
 
@@ -129,8 +137,8 @@ export const UpgradeWrapper = styled.div`
 
 export const ProgressBar = styled.div`
   height: 5px;
-  background: #c4ccd6;
-  border-radius: 4px;
+  background: ${T.borderSubtle};
+  border-radius: ${T.rSm};
   overflow: hidden;
   width: inherit;
 `;
@@ -138,16 +146,17 @@ export const ProgressBar = styled.div`
 export const ProgressFill = styled.div<{ percentage: number }>`
   width: ${({ percentage }) => `${percentage * 100}%`};
   height: inherit;
-  background: #2d9cff;
+  background: ${T.accent};
   transition: width 0.3s ease;
 `;
 
 export const UsageText = styled.div`
   font-size: 12px;
-  color: #1a1a1a;
+  color: ${T.textPrimary};
+  font-family: ${T.fontUI};
 
   span {
-    color: #2d9cff;
+    color: ${T.accent};
     cursor: pointer;
   }
 `;
@@ -156,16 +165,18 @@ export const UpgradeButton = styled.button`
   margin-top: 4px;
   padding: 10px 0;
   width: 100%;
-  border-radius: 9999px;
-  border: 1px solid #363840;
+  border-radius: ${T.rFull};
+  border: 1px solid ${T.borderStrong};
   background: transparent;
   font-size: 13px;
+  font-family: ${T.fontUI};
   cursor: pointer;
-  transition: 0.15s ease;
-  color: #363840;
+  transition: background ${T.tFast}, color ${T.tFast};
+  color: ${T.textSecondary};
 
   &:hover {
-    background: #363840;
-    color: white;
+    background: ${T.textPrimary};
+    color: ${T.textInvert};
+    border-color: ${T.textPrimary};
   }
 `;

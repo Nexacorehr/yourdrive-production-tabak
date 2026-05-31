@@ -14,6 +14,15 @@ import archiver from "archiver";
 import unzipper from "unzipper";
 import { Readable } from "stream";
 import crypto from "crypto";
+import {
+  collectSubtreeFileIds,
+  folderRowExists,
+  moveFolderById,
+  renameFolderById,
+} from "../services/folder.service";
+import { normalizeFolderPath, getFolderBaseName } from "../lib/folder-path";
+import { generateShortId } from "../lib/helper";
+import { mimeFromExtensionOrDefault } from "../lib/extension-mime";
 
 const BUCKET_NAME = process.env.B2_BUCKET_NAME;
 
@@ -98,35 +107,7 @@ export function generateUniqueFilename(
 }
 
 export function getMimeType(extension: string): string {
-  const mimeTypes: { [key: string]: string } = {
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    png: "image/png",
-    gif: "image/gif",
-    webp: "image/webp",
-    svg: "image/svg+xml",
-    pdf: "application/pdf",
-    doc: "application/msword",
-    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    xls: "application/vnd.ms-excel",
-    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    txt: "text/plain",
-    csv: "text/csv",
-    zip: "application/zip",
-    rar: "application/vnd.rar",
-    "7z": "application/x-7z-compressed",
-    tar: "application/x-tar",
-    gz: "application/gzip",
-    bz2: "application/x-bzip2",
-    mp4: "video/mp4",
-    mp3: "audio/mpeg",
-    html: "text/html",
-    css: "text/css",
-    js: "text/javascript",
-    json: "application/json",
-    xml: "application/xml",
-  };
-  return mimeTypes[extension.toLowerCase()] || "application/octet-stream";
+  return mimeFromExtensionOrDefault(extension);
 }
 
 export class FileActionsHandlers {
@@ -237,13 +218,34 @@ export class FileActionsHandlers {
 
       await client.query("BEGIN");
 
+      const expandedIds = new Set<number>();
+      for (const fileId of fileIds) {
+        const row = await client.query(
+          `SELECT id, is_folder, folder_path FROM user_files WHERE id = $1 AND user_id = $2`,
+          [parseInt(fileId, 10), userId],
+        );
+        if (row.rows.length === 0) continue;
+        const item = row.rows[0];
+        if (item.is_folder) {
+          const subtree = await collectSubtreeFileIds(
+            client,
+            userId,
+            item.folder_path,
+          );
+          subtree.forEach((id) => expandedIds.add(id));
+        } else {
+          expandedIds.add(Number(item.id));
+        }
+      }
+
       const movedFiles = [];
 
-      for (const fileId of fileIds) {
+      for (const numericId of expandedIds) {
+        const fileId = String(numericId);
         try {
           const fileResult = await client.query(
             `SELECT * FROM user_files WHERE id = $1 AND user_id = $2`,
-            [parseInt(fileId), userId],
+            [numericId, userId],
           );
 
           if (fileResult.rows.length === 0) {
@@ -511,7 +513,7 @@ export class FileActionsHandlers {
           await client.query(
             `INSERT INTO user_files 
              (id, user_id, user_email, original_name, s3_key, folder_path, size, mime_type, is_folder, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9, NOW())`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())`,
             [
               file.file_id,
               userId,
@@ -521,6 +523,7 @@ export class FileActionsHandlers {
               file.folder_path || "",
               file.size,
               file.mime_type,
+              file.original_name === ".metadata",
               file.created_at || new Date(),
             ],
           );
@@ -617,6 +620,21 @@ export class FileActionsHandlers {
         return res.status(403).json({
           success: false,
           error: "The welcome README must stay named README.md.",
+        });
+      }
+
+      if (meta.rows[0]?.is_folder) {
+        await renameFolderById(
+          client,
+          userId,
+          parseInt(fileId, 10),
+          newName.trim(),
+        );
+        await client.query("COMMIT");
+        return res.json({
+          success: true,
+          message: "Folder renamed successfully",
+          data: { id: parseInt(fileId, 10), name: newName.trim() },
         });
       }
 
@@ -815,13 +833,9 @@ export class FileActionsHandlers {
       }
 
       if (targetFolderPath && targetFolderPath !== "") {
-        const folderCheck = await client.query(
-          `SELECT id FROM user_files 
-           WHERE folder_path = $1 AND user_id = $2 AND is_folder = true`,
-          [targetFolderPath, userId],
-        );
-
-        if (folderCheck.rows.length === 0) {
+        const normalizedTarget = normalizeFolderPath(targetFolderPath);
+        const exists = await folderRowExists(client, userId, normalizedTarget);
+        if (!exists) {
           await client.query("ROLLBACK");
           return res.status(404).json({
             success: false,
@@ -830,27 +844,53 @@ export class FileActionsHandlers {
         }
       }
 
-      const result = await client.query(
-        `UPDATE user_files 
-         SET folder_path = $1, updated_at = NOW()
-         WHERE id = ANY($2) AND user_id = $3 AND is_folder = false
-         RETURNING id`,
-        [targetFolderPath, fileIds.map((id) => parseInt(id)), userId],
+      const numericIds = fileIds.map((id) => parseInt(id, 10));
+      const rows = await client.query(
+        `SELECT id, is_folder, folder_path FROM user_files
+         WHERE id = ANY($1) AND user_id = $2`,
+        [numericIds, userId],
       );
+
+      let movedCount = 0;
+      const target = normalizeFolderPath(targetFolderPath);
+
+      for (const row of rows.rows) {
+        if (row.is_folder) {
+          await moveFolderById(client, userId, row.id, target);
+          movedCount += 1;
+        }
+      }
+
+      const fileOnlyIds = rows.rows
+        .filter((row) => !row.is_folder)
+        .map((row) => row.id);
+
+      if (fileOnlyIds.length > 0) {
+        const result = await client.query(
+          `UPDATE user_files 
+           SET folder_path = $1, updated_at = NOW()
+           WHERE id = ANY($2) AND user_id = $3 AND is_folder = false
+           RETURNING id`,
+          [target, fileOnlyIds, userId],
+        );
+        movedCount += result.rows.length;
+      }
 
       await client.query("COMMIT");
 
       res.json({
         success: true,
-        message: `${result.rows.length} file(s) moved successfully`,
-        data: { movedCount: result.rows.length },
+        message: `${movedCount} item(s) moved successfully`,
+        data: { movedCount },
       });
     } catch (err) {
       await client.query("ROLLBACK");
       console.error("Move error:", err);
-      res.status(500).json({
+      const message =
+        err instanceof Error ? err.message : "Failed to move files";
+      res.status(message.includes("Cannot move") ? 400 : 500).json({
         success: false,
-        error: "Failed to move files",
+        error: message,
       });
     } finally {
       client.release();
@@ -1091,21 +1131,36 @@ export class FileActionsHandlers {
         "multipart/x-zip",
       ];
 
-      const isZipByExtension = file.original_name.match(
-        /\.(zip|rar|7z|tar|gz|bz2)$/i,
-      );
+      const isZipByExtension = /\.zip$/i.test(file.original_name);
       const isZipByMime = archiveTypes.includes(file.mime_type);
 
       if (!isZipByExtension && !isZipByMime) {
         await client.query("ROLLBACK");
+        const ext = file.original_name.split(".").pop()?.toLowerCase();
+        if (ext && ["rar", "7z", "tar", "gz", "bz2"].includes(ext)) {
+          return res.status(400).json({
+            success: false,
+            error: `Extract is only supported for .zip archives. Download the .${ext} file and extract it locally.`,
+          });
+        }
         return res.status(400).json({
           success: false,
-          error: "File is not a valid archive",
+          error: "File is not a valid ZIP archive",
         });
       }
 
       const archiveBuffer = await downloadFromS3(file.s3_key);
-      const directory = await unzipper.Open.buffer(archiveBuffer);
+      let directory;
+      try {
+        directory = await unzipper.Open.buffer(archiveBuffer);
+      } catch {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          success: false,
+          error:
+            "Could not read archive. Only valid .zip files can be extracted in-app.",
+        });
+      }
       const extractedFiles: any[] = [];
 
       for (const entry of directory.files) {
@@ -1190,6 +1245,47 @@ export class FileActionsHandlers {
         return res.status(404).json({
           success: false,
           error: "File not found",
+        });
+      }
+
+      if (file.is_folder) {
+        const displayName =
+          getFolderBaseName(file.folder_path) || "Folder";
+        const existingShare = await this.pool.query(
+          `SELECT share_token FROM "FileShare"
+           WHERE file_id = $1 AND owner_id = $2 AND is_active = true AND share_type = 'link'
+           ORDER BY created_at DESC LIMIT 1`,
+          [parseInt(fileId, 10), userId],
+        );
+
+        let shareToken = existingShare.rows[0]?.share_token as
+          | string
+          | undefined;
+        if (!shareToken) {
+          shareToken = crypto.randomBytes(32).toString("hex");
+          const shortId = generateShortId();
+          await this.pool.query(
+            `INSERT INTO "FileShare"
+             (id, file_id, owner_id, share_token, short_id, share_type, permission, is_active, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, 'link', 'view', true, NOW(), NOW())`,
+            [
+              crypto.randomUUID(),
+              parseInt(fileId, 10),
+              userId,
+              shareToken,
+              shortId,
+            ],
+          );
+        }
+
+        const shareUrl = `${resolveConfiguredFrontendBase()}/shared/${shareToken}`;
+        return res.json({
+          success: true,
+          link: shareUrl,
+          shareableLink: shareUrl,
+          expiresIn: "Until revoked",
+          fileName: displayName,
+          isFolder: true,
         });
       }
 

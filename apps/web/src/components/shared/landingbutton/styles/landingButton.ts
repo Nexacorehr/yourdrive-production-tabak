@@ -1,4 +1,5 @@
-import styled, { css } from 'styled-components';
+import styled, { css } from "styled-components";
+import { T } from "../../../../theme/tokens";
 
 type Variant = 'primary' | 'secondary' | 'ghost';
 type Size = 'sm' | 'md' | 'lg';
@@ -83,75 +84,30 @@ const sizeStyles = {
 
 const variantStyles = {
   primary: css`
-    background: linear-gradient(135deg, #3aadff 0%, #0d6efd 100%);
-    color: #eff3fd;
-    border: none;
-    position: relative;
+    background: ${T.accent};
+    color: ${T.textInvert};
+    border: 1px solid ${T.borderFaint};
 
-    &::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(255, 255, 255, 0.15);
-      opacity: 0;
-      transition: opacity 0.3s ease;
-      pointer-events: none;
-      border-radius: 6px;
-    }
-
-    &:hover:not(:disabled)::before {
-      opacity: 1;
+    &:hover:not(:disabled) {
+      background: ${T.accentHover};
     }
   `,
   secondary: css`
-    background: #e3ecfa;
-    color: #111;
-    border: none;
-    position: relative;
+    background: ${T.accentFaint};
+    color: ${T.textPrimary};
+    border: 1px solid ${T.borderSubtle};
 
-    &::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(255, 255, 255, 0.5);
-      opacity: 0;
-      transition: opacity 0.3s ease;
-      pointer-events: none;
-      border-radius: 6px;
-    }
-
-    &:hover:not(:disabled)::before {
-      opacity: 1;
+    &:hover:not(:disabled) {
+      background: ${T.bgActive};
     }
   `,
   ghost: css`
-    background: #3a3c45;
-    color: #eff3fd;
-    border: none;
-    position: relative;
+    background: var(--app-marketing-muted);
+    color: ${T.textInvert};
+    border: 1px solid transparent;
 
-    &::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(255, 255, 255, 0.1);
-      opacity: 0;
-      transition: opacity 0.3s ease;
-      pointer-events: none;
-      border-radius: 6px;
-    }
-
-    &:hover:not(:disabled)::before {
-      opacity: 1;
+    &:hover:not(:disabled) {
+      opacity: 0.92;
     }
   `,
 };
@@ -160,45 +116,31 @@ export const StyledButton = styled.button<StyledButtonProps>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  cursor: ${({ disabled }) => (disabled ? 'not-allowed' : 'pointer')};
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  font-family: 'Poppins', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif';
+  border-radius: ${T.rMd};
+  cursor: ${({ disabled }) => (disabled ? "not-allowed" : "pointer")};
+  transition: transform ${T.tBase}, box-shadow ${T.tBase}, background ${T.tFast};
+  font-family: ${T.fontUI};
   font-style: normal;
   line-height: 1.5;
   font-weight: 500;
-  box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: ${T.shadowSm};
   opacity: ${({ disabled }) => (disabled ? 0.6 : 1)};
-  width: ${({ $width }) => $width || 'auto'};
-  
+  width: ${({ $width }) => $width || "auto"};
+
   ${({ $size }) => sizeStyles[$size]}
   ${({ $variant }) => variantStyles[$variant]}
 
   &:hover:not(:disabled) {
-    transform: translateY(-1px) scale(1.02);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.17);
+    transform: translateY(-1px);
+    box-shadow: ${T.shadowCard};
   }
 
   &:active:not(:disabled) {
-    transform: translateY(0) scale(0.98);
+    transform: translateY(0);
   }
 
   &:focus-visible {
-    outline: 2px solid #3aadff;
+    outline: 2px solid ${T.accent};
     outline-offset: 2px;
-  }
-
-  @media (max-width: 768px) {
-    &:hover:not(:disabled) {
-      transform: translateY(-0.5px) scale(1.01);
-    }
-  }
-
-  @media (max-width: 480px) {
-    box-shadow: 0px 0.5px 2px rgba(0, 0, 0, 0.15);
-    
-    &:hover:not(:disabled) {
-      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
-    }
   }
 `;

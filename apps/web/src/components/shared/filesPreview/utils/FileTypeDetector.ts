@@ -427,6 +427,7 @@ const PREVIEWABLE_TYPES = [
   "text",
   "code",
   "document",
+  "archive",
 ];
 
 export function getFileTypeInfo(

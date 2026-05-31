@@ -1,28 +1,106 @@
 @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap");
 
-/* ~18px base (uz standardnih 16px u pregledniku) — veći odmak, čitljivije s udaljenosti */
+/* ~18px base — improved readability at distance */
 html {
   font-size: 112.5%;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
 
+/* ── Light theme defaults (overridden by applyThemeCssVars) ─────────────── */
+:root,
+:root[data-app-theme="light"] {
+  --ed-bgShell: #f0f2f5;
+  --ed-bgBase: #ffffff;
+  --ed-bgSurface: #ffffff;
+  --ed-bgElevated: #f8f9fa;
+  --ed-bgHover: #f1f3f4;
+  --ed-bgActive: #e8eaed;
+  --ed-bgInput: #f8f9fa;
+  --ed-bgOverlay: rgba(0, 0, 0, 0.35);
+
+  --ed-textPrimary: #1a1a2e;
+  --ed-textSecondary: #5f6368;
+  --ed-textMuted: #9aa0a6;
+  --ed-textCode: #1a1a2e;
+  --ed-textInvert: #ffffff;
+
+  --ed-accent: #1a73e8;
+  --ed-accentHover: #1967d2;
+  --ed-accentFaint: rgba(26, 115, 232, 0.08);
+  --ed-accentGlow: 0 0 0 3px rgba(26, 115, 232, 0.2);
+
+  --ed-successText: #16a34a;
+  --ed-dangerText: #dc2626;
+  --ed-warningText: #d97706;
+
+  --ed-borderFaint: rgba(0, 0, 0, 0.06);
+  --ed-borderSubtle: rgba(0, 0, 0, 0.1);
+  --ed-borderStrong: rgba(0, 0, 0, 0.18);
+
+  --ed-shadowCard: 0 1px 3px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  --ed-shadowElevated: 0 4px 24px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+  --ed-shadowSm: 0 1px 4px rgba(0, 0, 0, 0.08);
+
+  --app-marketing-hero-bg: #e9eef6;
+  --app-marketing-muted: #363840;
+
+  color-scheme: light;
+}
+
+:root[data-app-theme="dark"] {
+  --ed-bgShell: #080d17;
+  --ed-bgBase: #0d1526;
+  --ed-bgSurface: #111827;
+  --ed-bgElevated: #141e2e;
+  --ed-bgHover: #1a2640;
+  --ed-bgActive: #1e2d4a;
+  --ed-bgInput: #0d1526;
+  --ed-bgOverlay: rgba(8, 13, 23, 0.75);
+
+  --ed-textPrimary: #f0f4ff;
+  --ed-textSecondary: #8fa3bf;
+  --ed-textMuted: #4b6177;
+  --ed-textCode: #e2eaf8;
+  --ed-textInvert: #0d1526;
+
+  --ed-accent: #2563eb;
+  --ed-accentHover: #3b82f6;
+  --ed-accentFaint: rgba(37, 99, 235, 0.12);
+  --ed-accentGlow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+
+  --ed-successText: #4ade80;
+  --ed-dangerText: #f87171;
+  --ed-warningText: #fbbf24;
+
+  --ed-borderFaint: rgba(255, 255, 255, 0.05);
+  --ed-borderSubtle: rgba(255, 255, 255, 0.09);
+  --ed-borderStrong: rgba(255, 255, 255, 0.16);
+
+  --ed-shadowCard: 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 4px 24px rgba(0, 0, 0, 0.5);
+  --ed-shadowElevated: 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 8px 48px rgba(0, 0, 0, 0.7);
+  --ed-shadowSm: 0 1px 4px rgba(0, 0, 0, 0.4);
+
+  --app-marketing-hero-bg: #0d1526;
+  --app-marketing-muted: #8fa3bf;
+
+  color-scheme: dark;
+}
+
 :root {
-  font-family:
-    "Poppins",
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
+  font-family: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto,
     sans-serif;
   font-style: normal;
   line-height: 1.6;
   font-weight: 400;
 
-  color-scheme: light;
-  color: #0a0a08;
-  background-color: #e9eef6;
+  color: var(--ed-textPrimary);
+  background-color: var(--ed-bgShell);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -37,25 +115,40 @@ html {
 body {
   line-height: 1.6;
   letter-spacing: 0.015em;
+  color: var(--ed-textPrimary);
 }
 
 html,
 body,
 #root {
-  background: #e9eef6;
+  background: var(--ed-bgShell);
 }
 
-/* Hide scrollbar for Chrome, Safari and Opera */
+/* Scrollbars — visible in data surfaces, hidden globally elsewhere */
 *::-webkit-scrollbar {
   display: none;
 }
 
-/* Hide scrollbar for Firefox */
 * {
   scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-/* Hide scrollbar for IE + old Edge */
-* {
-  -ms-overflow-style: none;
+.scroll-surface::-webkit-scrollbar,
+[data-scroll-surface]::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+  height: 6px;
+}
+
+.scroll-surface::-webkit-scrollbar-thumb,
+[data-scroll-surface]::-webkit-scrollbar-thumb {
+  background: var(--ed-borderSubtle);
+  border-radius: 4px;
+}
+
+.scroll-surface,
+[data-scroll-surface] {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ed-borderSubtle) transparent;
 }

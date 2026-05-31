@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo } from "react";
 import styled from "styled-components";
 import { useUserUiPreferencesStore } from "../../../store/userUiPreferencesStore";
+import { T } from "../../../theme/tokens";
 import FileTypeIcon from "./FileTypeIcon";
 import FolderSmallIcon from "../icons/smallFolder";
 import { UploadIcon as Upload, ChevronRightIcon as ChevronRight, ChevronDownIcon as ChevronDown, FolderIcon as Folder } from "../icons/index";
@@ -29,6 +30,9 @@ export interface FileItem {
   starred?: boolean;
   trashed?: boolean;
   url: string;
+  /** Full logical path for folders; parent path for files */
+  folderPath?: string;
+  isFolder?: boolean;
 }
 
 interface FolderNode {
@@ -205,9 +209,21 @@ const FilesTable: React.FC<FilesTableProps> = ({
     return `${actionMap[file.lastInteractionType]} · ${file.lastInteraction}`;
   };
 
+  const formatGridSize = (bytes: number): string => {
+    if (bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+  };
+
   const handleRowClick = (file: FileItem) => {
     if (file.type === "folder") {
-      toggleFolder(file.location || file.name);
+      if (showFolderStructure) {
+        toggleFolder(file.location || file.name);
+        return;
+      }
+      onFileClick?.(file);
       return;
     }
 
@@ -220,6 +236,7 @@ const FilesTable: React.FC<FilesTableProps> = ({
 
   const handleRowDoubleClick = (file: FileItem) => {
     if (file.type === "folder") {
+      onFileDoubleClick?.(file);
       return;
     }
 
@@ -365,7 +382,7 @@ const FilesTable: React.FC<FilesTableProps> = ({
                 )}
               </FolderToggle>
               <FileIconWrapper $compact>
-                <Folder size={18} color="#5f6368" />
+                <Folder size={18} color={T.textSecondary} />
               </FileIconWrapper>
               <FileName $folder>{subfolder.name}</FileName>
               <ItemCount>{itemCount} items</ItemCount>
@@ -415,7 +432,7 @@ const FilesTable: React.FC<FilesTableProps> = ({
           {showLocation && (
             <TableCell>
               <LocationCell>
-                <FolderSmallIcon color="#5f6368" size={14} />
+                <FolderSmallIcon color={T.textSecondary} size={14} />
                 <LocationText>{file.location}</LocationText>
               </LocationCell>
             </TableCell>
@@ -493,6 +510,71 @@ const FilesTable: React.FC<FilesTableProps> = ({
     );
   }
 
+  if (fileView === "grid") {
+    const allItems = [...folders, ...regularFiles];
+    return (
+      <TableContainer
+        style={tableDensityStyle}
+        ref={dropZoneRef}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        {isDragging && (
+          <DragOverlay>
+            <DragOverlayContent>
+              <UploadIconWrapper>
+                <Upload size={48} />
+              </UploadIconWrapper>
+              <DragText>Drop files or folders to upload</DragText>
+              <DragSubtext>All files will be uploaded to Your Files</DragSubtext>
+            </DragOverlayContent>
+          </DragOverlay>
+        )}
+
+        <GridScrollContainer $maxHeight={maxHeight}>
+          <FilesGrid>
+            {allItems.map((file) => (
+              <GridCard
+                key={file.id}
+                $selected={selectedFiles.has(file.id)}
+                onClick={() => handleRowClick(file)}
+                onDoubleClick={() => handleRowDoubleClick(file)}
+                onContextMenu={(e) => handleContextMenu(file, e)}
+              >
+                {renderRowActions && (
+                  <GridActions onClick={(e) => e.stopPropagation()}>
+                    {renderRowActions(file)}
+                  </GridActions>
+                )}
+                <GridIconWrap>
+                  {file.type === "folder" ? (
+                    <Folder size={40} color={T.textSecondary} />
+                  ) : (
+                    <FileTypeIcon
+                      fileName={file.name}
+                      mimeType={file.mimeType}
+                      size={40}
+                    />
+                  )}
+                </GridIconWrap>
+                <GridName title={file.name}>{file.name}</GridName>
+                <GridMeta>
+                  {file.type === "folder"
+                    ? "Folder"
+                    : file.size != null
+                      ? formatGridSize(file.size)
+                      : formatInteraction(file)}
+                </GridMeta>
+              </GridCard>
+            ))}
+          </FilesGrid>
+        </GridScrollContainer>
+      </TableContainer>
+    );
+  }
+
   return (
     <TableContainer
       style={tableDensityStyle}
@@ -541,6 +623,7 @@ const FilesTable: React.FC<FilesTableProps> = ({
                     <TableRow
                       key={folder.id}
                       onClick={() => handleRowClick(folder)}
+                      onDoubleClick={() => handleRowDoubleClick(folder)}
                       onContextMenu={(e) => handleContextMenu(folder, e)}
                       $selected={selectedFiles.has(folder.id)}
                       tabIndex={0}
@@ -548,7 +631,7 @@ const FilesTable: React.FC<FilesTableProps> = ({
                       <TableCell>
                         <NameCell>
                           <FileIconWrapper>
-                            <Folder size={20} color="#5f6368" />
+                            <Folder size={20} color={T.textSecondary} />
                           </FileIconWrapper>
                           <FileName title={folder.name}>{folder.name}</FileName>
                         </NameCell>
@@ -561,7 +644,7 @@ const FilesTable: React.FC<FilesTableProps> = ({
                       {showLocation && (
                         <TableCell>
                           <LocationCell>
-                            <FolderSmallIcon color="#5f6368" size={16} />
+                            <FolderSmallIcon color={T.textSecondary} size={16} />
                             <LocationText>{folder.location}</LocationText>
                           </LocationCell>
                         </TableCell>
@@ -620,7 +703,7 @@ const FilesTable: React.FC<FilesTableProps> = ({
                       {showLocation && (
                         <TableCell>
                           <LocationCell>
-                            <FolderSmallIcon color="#5f6368" size={16} />
+                            <FolderSmallIcon color={T.textSecondary} size={16} />
                             <LocationText>{file.location}</LocationText>
                           </LocationCell>
                         </TableCell>
@@ -667,8 +750,9 @@ const FilesTable: React.FC<FilesTableProps> = ({
 const TableContainer = styled.div`
   position: relative;
   width: 100%;
-  background: #f8f9fa;
-  border-radius: 8px;
+  background: ${T.bgElevated};
+  border-radius: ${T.rMd};
+  border: 1px solid ${T.borderFaint};
 `;
 
 const DragOverlay = styled.div`
@@ -677,9 +761,9 @@ const DragOverlay = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(26, 115, 232, 0.08);
-  border: 2px dashed #1a73e8;
-  border-radius: 8px;
+  background: ${T.accentFaint};
+  border: 2px dashed ${T.accent};
+  border-radius: ${T.rMd};
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -699,23 +783,25 @@ const UploadIconWrapper = styled.div`
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background: #fff;
+  background: ${T.bgSurface};
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #1a73e8;
-  box-shadow: 0 4px 12px rgba(26, 115, 232, 0.2);
+  color: ${T.accent};
+  box-shadow: ${T.shadowCard};
 `;
 
 const DragText = styled.div`
   font-size: 16px;
   font-weight: 500;
-  color: #1a73e8;
+  color: ${T.accent};
+  font-family: ${T.fontUI};
 `;
 
 const DragSubtext = styled.div`
   font-size: 14px;
-  color: #5f6368;
+  color: ${T.textSecondary};
+  font-family: ${T.fontUI};
 `;
 
 const ScrollContainer = styled.div<{ $maxHeight: number }>`
@@ -739,12 +825,12 @@ const ScrollableArea = styled.div`
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #dadce0;
+    background: ${T.borderSubtle};
     border-radius: 4px;
   }
 
   &::-webkit-scrollbar-thumb:hover {
-    background: #bdc1c6;
+    background: ${T.borderStrong};
   }
 `;
 
@@ -757,10 +843,10 @@ const BottomFade = styled.div`
   pointer-events: none;
   background: linear-gradient(
     180deg,
-    rgba(248, 249, 250, 0) 0%,
-    rgba(248, 249, 250, 0.5) 30%,
-    rgba(248, 249, 250, 0.8) 60%,
-    rgba(248, 249, 250, 1) 100%
+    transparent 0%,
+    color-mix(in srgb, ${T.bgElevated} 50%, transparent) 30%,
+    color-mix(in srgb, ${T.bgElevated} 80%, transparent) 60%,
+    ${T.bgElevated} 100%
   );
   z-index: 10;
 `;
@@ -784,14 +870,14 @@ const TableHead = styled.thead`
 const TableBody = styled.tbody``;
 
 const TableRow = styled.tr<{ $selected?: boolean; $level?: number }>`
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid ${T.borderFaint};
   cursor: pointer;
-  background: ${({ $selected }) => ($selected ? "#e8f0fe" : "transparent")};
-  transition: background-color 0.15s;
+  background: ${({ $selected }) => ($selected ? T.accentFaint : "transparent")};
+  transition: background-color ${T.tFast};
 
   &:hover {
     background: ${({ $selected }) =>
-      $selected ? "#e8f0fe" : "rgba(201, 201, 201, 0.1)"};
+      $selected ? T.accentFaint : T.bgHover};
   }
 
   &:focus {
@@ -813,7 +899,7 @@ const FolderRow = styled(TableRow)<{ $level: number }>`
   height: 36px;
 
   &:hover {
-    background: rgba(201, 201, 201, 0.15);
+    background: ${T.bgHover};
   }
 `;
 
@@ -822,17 +908,19 @@ const TableHeader = styled.th`
   padding: var(--file-header-pad, 12px 16px);
   font-size: 12px;
   font-weight: 500;
-  color: #5f6368;
-  border-bottom: 1px solid #e0e0e0;
+  color: ${T.textSecondary};
+  border-bottom: 1px solid ${T.borderSubtle};
   white-space: nowrap;
-  background: #f8f9fa;
+  background: ${T.bgElevated};
+  font-family: ${T.fontUI};
 `;
 
 const TableCell = styled.td`
   padding: var(--file-cell-pad, 10px 16px);
   font-size: 14px;
-  color: #202124;
+  color: ${T.textPrimary};
   vertical-align: middle;
+  font-family: ${T.fontUI};
 
   @media (max-width: 768px) {
     display: table-cell;
@@ -860,7 +948,7 @@ const FolderToggle = styled.div`
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  color: #5f6368;
+  color: ${T.textSecondary};
   margin-right: 2px;
 `;
 
@@ -883,14 +971,14 @@ const FileName = styled.span<{ $folder?: boolean }>`
 
 const ItemCount = styled.span`
   font-size: 12px;
-  color: #80868b;
+  color: ${T.textMuted};
   font-weight: 400;
   margin-left: 6px;
   white-space: nowrap;
 `;
 
 const InteractionText = styled.span`
-  color: #5f6368;
+  color: ${T.textSecondary};
   font-size: 13px;
 `;
 
@@ -901,7 +989,7 @@ const LocationCell = styled.div`
 `;
 
 const LocationText = styled.span`
-  color: #5f6368;
+  color: ${T.textSecondary};
   font-size: 13px;
 `;
 
@@ -922,8 +1010,8 @@ const OwnerAvatarPlaceholder = styled.div`
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: #1a73e8;
-  color: white;
+  background: ${T.accent};
+  color: ${T.textInvert};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -932,7 +1020,7 @@ const OwnerAvatarPlaceholder = styled.div`
 `;
 
 const OwnerName = styled.span`
-  color: #5f6368;
+  color: ${T.textSecondary};
   font-size: 13px;
 `;
 
@@ -943,14 +1031,15 @@ const LoadingState = styled.div`
   justify-content: center;
   gap: 12px;
   font-size: 14px;
-  color: #5f6368;
+  color: ${T.textSecondary};
+  font-family: ${T.fontUI};
 `;
 
 const LoadingSpinner = styled.div`
   width: 20px;
   height: 20px;
-  border: 2px solid #e0e0e0;
-  border-top-color: #1a73e8;
+  border: 2px solid ${T.borderSubtle};
+  border-top-color: ${T.accent};
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 
@@ -964,31 +1053,97 @@ const LoadingSpinner = styled.div`
 const EmptyState = styled.div<{ $isDragging?: boolean }>`
   padding: 48px;
   text-align: center;
-  transition: all 0.2s ease;
+  transition: all ${T.tBase};
   border: 2px dashed
-    ${({ $isDragging }) => ($isDragging ? "#1a73e8" : "transparent")};
-  border-radius: 8px;
+    ${({ $isDragging }) => ($isDragging ? T.accent : "transparent")};
+  border-radius: ${T.rMd};
   background: ${({ $isDragging }) =>
-    $isDragging ? "rgba(26, 115, 232, 0.04)" : "transparent"};
+    $isDragging ? T.accentFaint : "transparent"};
 `;
 
 const EmptyText = styled.div`
   font-size: 14px;
   font-weight: 500;
-  color: #5f6368;
+  color: ${T.textSecondary};
+  font-family: ${T.fontUI};
 `;
 
 const EmptySubtext = styled.div`
   margin-top: 4px;
   font-size: 13px;
-  color: #80868b;
+  color: ${T.textMuted};
+  font-family: ${T.fontUI};
 `;
 
 const DragHint = styled.div`
   margin-top: 8px;
   font-size: 12px;
-  color: #1a73e8;
+  color: ${T.accent};
   font-weight: 500;
+  font-family: ${T.fontUI};
+`;
+
+const GridScrollContainer = styled.div<{ $maxHeight: number }>`
+  max-height: ${({ $maxHeight }) => `${$maxHeight}px`};
+  overflow-y: auto;
+`;
+
+const FilesGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  padding: 4px;
+`;
+
+const GridCard = styled.div<{ $selected?: boolean }>`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 12px;
+  border: 1px solid
+    ${({ $selected }) => ($selected ? T.accent : T.borderSubtle)};
+  border-radius: ${T.rLg};
+  background: ${({ $selected }) => ($selected ? T.accentFaint : T.bgSurface)};
+  cursor: pointer;
+  text-align: center;
+  transition: background ${T.tFast}, border-color ${T.tFast};
+  &:hover {
+    background: ${({ $selected }) => ($selected ? T.accentFaint : T.bgHover)};
+    border-color: ${({ $selected }) => ($selected ? T.accent : T.borderStrong)};
+  }
+`;
+
+const GridActions = styled.div`
+  position: absolute;
+  top: 8px;
+  right: 8px;
+`;
+
+const GridIconWrap = styled.div`
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const GridName = styled.div`
+  width: 100%;
+  font-size: 13px;
+  font-weight: 500;
+  color: ${T.textPrimary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: ${T.fontUI};
+`;
+
+const GridMeta = styled.div`
+  font-size: 12px;
+  color: ${T.textSecondary};
+  font-family: ${T.fontUI};
 `;
 
 export default FilesTable;

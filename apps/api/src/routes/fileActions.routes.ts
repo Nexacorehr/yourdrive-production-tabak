@@ -16,6 +16,16 @@ import sharp from "sharp";
 import crypto from "crypto";
 import PDFDocument from "pdfkit";
 import { FileActionsHandlers } from "./fileActionsHandlers";
+import {
+  buildZipBuffer,
+  uploadZipAndGetSignedUrl,
+  downloadFromS3 as downloadS3Object,
+} from "../lib/zip-download";
+import {
+  collectSubtreeFileRows,
+  buildFolderZipEntries,
+} from "../services/folder.service";
+import { mimeFromExtensionOrDefault } from "../lib/extension-mime";
 
 const fileActionsRoutes = express.Router();
 
@@ -139,33 +149,23 @@ function generateUniqueFilename(userId: string, originalName: string): string {
   return `${userId}/${timestamp}-${randomStr}-${originalName}`;
 }
 
+async function createUserZipDownload(
+  userId: string,
+  entries: Array<{ s3Key: string; archivePath: string }>,
+  zipName: string,
+): Promise<{ downloadUrl: string; fileName: string }> {
+  const zipBuffer = await buildZipBuffer(entries, downloadS3Object);
+  const zipS3Key = generateUniqueFilename(userId, zipName);
+  const downloadUrl = await uploadZipAndGetSignedUrl(
+    zipBuffer,
+    zipName,
+    zipS3Key,
+  );
+  return { downloadUrl, fileName: zipName };
+}
+
 function getMimeType(extension: string): string {
-  const mimeTypes: { [key: string]: string } = {
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    png: "image/png",
-    gif: "image/gif",
-    webp: "image/webp",
-    svg: "image/svg+xml",
-    pdf: "application/pdf",
-    doc: "application/msword",
-    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    xls: "application/vnd.ms-excel",
-    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    txt: "text/plain",
-    csv: "text/csv",
-    zip: "application/zip",
-    rar: "application/vnd.rar",
-    "7z": "application/x-7z-compressed",
-    mp4: "video/mp4",
-    mp3: "audio/mpeg",
-    html: "text/html",
-    css: "text/css",
-    js: "text/javascript",
-    json: "application/json",
-    xml: "application/xml",
-  };
-  return mimeTypes[extension.toLowerCase()] || "application/octet-stream";
+  return mimeFromExtensionOrDefault(extension);
 }
 
 fileActionsRoutes.post(
@@ -337,6 +337,31 @@ fileActionsRoutes.get(
           .json({ success: false, error: "File not found" });
       }
 
+      if (file.is_folder) {
+        const client = await pool.connect();
+        try {
+          const { folderName, files } = await collectSubtreeFileRows(
+            client,
+            userId,
+            file.folder_path,
+          );
+          const zipName = `${folderName}.zip`;
+          const entries = buildFolderZipEntries(file.folder_path, files);
+          const { downloadUrl, fileName } = await createUserZipDownload(
+            userId,
+            entries,
+            zipName,
+          );
+          return res.json({
+            success: true,
+            downloadUrl,
+            fileName,
+          });
+        } finally {
+          client.release();
+        }
+      }
+
       const command = new GetObjectCommand({
         Bucket: BUCKET_NAME,
         Key: file.s3_key,
@@ -359,7 +384,7 @@ fileActionsRoutes.get(
   },
 );
 
-// Multiple files download
+// Multiple files / folders download
 fileActionsRoutes.post(
   "/download",
   authMiddleware,
@@ -374,26 +399,33 @@ fileActionsRoutes.post(
           .json({ success: false, error: "Missing required fields" });
       }
 
-      const filesResult = await pool.query(
-        `SELECT * FROM user_files WHERE id = ANY($1) AND user_id = $2 AND is_folder = false`,
-        [fileIds, userId],
+      const parsedIds = fileIds.map((id: string) => parseInt(id, 10));
+      const itemsResult = await pool.query(
+        `SELECT * FROM user_files WHERE id = ANY($1) AND user_id = $2`,
+        [parsedIds, userId],
       );
 
-      if (filesResult.rows.length === 0) {
+      if (itemsResult.rows.length === 0) {
         return res
           .status(404)
           .json({ success: false, error: "No files found" });
       }
 
-      const files = filesResult.rows;
+      const items = itemsResult.rows;
+      const onlyFiles = items.filter((row) => !row.is_folder);
+      const folders = items.filter((row) => row.is_folder);
 
-      // Single file
-      if (files.length === 1) {
-        const file = files[0];
+      // Single regular file, no folders
+      if (items.length === 1 && onlyFiles.length === 1) {
+        const file = onlyFiles[0];
         const command = new GetObjectCommand({
           Bucket: BUCKET_NAME,
           Key: file.s3_key,
-          ResponseContentDisposition: buildContentDisposition("attachment", file.original_name, true),
+          ResponseContentDisposition: buildContentDisposition(
+            "attachment",
+            file.original_name,
+            true,
+          ),
         });
 
         const url = await getSignedUrl(s3Client, command, { expiresIn: 300 });
@@ -404,57 +436,94 @@ fileActionsRoutes.post(
         });
       }
 
-      // Multiple files - create zip
-      const archive = archiver("zip", { zlib: { level: 9 } });
-      const chunks: Buffer[] = [];
-
-      archive.on("data", (chunk) => chunks.push(chunk));
-      archive.on("end", async () => {
+      // Single folder
+      if (items.length === 1 && folders.length === 1) {
+        const folder = folders[0];
+        const client = await pool.connect();
         try {
-          const zipBuffer = Buffer.concat(chunks);
-          const zipName = `download-${Date.now()}.zip`;
-          const zipS3Key = generateUniqueFilename(userId!, zipName);
-
-          await s3Client.send(
-            new PutObjectCommand({
-              Bucket: BUCKET_NAME,
-              Key: zipS3Key,
-              Body: zipBuffer,
-              ContentType: "application/zip",
-            }),
+          const { folderName, files } = await collectSubtreeFileRows(
+            client,
+            userId,
+            folder.folder_path,
           );
-
-          const downloadCommand = new GetObjectCommand({
-            Bucket: BUCKET_NAME,
-            Key: zipS3Key,
-          });
-
-          const url = await getSignedUrl(s3Client, downloadCommand, {
-            expiresIn: 300,
-          });
-          res.json({
+          const zipName = `${folderName}.zip`;
+          const entries = buildFolderZipEntries(folder.folder_path, files);
+          const { downloadUrl, fileName } = await createUserZipDownload(
+            userId,
+            entries,
+            zipName,
+          );
+          return res.json({
             success: true,
-            downloadUrl: url,
-            fileName: zipName,
+            downloadUrl,
+            fileName,
           });
-        } catch (err) {
-          console.error("Zip upload error:", err);
-          res
-            .status(500)
-            .json({ success: false, error: "Failed to create download" });
-        }
-      });
-
-      for (const file of files) {
-        try {
-          const fileBuffer = await downloadFromS3(file.s3_key);
-          archive.append(fileBuffer, { name: file.original_name });
-        } catch (err) {
-          console.error(`Failed to add file ${file.original_name}:`, err);
+        } finally {
+          client.release();
         }
       }
 
-      await archive.finalize();
+      // Mixed selection or multiple items — build one zip
+      const zipEntries: Array<{ s3Key: string; archivePath: string }> = [];
+      const usedPaths = new Set<string>();
+      const client = await pool.connect();
+      try {
+        for (const file of onlyFiles) {
+          let archivePath = file.original_name;
+          let suffix = 1;
+          while (usedPaths.has(archivePath)) {
+            const dot = file.original_name.lastIndexOf(".");
+            if (dot > 0) {
+              archivePath = `${file.original_name.slice(0, dot)} (${suffix})${file.original_name.slice(dot)}`;
+            } else {
+              archivePath = `${file.original_name} (${suffix})`;
+            }
+            suffix++;
+          }
+          usedPaths.add(archivePath);
+          zipEntries.push({ s3Key: file.s3_key, archivePath });
+        }
+
+        for (const folder of folders) {
+          const { folderName, files } = await collectSubtreeFileRows(
+            client,
+            userId,
+            folder.folder_path,
+          );
+          const prefix =
+            folders.length === 1 && onlyFiles.length === 0
+              ? ""
+              : folderName;
+          for (const entry of buildFolderZipEntries(
+            folder.folder_path,
+            files,
+            prefix,
+          )) {
+            let archivePath = entry.archivePath;
+            let suffix = 1;
+            while (usedPaths.has(archivePath)) {
+              archivePath = `${entry.archivePath} (${suffix})`;
+              suffix++;
+            }
+            usedPaths.add(archivePath);
+            zipEntries.push({ s3Key: entry.s3Key, archivePath });
+          }
+        }
+      } finally {
+        client.release();
+      }
+
+      const zipName = `download-${Date.now()}.zip`;
+      const { downloadUrl, fileName } = await createUserZipDownload(
+        userId,
+        zipEntries,
+        zipName,
+      );
+      return res.json({
+        success: true,
+        downloadUrl,
+        fileName,
+      });
     } catch (err) {
       console.error("Download error:", err);
       res

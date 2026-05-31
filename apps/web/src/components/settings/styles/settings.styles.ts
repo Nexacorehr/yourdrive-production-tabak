@@ -1,11 +1,11 @@
 import styled from "styled-components";
+import { T } from "../../../theme/tokens";
 
 export const PageWrapper = styled.div`
   min-height: 100%;
   overflow: visible;
   background: transparent;
-  font-family: "Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  font-family: ${T.fontUI};
 `;
 
 export const Container = styled.div`
@@ -23,16 +23,16 @@ export const Header = styled.div`
 `;
 
 export const Title = styled.h1`
-  font-family: "Forma DJR Display", "Poppins", sans-serif;
+  font-family: "Forma DJR Display", ${T.fontUI};
   font-size: clamp(1.6rem, 2.2vw, 2rem);
   font-weight: 700;
   margin-bottom: 0.375rem;
-  color: #0d1b2a;
+  color: ${T.textPrimary};
   letter-spacing: -0.02em;
 `;
 
 export const Subtitle = styled.p`
-  color: #5c6b7d;
+  color: ${T.textSecondary};
   font-size: 0.9375rem;
   line-height: 1.5;
 `;
@@ -40,9 +40,9 @@ export const Subtitle = styled.p`
 export const TabsWrapper = styled.div<{ $layout?: "horizontal" | "vertical" }>`
   margin-bottom: 1rem;
   padding: 0.25rem;
-  border: 1px solid #dbe7f4;
-  border-radius: 14px;
-  background: #f3f7fc;
+  border: 1px solid ${T.borderSubtle};
+  border-radius: ${T.rLg};
+  background: ${T.bgElevated};
   overflow-x: ${({ $layout }) =>
     $layout === "vertical" ? "visible" : "auto"};
 
@@ -70,13 +70,14 @@ export const TabButton = styled.button<{ $active: boolean }>`
   gap: 0.5rem;
   padding: 0.625rem 0.85rem;
   border: none;
-  border-radius: 10px;
-  background: ${(props) => (props.$active ? "#ffffff" : "transparent")};
-  color: ${(props) => (props.$active ? "#14314c" : "#52657a")};
+  border-radius: ${T.rMd};
+  background: ${(props) => (props.$active ? T.bgSurface : "transparent")};
+  color: ${(props) => (props.$active ? T.textPrimary : T.textSecondary)};
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 600;
-  transition: all 0.2s ease-out;
+  font-family: ${T.fontUI};
+  transition: all ${T.tBase};
   white-space: nowrap;
   box-shadow: ${(props) => (props.$active ? "0 1px 2px rgba(15, 32, 58, 0.08)" : "none")};
 

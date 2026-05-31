@@ -1,2 +1,2 @@
-/api/*  https://test.onrender.com/api/:splat  200
+# API proxy line is injected at Netlify build time by scripts/prepare-netlify.mjs (NETLIFY_API_PROXY_URL).
 /*    /index.html   200

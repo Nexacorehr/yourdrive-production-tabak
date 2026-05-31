@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import styled, { keyframes } from "styled-components";
 import { XIcon as X, CheckIcon as Check } from "../../icons/index";
 import type { EnhancedFileItem } from "../types/fileActions";
+import { T } from "../../../../theme/tokens";
 
 interface RenameModalProps {
   isOpen: boolean;
@@ -36,38 +37,32 @@ const ModalOverlay = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: ${T.bgOverlay};
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: ${T.zModal};
   animation: ${fadeIn} 0.2s ease-out;
-  backdrop-filter: blur(4px);
 `;
 
 const ModalContent = styled.div`
-  background: white;
-  border-radius: 16px;
+  background: ${T.bgSurface};
+  border: 1px solid ${T.borderSubtle};
+  border-radius: ${T.rLg};
   padding: clamp(16px, 4vw, 24px);
   width: min(400px, calc(100vw - 24px));
   max-width: 100%;
   box-sizing: border-box;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: ${T.shadowElevated};
   animation: ${slideUp} 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-`;
-
-const ModalHeader = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
+  font-family: ${T.fontUI};
 `;
 
 const ModalTitle = styled.h2`
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #202124;
+  color: ${T.textPrimary};
 `;
 
 const CloseButton = styled.button`
@@ -79,14 +74,21 @@ const CloseButton = styled.button`
   background: transparent;
   border: none;
   border-radius: 50%;
-  color: #5f6368;
+  color: ${T.textSecondary};
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all ${T.tFast};
 
   &:hover {
-    background: #f1f3f4;
-    color: #202124;
+    background: ${T.bgHover};
+    color: ${T.textPrimary};
   }
+`;
+
+const ModalHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
 `;
 
 const ModalBody = styled.div`
@@ -98,28 +100,30 @@ const InputLabel = styled.label`
   margin-bottom: 8px;
   font-size: 14px;
   font-weight: 500;
-  color: #202124;
+  color: ${T.textPrimary};
 `;
 
 const FileNameInput = styled.input`
   width: 100%;
   padding: 12px 16px;
-  border: 2px solid #dadce0;
-  border-radius: 8px;
+  border: 1px solid ${T.borderSubtle};
+  border-radius: ${T.rMd};
   font-size: 14px;
-  font-family: inherit;
-  transition: all 0.15s ease;
+  font-family: ${T.fontUI};
+  background: ${T.bgInput};
+  color: ${T.textPrimary};
+  transition: all ${T.tFast};
   box-sizing: border-box;
 
   &:focus {
     outline: none;
-    border-color: #1a73e8;
-    box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.1);
+    border-color: ${T.accent};
+    box-shadow: ${T.accentGlow};
   }
 
   &:disabled {
-    background: #f8f9fa;
-    color: #9aa0a6;
+    background: ${T.bgElevated};
+    color: ${T.textMuted};
     cursor: not-allowed;
   }
 `;
@@ -127,16 +131,16 @@ const FileNameInput = styled.input`
 const FileInfo = styled.div`
   margin-top: 12px;
   padding: 12px;
-  background: #f8f9fa;
-  border-radius: 8px;
+  background: ${T.bgElevated};
+  border-radius: ${T.rMd};
   font-size: 12px;
-  color: #5f6368;
+  color: ${T.textSecondary};
 `;
 
 const FileNamePreview = styled.div`
-  font-family: monospace;
+  font-family: ${T.fontMono};
   margin-top: 4px;
-  color: #202124;
+  color: ${T.textPrimary};
 `;
 
 const ModalFooter = styled.div`
@@ -148,11 +152,12 @@ const ModalFooter = styled.div`
 const Button = styled.button<{ $primary?: boolean; $danger?: boolean }>`
   padding: 10px 24px;
   border: none;
-  border-radius: 8px;
+  border-radius: ${T.rMd};
   font-size: 14px;
   font-weight: 500;
+  font-family: ${T.fontUI};
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all ${T.tFast};
   display: flex;
   align-items: center;
   gap: 8px;
@@ -160,29 +165,26 @@ const Button = styled.button<{ $primary?: boolean; $danger?: boolean }>`
   ${(props) =>
     props.$primary
       ? `
-    background: #1a73e8;
-    color: white;
+    background: ${T.accent};
+    color: ${T.textInvert};
     &:hover {
-      background: #0d62d9;
+      background: ${T.accentHover};
     }
     &:disabled {
-      background: #8ab4f8;
+      opacity: 0.6;
       cursor: not-allowed;
     }
   `
       : props.$danger
         ? `
-    background: #d93025;
-    color: white;
-    &:hover {
-      background: #c5221f;
-    }
+    background: ${T.danger};
+    color: ${T.textInvert};
   `
         : `
-    background: #f1f3f4;
-    color: #202124;
+    background: ${T.bgHover};
+    color: ${T.textPrimary};
     &:hover {
-      background: #e8eaed;
+      background: ${T.bgActive};
     }
   `}
 `;
@@ -219,6 +221,10 @@ export const RenameModal: React.FC<RenameModalProps> = ({
       setError(null);
       setTimeout(() => {
         inputRef.current?.focus();
+        if (file.isFolder || file.type === "folder") {
+          inputRef.current?.select();
+          return;
+        }
         const extensionIndex = file.name.lastIndexOf(".");
         if (extensionIndex > 0) {
           inputRef.current?.setSelectionRange(0, extensionIndex);
@@ -231,6 +237,8 @@ export const RenameModal: React.FC<RenameModalProps> = ({
 
   if (!isOpen) return null;
 
+  const isFolder = file.isFolder || file.type === "folder";
+
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
 
@@ -240,7 +248,7 @@ export const RenameModal: React.FC<RenameModalProps> = ({
     }
 
     if (!newName.trim()) {
-      setError("File name cannot be empty");
+      setError(isFolder ? "Folder name cannot be empty" : "File name cannot be empty");
       return;
     }
 
@@ -281,7 +289,7 @@ export const RenameModal: React.FC<RenameModalProps> = ({
       <ModalContent onClick={(e) => e.stopPropagation()}>
         <form onSubmit={handleSubmit}>
           <ModalHeader>
-            <ModalTitle>Rename File</ModalTitle>
+            <ModalTitle>{isFolder ? "Rename folder" : "Rename file"}</ModalTitle>
             <CloseButton onClick={onClose} type="button">
               <X size={20} />
             </CloseButton>
@@ -309,7 +317,7 @@ export const RenameModal: React.FC<RenameModalProps> = ({
               {extension && (
                 <FileNamePreview>
                   {nameWithoutExt}
-                  <span style={{ color: "#1a73e8" }}>{extension}</span>
+                  <span style={{ color: "var(--ed-accent)" }}>{extension}</span>
                 </FileNamePreview>
               )}
             </FileInfo>

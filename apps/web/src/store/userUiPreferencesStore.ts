@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { UserSettings } from "../components/settings/types/UserSettings";
+import { applyThemeCssVars } from "../theme/tokens";
 
 const THEME_STORAGE_KEY = "yd_resolved_theme";
 
@@ -13,7 +14,7 @@ export type ResolvedTheme = "light" | "dark";
 function resolveTheme(
   theme: "light" | "dark" | "system" | undefined,
 ): ResolvedTheme {
-  const t = theme ?? "system";
+  const t = theme ?? "light";
   if (t === "dark") return "dark";
   if (t === "light") return "light";
   return getSystemDark() ? "dark" : "light";
@@ -52,7 +53,9 @@ type State = {
 const initialTheme = readCachedTheme();
 if (typeof document !== "undefined") {
   document.documentElement.dataset.appTheme = initialTheme;
-  document.documentElement.style.colorScheme = initialTheme === "dark" ? "dark" : "light";
+  document.documentElement.style.colorScheme =
+    initialTheme === "dark" ? "dark" : "light";
+  applyThemeCssVars(initialTheme);
 }
 
 export const useUserUiPreferencesStore = create<State>((set) => ({
@@ -65,6 +68,7 @@ export const useUserUiPreferencesStore = create<State>((set) => ({
 
   setResolvedTheme: (resolvedTheme) => {
     writeCachedTheme(resolvedTheme);
+    applyDocumentTheme(resolvedTheme);
     set({ resolvedTheme });
   },
 
@@ -101,7 +105,9 @@ export function refreshResolvedThemeFromSystem(): void {
 function applyDocumentTheme(resolved: ResolvedTheme, lang?: string): void {
   if (typeof document === "undefined") return;
   document.documentElement.dataset.appTheme = resolved;
-  document.documentElement.style.colorScheme = resolved === "dark" ? "dark" : "light";
+  document.documentElement.style.colorScheme =
+    resolved === "dark" ? "dark" : "light";
+  applyThemeCssVars(resolved);
   if (lang) {
     document.documentElement.lang = lang;
   }

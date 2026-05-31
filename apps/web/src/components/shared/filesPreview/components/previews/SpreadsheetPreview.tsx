@@ -20,6 +20,47 @@ interface SheetData {
   headers: string[];
 }
 
+function parseDelimitedLine(line: string, delimiter: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === delimiter && !inQuotes) {
+      result.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+function sheetDataFromDelimitedText(
+  text: string,
+  delimiter: string,
+  sheetName: string,
+): SheetData[] {
+  const lines = text.split(/\r?\n/).filter((line) => line.length > 0);
+  const rows = lines.map((line) => parseDelimitedLine(line, delimiter));
+  const headers = (rows[0] || []).map(String);
+  return [
+    {
+      name: sheetName,
+      data: rows.slice(1),
+      headers,
+    },
+  ];
+}
+
 const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
   url,
   fileName,
@@ -65,6 +106,23 @@ const SpreadsheetPreview: React.FC<SpreadsheetPreviewProps> = ({
         });
         arrayBuffer = response.data;
       }
+
+      const ext = fileName.split(".").pop()?.toLowerCase() || "";
+      if (ext === "csv" || ext === "tsv") {
+        const decoder = new TextDecoder("utf-8");
+        const text = decoder.decode(arrayBuffer);
+        const delimiter = ext === "tsv" ? "\t" : ",";
+        const sheetData = sheetDataFromDelimitedText(
+          text,
+          delimiter,
+          ext.toUpperCase(),
+        );
+        setSheets(sheetData);
+        setActiveSheet(sheetData[0]?.name || "");
+        setLoading(false);
+        return;
+      }
+
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(arrayBuffer);
 

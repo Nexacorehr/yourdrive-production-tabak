@@ -25,8 +25,21 @@ import { CommandPalette } from "../../../shared/fileEditor/CommandPalette";
 import type { Command } from "../../../shared/fileEditor/CommandPalette";
 import { getEditorVars } from "../../../shared/fileEditor/editor.tokens";
 import { ROUTES } from "../../../../router/router";
+import { T } from "../../../../theme/tokens";
 
-import type { EnhancedFileItem, FileActionId } from "../../../shared/enhancedFileTable/types/fileActions";
+import {
+  getItemsInFolder,
+  joinFolderPath,
+  normalizeFolderPath,
+  resolveFolderOpenPath,
+} from "../../../../lib/folderNavigation";
+import FolderBreadcrumbs from "../../../shared/folders/FolderBreadcrumbs";
+import CreateFolderModal from "../../../shared/folders/CreateFolderModal";
+import { useFolderBrowseStore } from "../../../../store/folderBrowseStore";
+import type {
+  EnhancedFileItem,
+  FileActionId,
+} from "../../../shared/enhancedFileTable/types/fileActions";
 
 import {
   TerminalIcon as Terminal,
@@ -112,6 +125,7 @@ const YourFiles: React.FC = () => {
   const refreshStorage = useStorageStore((s) => s.refreshStorage);
   const resolvedTheme = useUserUiPreferencesStore((s) => s.resolvedTheme);
   const router = useRouter();
+  const setYourFilesPath = useFolderBrowseStore((s) => s.setYourFilesPath);
 
   const [files, setFiles] = useState<FileItem[]>([]);
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -119,6 +133,8 @@ const YourFiles: React.FC = () => {
   const [previewIndex, setPreviewIndex] = useState<number>(-1);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [currentFolderPath, setCurrentFolderPath] = useState("");
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
 
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const actionHandlerRef = useRef<
@@ -128,10 +144,31 @@ const YourFiles: React.FC = () => {
   const { filteredFiles, hasActiveFilters, activeFilterCount } =
     useFileSearch(files);
 
+  const browseFiles = useMemo(() => {
+    if (hasActiveFilters) return filteredFiles;
+    return getItemsInFolder(filteredFiles, currentFolderPath);
+  }, [filteredFiles, currentFolderPath, hasActiveFilters]);
+
+  useEffect(() => {
+    setSelectedFiles(new Set());
+  }, [currentFolderPath]);
+
+  useEffect(() => {
+    setYourFilesPath(currentFolderPath);
+  }, [currentFolderPath, setYourFilesPath]);
+
+  const handleFolderOpen = useCallback((folder: EnhancedFileItem) => {
+    setCurrentFolderPath(resolveFolderOpenPath(folder as FileItem));
+  }, []);
+
+  const handleFolderNavigate = useCallback((path: string) => {
+    setCurrentFolderPath(normalizeFolderPath(path));
+  }, []);
+
   const navigableFiles =
     selectedFiles.size > 0
-      ? filteredFiles.filter((f) => selectedFiles.has(f.id))
-      : filteredFiles;
+      ? browseFiles.filter((f) => selectedFiles.has(f.id))
+      : browseFiles;
 
   const handleFilePreview = (file: FileItem) => {
     const index = navigableFiles.findIndex((f) => f.id === file.id);
@@ -196,9 +233,12 @@ const YourFiles: React.FC = () => {
         const relativePath =
           (file as File & { webkitRelativePath?: string }).webkitRelativePath || "";
         if (hasStructure && relativePath) {
-          return relativePath.substring(0, relativePath.lastIndexOf("/")) || "";
+          const inner = relativePath.substring(0, relativePath.lastIndexOf("/")) || "";
+          return inner
+            ? joinFolderPath(currentFolderPath, inner)
+            : currentFolderPath;
         }
-        return "";
+        return currentFolderPath;
       });
 
       addUsage(totalSize);
@@ -225,40 +265,42 @@ const YourFiles: React.FC = () => {
         return;
       }
 
-      const transformedFiles: FileItem[] = filesData.files.map((file: any) => ({
-        id: String(file.id),
+      const transformedFiles: FileItem[] = filesData.files.map((file: any) => {
+        const isFolder = file.type === "folder" || file.is_folder === true;
+        const folderPathRaw = file.folderPath ?? file.folder_path ?? "";
+        const folderPath = isFolder
+          ? normalizeFolderPath(folderPathRaw)
+          : normalizeFolderPath(folderPathRaw);
 
-        name: file.name || file.original_name || "Untitled",
-
-        type: file.type || "file",
-
-        mimeType: file.mimeType || file.mime_type || "application/octet-stream",
-
-        lastInteraction: file.updatedAt
-          ? formatDate(file.updatedAt)
-          : file.createdAt
-            ? formatDate(file.createdAt)
-            : "Unknown",
-
-        lastInteractionType: "uploaded",
-
-        location:
-          file.folderPath && file.folderPath.trim() !== ""
-            ? file.folderPath
-            : "Your Files",
-
-        owner: {
-          name: "You",
-          isYou: true,
-        },
-
-        size: Number(file.size) || 0,
-
-        url: file.s3Key,
-
-        createdAt: file.createdAt ?? file.created_at,
-        updatedAt: file.updatedAt ?? file.updated_at,
-      }));
+        return {
+          id: String(file.id),
+          name: file.name || file.original_name || "Untitled",
+          type: isFolder ? "folder" : "file",
+          isFolder,
+          folderPath,
+          mimeType: file.mimeType || file.mime_type || "application/octet-stream",
+          lastInteraction: file.updatedAt
+            ? formatDate(file.updatedAt)
+            : file.createdAt
+              ? formatDate(file.createdAt)
+              : "Unknown",
+          lastInteractionType: "uploaded",
+          location:
+            isFolder
+              ? folderPath || "Your Files"
+              : folderPath
+                ? folderPath
+                : "Your Files",
+          owner: {
+            name: "You",
+            isYou: true,
+          },
+          size: Number(file.size) || 0,
+          url: file.s3Key,
+          createdAt: file.createdAt ?? file.created_at,
+          updatedAt: file.updatedAt ?? file.updated_at,
+        };
+      });
 
       setFiles(transformedFiles);
     } catch (err) {
@@ -293,8 +335,8 @@ const YourFiles: React.FC = () => {
 
   // ── Command palette commands ─────────────────────────────────
   const selectedFileObjects = useMemo(
-    () => filteredFiles.filter((f) => selectedFiles.has(f.id)) as EnhancedFileItem[],
-    [filteredFiles, selectedFiles],
+    () => browseFiles.filter((f) => selectedFiles.has(f.id)) as EnhancedFileItem[],
+    [browseFiles, selectedFiles],
   );
 
   const execAction = useCallback(
@@ -430,7 +472,7 @@ const YourFiles: React.FC = () => {
         icon: <X size={14} />,
         group: "Selection",
         action: () => {
-          filteredFiles.forEach((f) => handleFileSelect(f as FileItem, false));
+          browseFiles.forEach((f) => handleFileSelect(f as FileItem, false));
           setSelectedFiles(new Set());
         },
       });
@@ -443,8 +485,16 @@ const YourFiles: React.FC = () => {
       icon: <CheckCircle size={14} />,
       group: "Files",
       action: () => {
-        filteredFiles.forEach((f) => handleFileSelect(f as FileItem, true));
+        browseFiles.forEach((f) => handleFileSelect(f as FileItem, true));
       },
+    });
+
+    cmds.push({
+      id: "new-folder",
+      label: "New folder here",
+      icon: <Type size={14} />,
+      group: "Files",
+      action: () => setCreateFolderOpen(true),
     });
 
     cmds.push({
@@ -555,23 +605,54 @@ const YourFiles: React.FC = () => {
           </FilterIndicator>
         )}
 
+        {!hasActiveFilters && (
+          <FolderBreadcrumbs
+            currentPath={currentFolderPath}
+            onNavigate={handleFolderNavigate}
+            onCreateFolder={() => setCreateFolderOpen(true)}
+            createDisabled={loading}
+          />
+        )}
+
         <EnhancedFilesTable
-          files={filteredFiles as EnhancedFileItem[]}
+          files={browseFiles as EnhancedFileItem[]}
           loading={loading}
-          emptyMessage={getEmptyMessage(hasActiveFilters)}
-          emptySubtext={getEmptySubtext(hasActiveFilters)}
+          emptyMessage={
+            hasActiveFilters
+              ? getEmptyMessage(true)
+              : currentFolderPath
+                ? "This folder is empty"
+                : getEmptyMessage(false)
+          }
+          emptySubtext={
+            hasActiveFilters
+              ? getEmptySubtext(true)
+              : currentFolderPath
+                ? "Upload files or create a subfolder to get started"
+                : getEmptySubtext(false)
+          }
           onFilePreview={(f) => handleFilePreview(f as FileItem)}
           onFileSelect={(f, sel) => handleFileSelect(f as FileItem, sel)}
           selectedFiles={selectedFiles}
           showOwner={false}
-          showLocation={true}
-          showFolderStructure={true}
+          showLocation={!currentFolderPath && !hasActiveFilters}
+          showFolderStructure={false}
+          onFolderOpen={handleFolderOpen}
           maxHeight={770}
           onFilesUpload={handleFilesUpload}
           checkStorageLimit={checkStorageLimit}
           onRefresh={fetchFiles}
           onActionHandlerReady={(handler) => {
             actionHandlerRef.current = handler;
+          }}
+        />
+
+        <CreateFolderModal
+          isOpen={createFolderOpen}
+          parentPath={currentFolderPath}
+          onClose={() => setCreateFolderOpen(false)}
+          onCreated={() => {
+            eventBus.emit(FILES_REFRESH_EVENT);
           }}
         />
 
@@ -637,16 +718,18 @@ const Title = styled.h1`
   margin-top: 0px;
   font-size: clamp(1.25rem, 4vw, 1.75rem);
   font-weight: 500;
-  color: #202124;
+  color: ${T.textPrimary};
   margin: 0;
   line-height: 1.2;
   min-width: 0;
+  font-family: ${T.fontUI};
 `;
 
 const FileCount = styled.div`
   font-size: clamp(13px, 2.5vw, 14px);
-  color: #5f6368;
+  color: ${T.textSecondary};
   white-space: nowrap;
+  font-family: ${T.fontUI};
 `;
 
 const HeaderSpacer = styled.div`
@@ -658,28 +741,28 @@ const CommandsBtn = styled.button`
   align-items: center;
   gap: 5px;
   padding: 6px 11px;
-  border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  background: rgba(255, 255, 255, 0.8);
-  color: #5f6368;
-  font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+  border-radius: ${T.rMd};
+  border: 1px solid ${T.borderSubtle};
+  background: ${T.bgSurface};
+  color: ${T.textSecondary};
+  font-family: ${T.fontUI};
   font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease,
-    box-shadow 0.12s ease;
+  transition: background ${T.tFast}, border-color ${T.tFast}, color ${T.tFast},
+    box-shadow ${T.tFast};
   white-space: nowrap;
   flex-shrink: 0;
 
   &:hover {
-    background: #ffffff;
-    border-color: rgba(0, 0, 0, 0.20);
-    color: #202124;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    background: ${T.bgHover};
+    border-color: ${T.borderStrong};
+    color: ${T.textPrimary};
+    box-shadow: ${T.shadowSm};
   }
 
   &:active {
-    background: #f1f3f4;
+    background: ${T.bgActive};
   }
 `;
 
@@ -690,14 +773,14 @@ const CmdBtnLabel = styled.span`
 `;
 
 const CmdKbd = styled.kbd`
-  font-family: 'Poppins', system-ui, sans-serif;
+  font-family: ${T.fontUI};
   font-size: 9px;
   font-weight: 600;
   padding: 1px 5px;
-  border-radius: 4px;
-  background: #f1f3f4;
-  border: 1px solid rgba(0, 0, 0, 0.10);
-  color: #9aa0a6;
+  border-radius: ${T.rSm};
+  background: ${T.bgHover};
+  border: 1px solid ${T.borderFaint};
+  color: ${T.textMuted};
   letter-spacing: 0.02em;
 
   @media (max-width: 520px) {
@@ -707,11 +790,14 @@ const CmdKbd = styled.kbd`
 
 const FilterIndicator = styled.div`
   font-size: 14px;
-  color: #666;
+  color: ${T.textSecondary};
   margin-bottom: 12px;
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: ${T.rMd};
+  background: ${T.bgHover};
+  border: 1px solid ${T.borderFaint};
   display: inline-block;
+  font-family: ${T.fontUI};
 `;
 
 /**

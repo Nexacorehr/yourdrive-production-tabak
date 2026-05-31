@@ -73,7 +73,12 @@ export class SettingsService {
         avatarInitials: this.getInitials(firstName, lastName),
       },
       security: settings.security || {},
-      appearance: settings.appearance || {},
+      appearance: {
+        theme: "light",
+        fileView: "grid",
+        thumbnailQuality: "medium",
+        ...(settings.appearance || {}),
+      },
       language: settings.language || {},
       storage: {
         ...(settings.storage || {}),
